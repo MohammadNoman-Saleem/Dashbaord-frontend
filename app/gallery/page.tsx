@@ -415,7 +415,7 @@ function QueryPanelDemos({ theme }: { theme: ThemeName }) {
         sub="Optimism banner, dimmed chart, severity in words."
       >
         <QueryPanel query={UNRELIABLE_QUERY} skeleton={<FunnelSkeleton />}>
-          {(rows, meta, flags) => (
+          {(rows, _meta, flags) => (
             <>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-xs text-ink-3">Novo funnels, instant and scheduled</span>

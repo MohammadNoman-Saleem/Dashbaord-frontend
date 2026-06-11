@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "../.smoke-fixtures",
+    "rootDir": "..",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "incremental": false,
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["../lib/fixtures/index.ts"]
+}

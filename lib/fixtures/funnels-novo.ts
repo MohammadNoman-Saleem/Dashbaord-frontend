@@ -1,0 +1,67 @@
+// Fixture for GET /api/funnels/novo.
+// Values lifted from the approved mockup (Saleem_Dashboard_Redesign.html,
+// Funnels view, Novo tab). All data is fictional.
+//
+// meta.reliable is false while the funnel definition mismatch stands; the UI
+// renders the Optimism Banner and dims the funnel from this flag alone.
+// BMI categories show percentages in the mockup (33, 31, 22, 14). The contract
+// carries counts, so they are converted against the 311 completed checks
+// (103 + 96 + 68 + 44 = 311).
+
+import type { Envelope, Meta } from '@/lib/api/envelope'
+import type { FunnelNovoData } from '@/lib/api/contract'
+
+const UPDATED_AT = '2026-06-11T07:18:00+03:00'
+
+const NOVO = {
+  tiles: {
+    landing_views: { value: 4120, chip: 'measured' },
+    funnel_says_paid: { value: 0, chip: 'misreading' },
+    real_consults: { value: 86, chip: 'verified' },
+    bmi_checks: { value: 311 },
+  },
+  funnel: [
+    { label: 'Landing', count: 4120, pct_of_first: 100 },
+    { label: 'Path chosen', count: 71, pct_of_first: 1.7 },
+    { label: 'Booked', count: 3, pct_of_first: 0.1 },
+    { label: 'Paid', count: 0, pct_of_first: 0 },
+  ],
+  ctas_by_type: [
+    { label: 'Book now', count: 312 },
+    { label: 'WhatsApp us', count: 188 },
+    { label: 'Learn more', count: 95 },
+    { label: 'BMI check', count: 0, not_instrumented: true },
+  ],
+  bmi_categories: [
+    { label: '30 to 35', count: 103 },
+    { label: '25 to 30', count: 96 },
+    { label: '35 and up', count: 68 },
+    { label: 'Under 25', count: 44 },
+  ],
+  landing_by_campaign: [
+    { label: 'novo-email', views: 1720 },
+    { label: 'meta-obesity', views: 1260 },
+    { label: 'direct / none', views: 660 },
+    { label: 'qr-clinic', views: 480 },
+  ],
+} satisfies FunnelNovoData
+
+const META = {
+  updated_at: UPDATED_AT,
+  cached: false,
+  stale: false,
+  reliable: false,
+  reasons: [
+    {
+      key: 'definition_mismatch',
+      title: 'These funnel numbers do not match reality',
+      text: 'The landing page took 4,120 visits this month, but the funnel below reads near zero because its definition is wrong. The fix is in review, and the verified consult count is the number to trust.',
+      owner: 'Noman',
+      due: '2026-06-12',
+    },
+  ],
+} satisfies Meta
+
+export function fixture(_params?: Record<string, string | number | undefined>): Envelope<unknown> {
+  return { data: NOVO, meta: META }
+}
