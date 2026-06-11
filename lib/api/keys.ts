@@ -12,6 +12,7 @@ export const qk = {
   deliverables: (month: string) => ['deliverables', month] as const,
   attention: (person: string) => ['attention', person] as const,
   urgent: () => ['urgent'] as const,
+  casesSummary: () => ['cases', 'summary'] as const,
   priorities: (person: string) => ['pipeline', 'priorities', person] as const,
   pipelineHealth: () => ['pipeline', 'health'] as const,
   providers: () => ['pipeline', 'providers'] as const,

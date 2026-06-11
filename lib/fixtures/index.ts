@@ -9,6 +9,7 @@ import { fixture as agentsFixture } from './agents'
 import { fixture as appointmentsFixture } from './appointments'
 import { fixture as attentionFixture } from './attention'
 import { fixture as briefFixture } from './brief'
+import { fixture as casesSummaryFixture } from './cases-summary'
 import { fixture as crmFixture } from './crm'
 import { fixture as deliverablesFixture } from './deliverables'
 import { fixture as financialsFixture } from './financials'
@@ -44,6 +45,7 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   deliverables: deliverablesFixture,
   attention: attentionFixture,
   urgent: urgentFixture,
+  cases_summary: casesSummaryFixture,
   priorities: prioritiesFixture,
   pipeline_health: pipelineHealthFixture,
   providers: providersFixture,

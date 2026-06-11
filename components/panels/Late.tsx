@@ -49,7 +49,12 @@ function LateSkeleton() {
   );
 }
 
-export function LatePanel(_props: { person: string }) {
+export function LatePanel({
+  variant = "home",
+}: {
+  person?: string;
+  variant?: "home" | "cases";
+}) {
   const searchParams = useSearchParams();
   const viewAs = searchParams.get("as") ?? undefined;
 
@@ -63,8 +68,12 @@ export function LatePanel(_props: { person: string }) {
   return (
     <Card>
       <CardHeader
-        title="Running late"
-        subtitle="Past the time we promise ourselves."
+        title={variant === "cases" ? "Deals running late" : "Running late"}
+        subtitle={
+          variant === "cases"
+            ? "Past an SLA. Each one gets a root-cause look from Aziz."
+            : "Past the time we promise ourselves."
+        }
         right={
           count != null && count > 0 ? (
             <Chip variant="warn">
@@ -87,7 +96,7 @@ export function LatePanel(_props: { person: string }) {
           )}
         </QueryPanel>
       </div>
-      {query.data?.data ? (
+      {query.data?.data && variant === "home" ? (
         <CardFooter
           note="Aziz reviews every breach for a root cause."
           right={<Link href={buildDeepLink({ view: "cases" }, viewAs)}>See pipeline</Link>}

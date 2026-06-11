@@ -117,7 +117,8 @@ export interface UrgentData {
 export interface PriorityRow {
   patient_ref: PatientRefData
   patient_name?: string
-  why_now: { label: string; warn: boolean }
+  /** tone: info = new lead, warn = going quiet, good = today's follow-up */
+  why_now: { label: string; tone: 'info' | 'warn' | 'good' }
   pipeline: string
   waiting_display: string
   next_step: string
@@ -126,6 +127,11 @@ export interface PriorityRow {
 export interface PrioritiesData {
   rows: PriorityRow[]
   counts: { shown: number; queued: number; dormant: number }
+}
+
+// /api/cases/summary (the four KPI cards on /cases; reuses the strip card shape)
+export interface CasesSummaryData {
+  cards: KpiStripCard[]
 }
 
 // /api/pipeline/health

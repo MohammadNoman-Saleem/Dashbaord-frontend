@@ -46,7 +46,12 @@ function AppointmentsSkeleton() {
   );
 }
 
-export function AppointmentsPanel(_props: { person: string }) {
+export function AppointmentsPanel({
+  variant = "home",
+}: {
+  person?: string;
+  variant?: "home" | "cases";
+}) {
   const searchParams = useSearchParams();
   const viewAs = searchParams.get("as") ?? undefined;
 
@@ -61,11 +66,13 @@ export function AppointmentsPanel(_props: { person: string }) {
   return (
     <Card>
       <CardHeader
-        title="Today's consultations"
+        title={variant === "cases" ? "Appointments" : "Today's consultations"}
         subtitle={
-          booked != null
-            ? `${booked} booked. Fees hold until both sides join.`
-            : "Fees hold until both sides join."
+          variant === "cases"
+            ? "Upcoming and just finished."
+            : booked != null
+              ? `${booked} booked. Fees hold until both sides join.`
+              : "Fees hold until both sides join."
         }
       />
       <div className="px-[18px] pt-2 pb-4">
@@ -76,7 +83,10 @@ export function AppointmentsPanel(_props: { person: string }) {
           emptyCopy="No appointments today."
         >
           {(d, _meta, flags) => {
-            const rows = [...d.today, ...d.recent_done.slice(0, 1)];
+            const rows =
+              variant === "cases"
+                ? [...d.today, ...d.recent_done]
+                : [...d.today, ...d.recent_done.slice(0, 1)];
             return (
               <div className={flags.unreliable ? "opacity-55" : undefined}>
                 {rows.map((row) => (
@@ -99,10 +109,14 @@ export function AppointmentsPanel(_props: { person: string }) {
         </QueryPanel>
       </div>
       {data ? (
-        <CardFooter
-          note="Showing today and the most recent completed consult."
-          right={<Link href={buildDeepLink({ view: "cases" }, viewAs)}>All appointments</Link>}
-        />
+        variant === "cases" ? (
+          <CardFooter note="If the doctor is 2 minutes late on instant consults, the patient can claim a full refund." />
+        ) : (
+          <CardFooter
+            note="Showing today and the most recent completed consult."
+            right={<Link href={buildDeepLink({ view: "cases" }, viewAs)}>All appointments</Link>}
+          />
+        )
       ) : null}
     </Card>
   );
