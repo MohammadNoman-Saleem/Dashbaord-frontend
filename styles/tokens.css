@@ -1,0 +1,58 @@
+/* ============ Saleem design tokens ============
+   Source of truth: Saleem_Dashboard_Redesign.html (approved by Khalid, Jun 10 2026).
+   This is the ONLY file in the repo allowed to contain raw color values.
+   CI enforces: no color literals anywhere else, no red-dominant values here. */
+:root {
+  --bg: #f2f1f0;            /* Transparency */
+  --surface: #ffffff;       /* Support */
+  --surface-2: #f7f7f6;
+  --ink: #000000;           /* Assurance, body */
+  --ink-2: rgba(7, 58, 79, .66);
+  --ink-3: rgba(7, 58, 79, .45);
+  --title: #073a4f;         /* Trust */
+  --accent: #588be4;        /* Saleem */
+  --accent-text: #3667c5;
+  --digital: #64a9d6;
+  --accessible: #aed6e4;
+  --accessible-soft: rgba(174, 214, 228, .32);
+  --recovery: #2e7d67;
+  --recovery-soft: rgba(46, 125, 103, .12);
+  --balance: #bcc99e;
+  --optimism: #f7de9f;
+  --optimism-soft: rgba(247, 222, 159, .55);
+  --line: rgba(7, 58, 79, .12);
+  --line-soft: rgba(7, 58, 79, .07);
+  --pulse-line: rgba(7, 58, 79, .30);
+  --shadow: 0 1px 2px rgba(7, 58, 79, .04), 0 10px 28px -18px rgba(7, 58, 79, .22);
+  --shadow-pop: 0 16px 48px -16px rgba(7, 58, 79, .32);
+  --r: 16px;
+  --r-sm: 10px;
+  /* Additions so no component ever writes hex (mockup hardcodes these on
+     accent buttons, warn chips, and navy buttons) */
+  --on-accent: #ffffff;
+  --trust-ink: #073a4f;
+}
+
+[data-theme="dark"] {
+  --bg: #061f2a;
+  --surface: #0a2a39;
+  --surface-2: #0d3142;
+  --ink: #f2f1f0;
+  --ink-2: rgba(208, 228, 238, .72);
+  --ink-3: rgba(208, 228, 238, .48);
+  --title: #eaf3f7;
+  --accent: #6f9eea;
+  --accent-text: #9dbdf2;
+  --digital: #7cb8de;
+  --accessible: #aed6e4;
+  --accessible-soft: rgba(174, 214, 228, .14);
+  --recovery: #5fb393;
+  --recovery-soft: rgba(95, 179, 147, .16);
+  --optimism: #f7de9f;
+  --optimism-soft: rgba(247, 222, 159, .16);
+  --line: rgba(174, 214, 228, .16);
+  --line-soft: rgba(174, 214, 228, .09);
+  --pulse-line: rgba(174, 214, 228, .42);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .25), 0 12px 30px -18px rgba(0, 0, 0, .55);
+  --shadow-pop: 0 18px 52px -16px rgba(0, 0, 0, .6);
+}

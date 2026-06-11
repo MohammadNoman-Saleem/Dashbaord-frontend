@@ -1,26 +1,99 @@
 @import "tailwindcss";
+@import "../styles/tokens.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* Map tokens into Tailwind v4 theme so utilities like bg-surface, text-ink,
+   border-line resolve to the CSS variables and flip with [data-theme]. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-title: var(--title);
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-digital: var(--digital);
+  --color-accessible: var(--accessible);
+  --color-accessible-soft: var(--accessible-soft);
+  --color-recovery: var(--recovery);
+  --color-recovery-soft: var(--recovery-soft);
+  --color-balance: var(--balance);
+  --color-optimism: var(--optimism);
+  --color-optimism-soft: var(--optimism-soft);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-pulse-line: var(--pulse-line);
+  --color-on-accent: var(--on-accent);
+  --color-trust-ink: var(--trust-ink);
+  --radius-card: var(--r);
+  --radius-inner: var(--r-sm);
+  --shadow-card: var(--shadow);
+  --shadow-pop: var(--shadow-pop);
+  --font-sans: var(--font-inter);
+  --font-serif: var(--font-baskerville);
+  --font-arabic: var(--font-rubik);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ============ Base (ported from the approved mockup) ============ */
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font: 400 14px/1.55 var(--font-inter), system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .serif {
+  font-family: var(--font-baskerville), Georgia, serif;
+  color: var(--title);
+  font-weight: 400;
+}
+
+.ar {
+  font-family: var(--font-rubik), sans-serif;
+}
+
+a {
+  color: var(--accent-text);
+  text-decoration: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: var(--accessible);
+  color: var(--trust-ink);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Flash highlight for ?focus= deep links (2px accent ring fading over 1.6s) */
+@keyframes flashr {
+  0% { box-shadow: 0 0 0 2px var(--accent); }
+  100% { box-shadow: 0 0 0 2px transparent; }
+}
+
+.flash {
+  animation: flashr 1.6s ease-out 1;
+}
+
+/* Reduced motion kills the blip halo, flash highlight, fades, smooth scroll */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  html {
+    scroll-behavior: auto;
+  }
 }
