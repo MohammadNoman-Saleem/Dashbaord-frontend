@@ -1,0 +1,109 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import { Calendar, Check } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+
+import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
+import { Chip, type ChipVariant } from "@/components/ui/Chip";
+import { ListRow } from "@/components/ui/ListRow";
+import { QueryPanel } from "@/components/ui/QueryPanel";
+import { Skeleton } from "@/components/ui/Skeleton";
+import type { AppointmentRow, AppointmentsData } from "@/lib/api/contract";
+import { fetchEnvelope } from "@/lib/api/fetcher";
+import { qk } from "@/lib/api/keys";
+import { buildDeepLink } from "@/lib/deepLink";
+
+/* Home panel p-appointments (spec 02 section 8.1). Today's consultations
+   plus the most recent completed one. Fee state chips: Paid, Hold, Done. */
+
+const FEE_CHIP: Record<AppointmentRow["fee_state"], { label: string; variant: ChipVariant }> = {
+  paid: { label: "Paid", variant: "good" },
+  hold: { label: "Hold", variant: "info" },
+  done: { label: "Done", variant: "good" },
+};
+
+/* Consult fees keep one decimal ("BHD 9.9"), matching the mockup list rows.
+   Whole-dinar totals elsewhere go through fmtBHD. */
+function fmtFee(n: number): string {
+  return `BHD ${n.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
+}
+
+function feePhrase(row: AppointmentRow): string {
+  if (row.fee_state === "paid") return `${fmtFee(row.fee_bhd)} paid`;
+  if (row.fee_state === "hold") return `${fmtFee(row.fee_bhd)} on hold`;
+  return "Completed, fee collected";
+}
+
+function AppointmentsSkeleton() {
+  return (
+    <div className="flex flex-col gap-[9px] pt-1">
+      {Array.from({ length: 4 }, (_, i) => (
+        <Skeleton key={i} height={38} />
+      ))}
+    </div>
+  );
+}
+
+export function AppointmentsPanel(_props: { person: string }) {
+  const searchParams = useSearchParams();
+  const viewAs = searchParams.get("as") ?? undefined;
+
+  const query = useQuery({
+    queryKey: qk.appointments(),
+    queryFn: () => fetchEnvelope<AppointmentsData>("appointments", "/appointments"),
+  });
+
+  const data = query.data?.data;
+  const booked = data?.today.length;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Today's consultations"
+        subtitle={
+          booked != null
+            ? `${booked} booked. Fees hold until both sides join.`
+            : "Fees hold until both sides join."
+        }
+      />
+      <div className="px-[18px] pt-2 pb-4">
+        <QueryPanel
+          query={query}
+          skeleton={<AppointmentsSkeleton />}
+          isEmpty={(d) => d.today.length === 0 && d.recent_done.length === 0}
+          emptyCopy="No appointments today."
+        >
+          {(d, _meta, flags) => {
+            const rows = [...d.today, ...d.recent_done.slice(0, 1)];
+            return (
+              <div className={flags.unreliable ? "opacity-55" : undefined}>
+                {rows.map((row) => (
+                  <ListRow
+                    key={`${row.time}-${row.doctor}`}
+                    icon={row.fee_state === "done" ? Check : Calendar}
+                    variant={row.fee_state === "done" ? "good" : "info"}
+                    title={`${row.time} · ${row.doctor}`}
+                    subtitle={`${row.product} · ${feePhrase(row)}`}
+                    right={
+                      <Chip variant={FEE_CHIP[row.fee_state].variant}>
+                        {FEE_CHIP[row.fee_state].label}
+                      </Chip>
+                    }
+                  />
+                ))}
+              </div>
+            );
+          }}
+        </QueryPanel>
+      </div>
+      {data ? (
+        <CardFooter
+          note="Showing today and the most recent completed consult."
+          right={<Link href={buildDeepLink({ view: "cases" }, viewAs)}>All appointments</Link>}
+        />
+      ) : null}
+    </Card>
+  );
+}
