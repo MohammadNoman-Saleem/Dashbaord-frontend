@@ -56,3 +56,37 @@ export async function fetchEnvelope<T>(
   }
   return body
 }
+
+/** Write through the same seam. Fixture mode settles after the same short
+ *  delay with no server effect, so optimistic cache updates remain the whole
+ *  story until the endpoint flips to live. */
+export async function mutateEnvelope<T>(
+  key: EndpointKey,
+  method: 'POST' | 'PATCH' | 'DELETE',
+  path: string,
+  body?: unknown,
+): Promise<Envelope<T> | null> {
+  if (ENDPOINT_MODES[key] === 'fixture') {
+    await fixtureDelay()
+    return null
+  }
+
+  const res = await fetch(`${API_BASE}/api${path}`, {
+    method,
+    credentials: 'include',
+    headers: {
+      accept: 'application/json',
+      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  const payload = (await res.json().catch(() => null)) as Envelope<T> | null
+  if (!res.ok) {
+    throw new ApiError(
+      `${method} ${path} responded ${res.status}`,
+      res.status,
+      payload?.meta?.error?.message_plain,
+    )
+  }
+  return payload
+}

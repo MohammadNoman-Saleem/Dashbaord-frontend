@@ -12,7 +12,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { UrgentData, UrgentItem } from "@/lib/api/contract";
 import type { Envelope } from "@/lib/api/envelope";
-import { fetchEnvelope } from "@/lib/api/fetcher";
+import { fetchEnvelope, mutateEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
 import { fmtAgo } from "@/lib/format/datetime";
 import { useViewer } from "@/lib/viewer";
@@ -49,13 +49,10 @@ let tmpIdCounter = 0;
 
 type UrgentEnvelope = Envelope<UrgentData>;
 
-/* Fixtures drive the app today, so mutations are optimistic only: the
-   mutationFn settles after a short delay and the cache write below is the
-   whole effect. The live POST lands here when the urgent endpoint flips to
-   live in config/endpoints.ts. */
-function pretendWrite(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 150));
-}
+/* Writes go through the fetcher seam: in fixture mode they settle with no
+   server effect (the optimistic cache update is the whole story); in live
+   mode they POST or PATCH saleem-api and onSettled refetches so optimistic
+   temp rows reconcile with server truth. */
 
 type UrgentDrawerProps = {
   open: boolean;
@@ -102,7 +99,8 @@ export function UrgentDrawer({ open, onClose }: UrgentDrawerProps) {
   }
 
   const addMutation = useMutation({
-    mutationFn: (_text: string) => pretendWrite(),
+    mutationFn: (newText: string) =>
+      mutateEnvelope<UrgentItem>("urgent", "POST", "/urgent", { text: newText }),
     onMutate: async (newText: string) => {
       await queryClient.cancelQueries({ queryKey: qk.urgent() });
       const previous = queryClient.getQueryData<UrgentEnvelope>(qk.urgent());
@@ -126,10 +124,14 @@ export function UrgentDrawer({ open, onClose }: UrgentDrawerProps) {
     onSuccess: () => {
       toast("Added to the urgent board.");
     },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.urgent() });
+    },
   });
 
   const resolveMutation = useMutation({
-    mutationFn: (_id: string) => pretendWrite(),
+    mutationFn: (id: string) =>
+      mutateEnvelope<UrgentItem>("urgent", "PATCH", `/urgent/${id}/resolve`),
     onMutate: async (id: string) => {
       await queryClient.cancelQueries({ queryKey: qk.urgent() });
       const previous = queryClient.getQueryData<UrgentEnvelope>(qk.urgent());
@@ -154,6 +156,9 @@ export function UrgentDrawer({ open, onClose }: UrgentDrawerProps) {
     },
     onSuccess: () => {
       toast("Marked resolved. The team sees it instantly.");
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: qk.urgent() });
     },
   });
 

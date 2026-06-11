@@ -11,10 +11,10 @@
 // lib/fixtures/me.ts (03 section 3 describes it loosely). It is defined
 // here, not imported, because panels never import fixture modules.
 
-import { createContext, useContext, useMemo, type ReactNode } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { fetchEnvelope } from '@/lib/api/fetcher'
+import { ApiError, fetchEnvelope } from '@/lib/api/fetcher'
 import { qk } from '@/lib/api/keys'
 
 export interface ViewerPerson {
@@ -26,7 +26,7 @@ export interface ViewerPerson {
 export interface ViewerCapabilities {
   can_view_as: boolean
   sees_patient_names: boolean
-  kpi_edit_scope: 'all' | 'team' | 'none'
+  kpi_edit_scope: 'any' | 'team' | 'none'
   can_edit_payout_rules: boolean
 }
 
@@ -35,7 +35,7 @@ export interface Viewer {
   name: string
   role: 'admin' | 'dept_head' | 'member'
   role_label: string
-  department: string
+  department: string | null
   must_reset: boolean
   theme: 'light' | 'dark'
   viewed_person: string
@@ -67,9 +67,23 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
     queryKey: qk.me(),
     queryFn: () => fetchEnvelope<Viewer>('me', '/me'),
     staleTime: Infinity,
+    retry: (failureCount, error) =>
+      !(error instanceof ApiError && error.status === 401) && failureCount < 2,
   })
   const searchParams = useSearchParams()
   const asParam = searchParams.get('as')
+  const router = useRouter()
+  const pathname = usePathname()
+
+  // No session: send the visitor to sign in. Live mode only ever hits this
+  // path; the fixture never 401s.
+  const unauthenticated =
+    query.error instanceof ApiError && query.error.status === 401
+  useEffect(() => {
+    if (unauthenticated && pathname !== '/login') {
+      router.replace('/login')
+    }
+  }, [unauthenticated, pathname, router])
 
   const me = query.data?.data ?? null
   const isLoading = query.isPending
