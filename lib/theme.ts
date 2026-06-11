@@ -4,7 +4,7 @@
 
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 
 export type Theme = 'light' | 'dark'
 
@@ -19,12 +19,24 @@ export function getTheme(): Theme {
   return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
 }
 
-export function useTheme(): { theme: Theme; setTheme: (t: Theme) => void } {
-  const [theme, setThemeState] = useState<Theme>('light')
+// The document's data-theme attribute is the source of truth (set before
+// paint by the bootstrap script). Treat it as an external store so React
+// reads it without setState-in-effect and stays in sync across hook users.
+function subscribeToTheme(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange)
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  })
+  return () => observer.disconnect()
+}
 
-  useEffect(() => {
-    setThemeState(getTheme())
-  }, [])
+function getServerTheme(): Theme {
+  return 'light'
+}
+
+export function useTheme(): { theme: Theme; setTheme: (t: Theme) => void } {
+  const theme = useSyncExternalStore(subscribeToTheme, getTheme, getServerTheme)
 
   const setTheme = useCallback((t: Theme) => {
     document.documentElement.setAttribute('data-theme', t)
@@ -33,7 +45,6 @@ export function useTheme(): { theme: Theme; setTheme: (t: Theme) => void } {
     } catch {
       // private mode: theme still applies for this page view
     }
-    setThemeState(t)
   }, [])
 
   return { theme, setTheme }
