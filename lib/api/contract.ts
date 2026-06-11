@@ -191,9 +191,10 @@ export interface FinancialsData {
     due_display: string
   }>
   outstanding_bhd: number
-  payouts_due_bhd: number
-  saleem_share_bhd: number
-  treatment_manual_bhd: number
+  /** Null until the payout rules work lands; meta carries the reason. */
+  payouts_due_bhd: number | null
+  saleem_share_bhd: number | null
+  treatment_manual_bhd: number | null
 }
 
 // /api/crm?resource=&page=&page_size=
@@ -207,11 +208,13 @@ export interface CrmSliceData {
 
 // /api/marketing
 export interface MarketingData {
+  /** Tiles without a wired source (Meta connector pending) are null with a
+   *  meta reason; the target is null when no KPI row exists this month. */
   tiles: {
-    leads: { value: number; target: number }
-    cpl: { value_bhd: number; cap_bhd: number }
-    whatsapp_reply_pct: { value: number; target: number }
-    ig_reach: { value: number; spark: number[] }
+    leads: { value: number; target: number | null }
+    cpl: { value_bhd: number; cap_bhd: number } | null
+    whatsapp_reply_pct: { value: number; target: number } | null
+    ig_reach: { value: number; spark: number[] } | null
   }
   channels: Array<{ channel: string; leads: number; spend_bhd: number | null; cpl_display: string; read: string }>
   moves: Array<{ title: string; text: string }>
@@ -225,11 +228,14 @@ export interface FunnelStep {
 }
 export interface FunnelGeneralData {
   tiles: {
-    site_visits: number
+    /** Null when Mixpanel sessions are not enabled for the project. */
+    site_visits: number | null
     consult_page_views: number
     booking_starts: number
-    dead_clicks: number
+    /** Null when the dead click event is not instrumented in Mixpanel. */
+    dead_clicks: number | null
   }
+  /** Empty when site visits are not measured (see site_visits). */
   visits_14d: number[]
   top_pages: Array<{ label: string; views: number }>
 }
@@ -252,7 +258,8 @@ export interface FunnelNovoData {
   tiles: {
     landing_views: { value: number; chip: 'measured' }
     funnel_says_paid: { value: number; chip: 'misreading' }
-    real_consults: { value: number; chip: 'verified' }
+    /** Null until the admin panel supplies the verified count. */
+    real_consults: { value: number | null; chip: 'verified' }
     bmi_checks: { value: number }
   }
   funnel: FunnelStep[]

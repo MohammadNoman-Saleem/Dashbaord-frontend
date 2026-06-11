@@ -75,13 +75,28 @@ export function FinMiniPanel(_props: { person: string }) {
                     <Chip variant={data.outstanding_bhd > 0 ? 'warn' : 'good'}>Owed to us</Chip>
                   }
                 />
-                <ListRow
-                  icon={Split}
-                  variant="info"
-                  title={`${fmtBHD(data.payouts_due_bhd)} provider payouts this cycle`}
-                  subtitle={`Computed from ${month} bookings.`}
-                  right={<Chip variant="info">We owe</Chip>}
-                />
+                {data.payouts_due_bhd === null ? (
+                  /* Not connected yet: muted and distinct from a zero. */
+                  <ListRow
+                    icon={Split}
+                    variant="info"
+                    title={
+                      <span className="font-medium text-ink-2">
+                        Provider payouts not connected yet
+                      </span>
+                    }
+                    subtitle="Payout figures connect with the payout rules work."
+                    right={<Chip variant="mut">Not connected yet</Chip>}
+                  />
+                ) : (
+                  <ListRow
+                    icon={Split}
+                    variant="info"
+                    title={`${fmtBHD(data.payouts_due_bhd)} provider payouts this cycle`}
+                    subtitle={`Computed from ${month} bookings.`}
+                    right={<Chip variant="info">We owe</Chip>}
+                  />
+                )}
               </div>
             )
           }}

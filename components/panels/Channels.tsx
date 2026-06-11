@@ -24,8 +24,11 @@ function monthName(iso?: string): string {
   return d.toLocaleDateString('en-US', { month: 'long' })
 }
 
-/* "Cost per lead BHD 7.2, under the 8.0 cap." Severity in words. */
-function cplLine(cpl: MarketingData['tiles']['cpl']): string {
+/* "Cost per lead BHD 7.2, under the 8.0 cap." Severity in words. A null
+   tile (no spend source wired yet) reads as not connected, never as zero. */
+function cplLine(cpl: MarketingData['tiles']['cpl'] | undefined): string {
+  if (cpl === undefined) return 'Cost per lead updates with the CRM.'
+  if (cpl === null) return 'Cost per lead is not connected yet.'
   const state = cpl.value_bhd <= cpl.cap_bhd ? 'under' : 'over'
   return `Cost per lead BHD ${cpl.value_bhd.toFixed(1)}, ${state} the ${cpl.cap_bhd.toFixed(1)} cap.`
 }
@@ -87,7 +90,7 @@ export function ChannelsPanel(_props: { person: string }) {
         </QueryPanel>
       </div>
       <CardFooter
-        note={cpl ? cplLine(cpl) : 'Cost per lead updates with the CRM.'}
+        note={cplLine(cpl)}
         right={<Link href={buildDeepLink({ view: 'marketing' }, asParam)}>Marketing view</Link>}
       />
     </Card>
