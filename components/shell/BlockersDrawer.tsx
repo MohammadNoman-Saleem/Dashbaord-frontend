@@ -210,17 +210,9 @@ export function BlockersDrawer({ open, onClose }: BlockersDrawerProps) {
   }
 
   function rowAction(item: BlockerItem) {
-    if (canUnblock(me)) {
-      return (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => resolveMutation.mutate({ id: item.id, action: "unblock" })}
-        >
-          Unblocked
-        </Button>
-      );
-    }
+    // Ownership wins over role: a raiser always withdraws their own item,
+    // even when they could also unblock (an informally resolved blocker is
+    // a withdrawal, not an unblock with a synthesized resolution note).
     if (me && item.raised_by === me.person) {
       return (
         <Button
@@ -229,6 +221,17 @@ export function BlockersDrawer({ open, onClose }: BlockersDrawerProps) {
           onClick={() => resolveMutation.mutate({ id: item.id, action: "withdraw" })}
         >
           Withdraw
+        </Button>
+      );
+    }
+    if (canUnblock(me)) {
+      return (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => resolveMutation.mutate({ id: item.id, action: "unblock" })}
+        >
+          Mark unblocked
         </Button>
       );
     }

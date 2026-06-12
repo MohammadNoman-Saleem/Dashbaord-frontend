@@ -138,7 +138,7 @@ export function corridorSentence(destinations: Destinations): string {
 export function originsCaption(data: MedicalTravelLeadsData): string {
   const foreign = data.origins.find((o) => o.country !== 'Bahrain')
   const base = `${data.totals.outside_bahrain_pct}% of leads are from outside Bahrain.`
-  return foreign ? `${base} ${foreign.country} leads that group with ${foreign.n}.` : base
+  return foreign ? `${base} ${foreign.country} is the largest source at ${foreign.n}.` : base
 }
 
 export function specialtiesCaption(data: MedicalTravelLeadsData): string {
