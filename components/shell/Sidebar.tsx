@@ -8,6 +8,7 @@ import {
   Layers,
   Megaphone,
   Split,
+  SquareKanban,
   Target,
   Wallet,
   type LucideIcon,
@@ -27,6 +28,10 @@ type NavEntry = { href: string; label: string; icon: LucideIcon };
 const WORKSPACE_NAV: NavEntry[] = [
   { href: "/", label: "Command Center", icon: Home },
   { href: "/cases", label: "Cases & Pipeline", icon: Layers },
+  /* Team board is NOT in the approved v3 mockup; it is the legacy kanban
+     port, styled with the existing design system and flagged for Khalid's
+     review per the parking-list rule. */
+  { href: "/board", label: "Board", icon: SquareKanban },
   { href: "/funnels", label: "Funnels & Behaviour", icon: Filter },
   { href: "/marketing", label: "Marketing", icon: Megaphone },
   { href: "/financials", label: "Financials", icon: Wallet },

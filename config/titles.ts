@@ -33,6 +33,10 @@ export const TITLES: Record<ViewKey, ViewTitle> = {
     title: 'Cases & Pipeline',
     sub: "Patients, deals, and today's appointments in one place",
   },
+  board: {
+    title: 'Team board',
+    sub: 'Department tasks and IT tickets, straight from Zoho Projects',
+  },
   funnels: {
     title: 'Funnels & Behaviour',
     sub: 'How the site and booking flows are performing · refreshes hourly',
