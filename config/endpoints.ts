@@ -12,7 +12,9 @@ export type EndpointKey =
   | 'deliverables'
   | 'attention'
   | 'urgent'
+  | 'blockers'
   | 'cases_summary'
+  | 'leads_medical_travel'
   | 'priorities'
   | 'pipeline_health'
   | 'providers'
@@ -44,7 +46,9 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   deliverables: 'live',
   attention: 'live',
   urgent: 'live',
+  blockers: 'live',
   cases_summary: 'live',
+  leads_medical_travel: 'live',
   priorities: 'live',
   pipeline_health: 'live',
   providers: 'live',

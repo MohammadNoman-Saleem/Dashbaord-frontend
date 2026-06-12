@@ -98,6 +98,92 @@ export interface AttentionItem {
   link: DeepLink
 }
 
+// /api/blockers
+// Mirrors the urgent board grammar with different ownership semantics:
+// urgent means "needs attention now, anyone can act"; a blocker means
+// "I am stuck, Aziz owns the unblock" (06 section F, 07 section 3).
+export interface BlockerItem {
+  id: string
+  text: string
+  waiting_on: string | null
+  raised_by: string
+  raised_by_name: string
+  raised_at: string
+  /** Plain age served by the API ("3d", "4h"). */
+  age_label: string
+  status: 'open' | 'unblocked' | 'withdrawn'
+  /** Prior blocker id when repeat detection matched. */
+  repeat_of: string | null
+  /** True on the second occurrence; triggers the root cause review. */
+  root_cause_flag: boolean
+  resolution_note: string | null
+}
+export interface BlockersData {
+  open: BlockerItem[]
+  /** Resolved in the last 7 days. */
+  resolved: BlockerItem[]
+}
+
+// /api/leads/medical-travel?from=&to=
+// Single source for the Cases card, the Marketing campaign card, and the
+// p-mtl home panel (07 section 3). Every Meta-derived field is nullable:
+// totals.meta_leads, the cpl block, spend, reconciliation, and
+// daily[].spend_usd are null until the Meta connector reports, and
+// meta.reasons carries why.
+export type CorridorStatus = 'live' | 'proposal' | 'final_stages' | 'developing' | 'not_contacted'
+export interface MtlActionRow {
+  /** Lead reference, "L01" style. Never a name, for any viewer. */
+  ref: string
+  from: string
+  destination: string
+  treatment: string
+  status: 'converted' | 'waiting' | 'new'
+  /** Zoho deal stage, set when status is converted. */
+  deal_stage: string | null
+  zoho_lead_id: string
+}
+export interface MtlRead {
+  key: string
+  title: string
+  /** Server-rendered sentence with the live numbers in it. */
+  body: string
+}
+export interface MedicalTravelLeadsData {
+  period: { from: string; to: string; partial_day: boolean; campaign_day: number }
+  totals: {
+    zoho_leads: number
+    meta_leads: number | null
+    outside_bahrain_pct: number
+    gcc_countries: number
+    converted: number
+  }
+  cpl: {
+    basis: string
+    blended_usd: number
+    blended_bhd: number
+    first_week_usd: number
+    since_usd: number
+    split_date: string
+    delta_pct: number
+    fatigue: boolean
+  } | null
+  spend: { usd: number; bhd: number } | null
+  daily: Array<{ date: string; leads: number; spend_usd: number | null }>
+  origins: Array<{ country: string; n: number; inferred_n: number }>
+  destinations: Array<{ group: string; n: number; corridor_status: CorridorStatus }>
+  specialties: Array<{ group: string; n: number }>
+  statuses: {
+    converted: number
+    intro_done: number
+    waiting: number
+    new: number
+    not_qualified: number
+  }
+  action_rows: MtlActionRow[]
+  reads: MtlRead[]
+  reconciliation: { meta: number; zoho: number; gap: number; gap_age_hours: number } | null
+}
+
 // /api/urgent
 export interface UrgentItem {
   id: string
@@ -119,6 +205,11 @@ export interface PriorityRow {
   patient_name?: string
   /** tone: info = new lead, warn = going quiet, good = today's follow-up */
   why_now: { label: string; tone: 'info' | 'warn' | 'good' }
+  /** Classified server-side (07 section 2): Telemedicine pipeline deals are
+   *  tele, Treatment pipeline deals are travel. */
+  service: 'tele' | 'travel'
+  /** Stage or context word shown after the service chip ("spine",
+   *  "consult payment"). May be empty. */
   pipeline: string
   waiting_display: string
   next_step: string
@@ -140,15 +231,25 @@ export interface LateItem {
   promise_plain: string
   owner: string
   over_by_days: number
+  /** Derived from the deal's layout (07 section 2): Customers gives patient,
+   *  Provider gives provider, Corporates gives corp. */
+  kind: 'patient' | 'provider' | 'corp'
 }
 export interface PipelineHealthData {
   items: LateItem[]
 }
 
 // /api/pipeline/providers
-export interface ProvidersData {
+export interface ScopeBlock {
   stages: Array<{ label: string; count: number }>
-  awaiting_signoff: string[]
+  /** Per-scope footer sentence, assembled server-side with the live numbers. */
+  foot: string
+}
+export interface ProvidersData {
+  scopes: { all: ScopeBlock; local: ScopeBlock; intl: ScopeBlock }
+  /** Providers with no country set. Surfaced in the All footer, never
+   *  silently bucketed. */
+  unclassified: number
 }
 
 // /api/handoffs

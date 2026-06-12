@@ -183,11 +183,12 @@ const STRIPS = {
       dot: 'warn',
     },
     {
-      metric_key: 'open_urgent',
-      label: 'Open urgent items',
+      metric_key: 'open_blockers',
+      label: 'Open blockers',
       value_display: '3',
-      note: 'Oldest is 1 day, the portal bug',
-      dot: 'good',
+      small: '1 repeat',
+      note: 'Oldest is the spine-case quote, 3 days',
+      dot: 'warn',
     },
   ],
   noman: [

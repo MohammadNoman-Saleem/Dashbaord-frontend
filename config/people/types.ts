@@ -32,6 +32,8 @@ export type PanelId =
   | 'p-providers'
   | 'p-handoffs'
   | 'p-fin-mini'
+  | 'p-mtl'
+  | 'p-blockers'
 
 export interface PersonHomeConfig {
   key: PersonKey

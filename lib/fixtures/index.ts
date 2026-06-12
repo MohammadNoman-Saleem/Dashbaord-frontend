@@ -8,6 +8,7 @@ import type { Envelope } from '@/lib/api/envelope'
 import { fixture as agentsFixture } from './agents'
 import { fixture as appointmentsFixture } from './appointments'
 import { fixture as attentionFixture } from './attention'
+import { fixture as blockersFixture } from './blockers'
 import { fixture as briefFixture } from './brief'
 import { fixture as casesSummaryFixture } from './cases-summary'
 import { fixture as crmFixture } from './crm'
@@ -22,6 +23,7 @@ import { fixture as handoffsFixture } from './handoffs'
 import { fixture as kpiStripFixture } from './kpi-strip'
 import { fixture as kpiTargetsFixture } from './kpi-targets'
 import { fixture as kpiTeamSummaryFixture } from './kpi-team-summary'
+import { fixture as leadsMedicalTravelFixture } from './leads-medical-travel'
 import { fixture as marketingFixture } from './marketing'
 import { fixture as meFixture } from './me'
 import { summaryFixture, bookingsFixture, rulesFixture } from './payouts'
@@ -45,7 +47,9 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   deliverables: deliverablesFixture,
   attention: attentionFixture,
   urgent: urgentFixture,
+  blockers: blockersFixture,
   cases_summary: casesSummaryFixture,
+  leads_medical_travel: leadsMedicalTravelFixture,
   priorities: prioritiesFixture,
   pipeline_health: pipelineHealthFixture,
   providers: providersFixture,

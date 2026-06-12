@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Megaphone } from "lucide-react";
 
+import { MtlCampaignCard } from "@/components/mtl/MtlCampaignCard";
 import { Grid, spans } from "@/components/shell/Grid";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
@@ -244,6 +245,14 @@ function MarketingContent() {
           );
         }}
       </QueryPanel>
+      {/* The medical travel campaign card (06 group D2) reads its own
+          endpoint, so it sits outside the marketing QueryPanel and still
+          renders when the marketing payload fails. */}
+      <Grid className="mt-[14px]">
+        <div className={spans.c12}>
+          <MtlCampaignCard />
+        </div>
+      </Grid>
     </>
   );
 }

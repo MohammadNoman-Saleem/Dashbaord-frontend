@@ -1,14 +1,16 @@
 // Compact comparison bars. Matches the mockup .mini-bars and .mb rules:
 // 108px label, flexible 9px track, 44px right-aligned value, 7px row gap.
 // Fill is accent by default, optimism when a row is flagged behind,
-// recovery when ahead. Severity is carried by words in the consumer copy.
-// Pure render, decorative only. Consumers render the values as text.
+// recovery when ahead, accessible when a row is set aside (the V3 "Other"
+// and "Not qualified" buckets). Severity is carried by words in the
+// consumer copy. Pure render, decorative only. Consumers render the values
+// as text.
 
 export type MiniBarRow = {
   label: string
   value: string | number
   pct: number
-  status?: 'ahead' | 'behind'
+  status?: 'ahead' | 'behind' | 'aside'
 }
 
 type MiniBarsProps = {
@@ -26,7 +28,9 @@ export function MiniBars({ rows }: MiniBarsProps) {
             ? 'bg-optimism'
             : row.status === 'ahead'
               ? 'bg-recovery'
-              : 'bg-accent'
+              : row.status === 'aside'
+                ? 'bg-accessible'
+                : 'bg-accent'
         return (
           <div
             key={`${row.label}-${i}`}

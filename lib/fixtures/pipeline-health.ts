@@ -12,30 +12,35 @@ function meta(): Meta {
 const ITEMS = [
   {
     what: 'Treatment quote, Patient C.',
+    kind: 'patient',
     promise_plain: 'Quote within 72h',
     owner: 'Fatima',
     over_by_days: 2,
   },
   {
     what: 'Hospital quote, spine case',
+    kind: 'patient',
     promise_plain: 'Partner reply within 72h',
     owner: 'Fatima',
     over_by_days: 3,
   },
   {
     what: 'First reply, Lead 0395',
+    kind: 'patient',
     promise_plain: 'Reply within 12h',
     owner: 'Fatima',
     over_by_days: 1,
   },
   {
     what: 'Provider documents, Dr. M.',
+    kind: 'provider',
     promise_plain: 'Docs within 7 days',
     owner: 'Razan',
     over_by_days: 4,
   },
   {
     what: 'Proposal, Alpha Insurance',
+    kind: 'corp',
     promise_plain: 'Send within 5 days',
     owner: 'Afaf',
     over_by_days: 2,

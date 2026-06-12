@@ -15,7 +15,8 @@ const DATA = {
       metric_key: 'cases_active_deals',
       label: 'Active deals',
       value_display: '38',
-      note: 'Across both patient pipelines',
+      /* The live service split arrives assembled server-side (06 group A). */
+      note: '26 telemedicine, 12 medical travel',
       dot: 'good',
     },
     {

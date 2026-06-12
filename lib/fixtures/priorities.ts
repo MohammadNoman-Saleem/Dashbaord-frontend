@@ -19,7 +19,8 @@ const ROWS = [
   {
     patient_ref: { zoho_id: 'T-031', initials: 'A' },
     why_now: { label: 'New lead', tone: 'info' },
-    pipeline: 'Treatment, spine',
+    service: 'travel',
+    pipeline: 'spine',
     waiting_display: '1h 40m',
     next_step: 'Send the intro on WhatsApp, Arabic first',
     source: 'Meta ad',
@@ -27,6 +28,7 @@ const ROWS = [
   {
     patient_ref: { zoho_id: '0427', initials: 'G' },
     why_now: { label: 'New lead', tone: 'info' },
+    service: 'tele',
     pipeline: 'Novo track',
     waiting_display: '50m',
     next_step: 'Confirm slot with Dr. Kareem',
@@ -35,7 +37,8 @@ const ROWS = [
   {
     patient_ref: { zoho_id: '0430', initials: 'B' },
     why_now: { label: 'New lead', tone: 'info' },
-    pipeline: 'Telemedicine',
+    service: 'tele',
+    pipeline: '',
     waiting_display: '3h 10m',
     next_step: 'Call back, asked for Arabic',
     source: 'Website',
@@ -43,7 +46,8 @@ const ROWS = [
   {
     patient_ref: { zoho_id: '0421', initials: '0421' },
     why_now: { label: 'New lead', tone: 'info' },
-    pipeline: 'Telemedicine',
+    service: 'tele',
+    pipeline: '',
     waiting_display: '2h 20m',
     next_step: 'Reply with dermatology fee range',
     source: 'Instagram',
@@ -51,7 +55,8 @@ const ROWS = [
   {
     patient_ref: { zoho_id: '0418', initials: '0418' },
     why_now: { label: 'New lead', tone: 'info' },
-    pipeline: 'Treatment, cardiac',
+    service: 'travel',
+    pipeline: 'cardiac',
     waiting_display: '5h',
     next_step: 'Qualify budget, ask for reports',
     source: 'Referral',
@@ -59,7 +64,8 @@ const ROWS = [
   {
     patient_ref: { zoho_id: 'T-030', initials: 'C' },
     why_now: { label: 'Quiet 4 days', tone: 'warn' },
-    pipeline: 'Treatment quote',
+    service: 'travel',
+    pipeline: 'quote stage',
     waiting_display: '4d',
     next_step: 'Nudge with revised quote',
     source: 'Meta ad',
@@ -67,7 +73,8 @@ const ROWS = [
   {
     patient_ref: { zoho_id: 'C-204', initials: 'D' },
     why_now: { label: 'Quiet 3 days', tone: 'warn' },
-    pipeline: 'Consult payment',
+    service: 'tele',
+    pipeline: 'consult payment',
     waiting_display: '3d',
     next_step: 'Payment link reminder, expires tonight',
     source: 'WhatsApp',
@@ -75,7 +82,8 @@ const ROWS = [
   {
     patient_ref: { zoho_id: 'T-029', initials: 'H' },
     why_now: { label: 'Quiet 3 days', tone: 'warn' },
-    pipeline: 'Treatment payment',
+    service: 'travel',
+    pipeline: 'payment stage',
     waiting_display: '3d',
     next_step: 'Gentle deposit reminder',
     source: 'Referral',
@@ -83,7 +91,8 @@ const ROWS = [
   {
     patient_ref: { zoho_id: '0395', initials: '0395' },
     why_now: { label: 'Quiet 6 days', tone: 'warn' },
-    pipeline: 'New deal',
+    service: 'tele',
+    pipeline: 'new deal',
     waiting_display: '6d',
     next_step: 'Final check-in, then set aside',
     source: 'Google',
@@ -91,7 +100,8 @@ const ROWS = [
   {
     patient_ref: { zoho_id: 'T-028', initials: 'E' },
     why_now: { label: 'Check-in due', tone: 'good' },
-    pipeline: 'Treatment done Jun 7',
+    service: 'travel',
+    pipeline: 'done Jun 7',
     waiting_display: 'Today',
     next_step: '72-hour call, after 4 PM',
     source: '·',
@@ -99,7 +109,8 @@ const ROWS = [
   {
     patient_ref: { zoho_id: 'C-201', initials: 'F' },
     why_now: { label: 'Follow-up', tone: 'good' },
-    pipeline: 'Consult Jun 9',
+    service: 'tele',
+    pipeline: 'consult Jun 9',
     waiting_display: 'Today',
     next_step: 'Send summary and next steps',
     source: 'WhatsApp',
@@ -107,7 +118,8 @@ const ROWS = [
   {
     patient_ref: { zoho_id: 'T-027', initials: 'J' },
     why_now: { label: '30-day review', tone: 'good' },
-    pipeline: 'Treatment done May 11',
+    service: 'travel',
+    pipeline: 'done May 11',
     waiting_display: 'Today',
     next_step: 'Book the outcome call',
     source: '·',

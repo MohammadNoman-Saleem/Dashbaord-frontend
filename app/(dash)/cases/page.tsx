@@ -2,17 +2,19 @@
 
 import { CrmSlice } from "@/components/cases/CrmSlice";
 import { CasesKpiRow } from "@/components/cases/KpiRow";
+import { MtlCard } from "@/components/mtl/MtlCard";
 import { AppointmentsPanel } from "@/components/panels/Appointments";
 import { LatePanel } from "@/components/panels/Late";
 import { PrioritiesPanel } from "@/components/panels/Priorities";
 import { Grid, spans } from "@/components/shell/Grid";
 import { useFocusFlash } from "@/lib/deepLink";
 
-/* Cases and Pipeline (spec 02 section 8.2): the four KPI cards, Fatima's
-   morning list in full, deals running late, appointments with the refund
-   rule, and the paginated CRM slice. The morning list is Fatima's queue for
-   every viewer; whether names render is decided server-side per the signed
-   in viewer, never here. */
+/* Cases and Pipeline (spec 02 section 8.2, 06 groups A and D1): the four
+   KPI cards, Fatima's morning list in full with the service filter, the
+   medical travel leads card (deep-link target mtl-card), deals running
+   late, appointments with the refund rule, and the paginated CRM slice.
+   The morning list is Fatima's queue for every viewer; whether names
+   render is decided server-side per the signed in viewer, never here. */
 
 export default function CasesPage() {
   useFocusFlash();
@@ -22,6 +24,9 @@ export default function CasesPage() {
       <CasesKpiRow />
       <div className={spans.c12} data-focus-id="morning-list">
         <PrioritiesPanel person="fatima" variant="cases" />
+      </div>
+      <div className={spans.c12} data-focus-id="mtl-card">
+        <MtlCard />
       </div>
       <div className={spans.c7} data-focus-id="running-late">
         <LatePanel variant="cases" />

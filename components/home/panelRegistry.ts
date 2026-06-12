@@ -14,6 +14,7 @@ import type { PanelId } from '@/config/people/types'
 
 import { AgentsMiniPanel } from '@/components/panels/AgentsMini'
 import { AppointmentsPanel } from '@/components/panels/Appointments'
+import { BlockersMiniPanel } from '@/components/panels/BlockersMini'
 import { BriefPanel } from '@/components/panels/Brief'
 import { ChannelsPanel } from '@/components/panels/Channels'
 import { DeliverablesMiniPanel } from '@/components/panels/DeliverablesMini'
@@ -21,6 +22,7 @@ import { FinMiniPanel } from '@/components/panels/FinMini'
 import { FunnelMiniPanel } from '@/components/panels/FunnelMini'
 import { HandoffsPanel } from '@/components/panels/Handoffs'
 import { LatePanel } from '@/components/panels/Late'
+import { MtlMiniPanel } from '@/components/panels/MtlMini'
 import { PrioritiesPanel } from '@/components/panels/Priorities'
 import { ProvidersPanel } from '@/components/panels/Providers'
 import { RevenuePanel } from '@/components/panels/Revenue'
@@ -51,4 +53,6 @@ export const PANEL_REGISTRY: Record<PanelId, PanelRegistration> = {
   'p-providers': { Component: ProvidersPanel, span: 'c6' },
   'p-handoffs': { Component: HandoffsPanel, span: 'c6' },
   'p-fin-mini': { Component: FinMiniPanel, span: 'c6' },
+  'p-mtl': { Component: MtlMiniPanel, span: 'c6' },
+  'p-blockers': { Component: BlockersMiniPanel, span: 'c6' },
 }
