@@ -421,6 +421,85 @@ export interface FunnelNovoData {
   landing_by_campaign: Array<{ label: string; views: number }>
 }
 
+// /api/growth/engagement
+export interface GrowthTrendPoint {
+  date: string
+  dau: number
+  rolling_avg: number
+}
+export interface GrowthEngagementData {
+  active_users: {
+    dau: number
+    mau: number
+    stickiness_pct: number
+    /** The event behind DAU/MAU, surfaced so the UI labels it honestly. */
+    event: string
+    trend_30d: GrowthTrendPoint[]
+  }
+  top_events: Array<{
+    name: string
+    count_7d: number
+    count_30d: number
+    /** Null when the prior week had no events (no honest base for a trend). */
+    trend_pct: number | null
+  }>
+  traffic: {
+    window_days: number
+    homepage_views: number
+    consult_views: number
+    trend_homepage_pct: number | null
+    trend_consult_pct: number | null
+    /** Null when Mixpanel returned no $os buckets for the window. */
+    device_split: { mobile: number; desktop: number; other: number } | null
+  }
+}
+
+// /api/growth/retention
+export interface RetentionCohortRow {
+  /** Cohort start date, YYYY-MM-DD (week of first visit, not an identity). */
+  date: string
+  size: number
+  /** Percent retained per column; null when the bucket has not matured. */
+  cells: Array<number | null>
+}
+export interface GrowthRetentionData {
+  /** Null when Mixpanel is rate limited with nothing saved yet. */
+  behaviour: {
+    born_event: string
+    return_event: string
+    columns: string[]
+    visits: RetentionCohortRow[]
+    bookings: RetentionCohortRow[]
+  } | null
+  lead_to_booking: {
+    by_source: Array<{
+      source: string
+      leads: number
+      booked: number
+      conversion_pct: number
+      median_days: number | null
+    }>
+    overall: { leads: number; booked: number; conversion_pct: number; median_days: number | null }
+    leads_total: number
+    leads_with_email: number
+    definition: string
+  }
+  booking_cohorts: {
+    cohorts: Array<{
+      key: string
+      label: string
+      size: number
+      repeat_1m_pct: number | null
+      repeat_2m_pct: number | null
+      repeat_3m_pct: number | null
+      repeat_revenue: number
+      first_revenue: number
+    }>
+    identified_patients: number
+    definition: string
+  }
+}
+
 // /api/agents
 export interface AgentRow {
   key: string

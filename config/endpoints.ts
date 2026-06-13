@@ -31,6 +31,8 @@ export type EndpointKey =
   | 'funnels_uiux'
   | 'funnels_scheduled'
   | 'funnels_novo'
+  | 'growth_engagement'
+  | 'growth_retention'
   | 'agents'
   | 'tasks'
   | 'board'
@@ -70,6 +72,8 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   funnels_uiux: 'live',
   funnels_scheduled: 'live',
   funnels_novo: 'live',
+  growth_engagement: 'live',
+  growth_retention: 'live',
   agents: 'live',
   tasks: 'live',
   board: 'live',

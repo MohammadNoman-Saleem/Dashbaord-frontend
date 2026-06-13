@@ -8,6 +8,7 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { DirectTab } from "@/components/funnels/DirectTab";
 import { GeneralTab } from "@/components/funnels/GeneralTab";
 import { NovoTab } from "@/components/funnels/NovoTab";
+import { RetentionTab } from "@/components/funnels/RetentionTab";
 import { ScheduledTab } from "@/components/funnels/ScheduledTab";
 import { UiuxTab } from "@/components/funnels/UiuxTab";
 import { Button } from "@/components/ui/Button";
@@ -19,6 +20,8 @@ import type {
   FunnelNovoData,
   FunnelScheduledData,
   FunnelUiuxData,
+  GrowthEngagementData,
+  GrowthRetentionData,
 } from "@/lib/api/contract";
 import type { Envelope } from "@/lib/api/envelope";
 import { qk } from "@/lib/api/keys";
@@ -28,13 +31,14 @@ import { fmtAgo, fmtTime } from "@/lib/format/datetime";
 import type { EndpointKey } from "@/config/endpoints";
 import { TITLES } from "@/config/titles";
 
-/* Funnels and Behaviour (spec 02 section 8.3). The five tabs are wired to
-   ?tab= (general|direct|uiux|scheduled|novo) and the Direct dataset to
-   ?variant=, so deep links land on the right pane from a cold load. Each
-   tab is one endpoint; the header reads "Updated {ago}" from its meta and
-   the Refresh button refetches with refresh=1. A refresh that comes back
-   meta.cached means Mixpanel kept its saved numbers; the toast says so in
-   the copy-library words. */
+/* Funnels and Behaviour (spec 02 section 8.3). The six tabs are wired to
+   ?tab= (general|direct|uiux|scheduled|novo|retention) and the Direct
+   dataset to ?variant=, so deep links land on the right pane from a cold
+   load. Each tab is one endpoint, except General which carries a second
+   engagement query (DAU/MAU, top events, traffic); the header reads
+   "Updated {ago}" from the tab's meta and the Refresh button refetches with
+   refresh=1. A refresh that comes back meta.cached means Mixpanel kept its
+   saved numbers; the toast says so in the copy-library words. */
 
 const TAB_ITEMS = [
   { key: "general", label: "General" },
@@ -42,9 +46,10 @@ const TAB_ITEMS = [
   { key: "uiux", label: "UI/UX" },
   { key: "scheduled", label: "Scheduled" },
   { key: "novo", label: "Novo" },
+  { key: "retention", label: "Retention" },
 ];
 
-type TabKey = "general" | "direct" | "uiux" | "scheduled" | "novo";
+type TabKey = "general" | "direct" | "uiux" | "scheduled" | "novo" | "retention";
 
 const TAB_SOURCES: Record<TabKey, { endpoint: EndpointKey; path: string }> = {
   general: { endpoint: "funnels_general", path: "/funnels/general" },
@@ -52,6 +57,7 @@ const TAB_SOURCES: Record<TabKey, { endpoint: EndpointKey; path: string }> = {
   uiux: { endpoint: "funnels_uiux", path: "/funnels/uiux" },
   scheduled: { endpoint: "funnels_scheduled", path: "/funnels/scheduled" },
   novo: { endpoint: "funnels_novo", path: "/funnels/novo" },
+  retention: { endpoint: "growth_retention", path: "/growth/retention" },
 };
 
 function FunnelsContent() {
@@ -74,6 +80,14 @@ function FunnelsContent() {
     path: source.path,
     params: tab === "direct" ? { variant } : undefined,
   });
+  // The General tab's second query: engagement numbers from /growth.
+  // Refresh covers both queries while that tab is up.
+  const engagement = useRefreshableEnvelope<GrowthEngagementData>({
+    queryKey: qk.growth("engagement"),
+    endpoint: "growth_engagement",
+    path: "/growth/engagement",
+    enabled: tab === "general",
+  });
   const meta = query.data?.meta;
 
   function navigate(nextTab: TabKey, nextVariant?: string) {
@@ -88,7 +102,10 @@ function FunnelsContent() {
   }
 
   async function onRefresh() {
-    const envelope = await refresh();
+    const [envelope] = await Promise.all([
+      refresh(),
+      tab === "general" ? engagement.refresh() : Promise.resolve(undefined),
+    ]);
     if (envelope?.meta.cached) {
       toast(
         `Mixpanel is busy right now. Showing saved numbers from ${fmtTime(envelope.meta.updated_at)}. It refreshes again within the hour.`,
@@ -123,7 +140,10 @@ function FunnelsContent() {
       />
 
       {tab === "general" ? (
-        <GeneralTab query={query as UseQueryResult<Envelope<FunnelGeneralData>>} />
+        <GeneralTab
+          query={query as UseQueryResult<Envelope<FunnelGeneralData>>}
+          engagement={engagement.query}
+        />
       ) : null}
       {tab === "direct" ? (
         <DirectTab
@@ -140,6 +160,9 @@ function FunnelsContent() {
       ) : null}
       {tab === "novo" ? (
         <NovoTab query={query as UseQueryResult<Envelope<FunnelNovoData>>} />
+      ) : null}
+      {tab === "retention" ? (
+        <RetentionTab query={query as UseQueryResult<Envelope<GrowthRetentionData>>} />
       ) : null}
     </>
   );

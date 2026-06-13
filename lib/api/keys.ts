@@ -27,6 +27,7 @@ export const qk = {
   crm: (resource: string, page: number, pageSize: number) => ['crm', resource, page, pageSize] as const,
   marketing: () => ['marketing'] as const,
   funnels: (tab: string, variant?: string) => ['funnels', tab, variant ?? ''] as const,
+  growth: (section: string) => ['growth', section] as const,
   agents: () => ['agents'] as const,
   tasks: () => ['tasks'] as const,
   board: (scope: string) => ['board', scope] as const,
