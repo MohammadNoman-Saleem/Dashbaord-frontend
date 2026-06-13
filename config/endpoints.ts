@@ -30,6 +30,8 @@ export type EndpointKey =
   | 'funnels_novo'
   | 'agents'
   | 'tasks'
+  | 'board'
+  | 'it_support'
   | 'brief'
   | 'payouts_summary'
   | 'payouts_bookings'
@@ -64,6 +66,10 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   funnels_novo: 'live',
   agents: 'live',
   tasks: 'live',
+  board: 'live',
+  // POST-only seam for raising IT tickets; carries no fixture (mutateEnvelope
+  // resolves null in fixture mode without ever reading one).
+  it_support: 'live',
   brief: 'live',
   payouts_summary: 'fixture',
   payouts_bookings: 'fixture',

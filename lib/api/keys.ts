@@ -26,6 +26,7 @@ export const qk = {
   funnels: (tab: string, variant?: string) => ['funnels', tab, variant ?? ''] as const,
   agents: () => ['agents'] as const,
   tasks: () => ['tasks'] as const,
+  board: (scope: string) => ['board', scope] as const,
   brief: () => ['brief'] as const,
   payoutsSummary: (cycle: string) => ['payouts', 'summary', cycle] as const,
   payoutsBookings: (cycle: string) => ['payouts', 'bookings', cycle] as const,

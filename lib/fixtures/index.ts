@@ -9,6 +9,7 @@ import { fixture as agentsFixture } from './agents'
 import { fixture as appointmentsFixture } from './appointments'
 import { fixture as attentionFixture } from './attention'
 import { fixture as blockersFixture } from './blockers'
+import { fixture as boardFixture } from './board'
 import { fixture as briefFixture } from './brief'
 import { fixture as casesSummaryFixture } from './cases-summary'
 import { fixture as crmFixture } from './crm'
@@ -65,6 +66,13 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   funnels_novo: funnelsNovoFixture,
   agents: agentsFixture,
   tasks: tasksFixture,
+  board: boardFixture,
+  // POST-only endpoint: mutateEnvelope resolves null in fixture mode and
+  // never calls getFixture, so this stub only satisfies the record type.
+  it_support: () => ({
+    data: { ticket_id: null },
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
   brief: briefFixture,
   payouts_summary: summaryFixture,
   payouts_bookings: bookingsFixture,

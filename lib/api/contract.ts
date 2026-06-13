@@ -14,7 +14,7 @@ export interface PatientRefData {
 }
 
 export interface DeepLink {
-  view: 'home' | 'cases' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'payouts'
+  view: 'home' | 'cases' | 'board' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'payouts'
   tab?: string
   focus?: string
 }
@@ -388,6 +388,44 @@ export interface SourceRow {
 export interface AgentsData {
   agents: AgentRow[]
   sources: SourceRow[]
+}
+
+// /api/board?scope=
+// Department kanban over Zoho Projects: the five department tasklists in
+// the IT project plus the whole cross-department project as one scope each.
+// Columns arrive in the legacy board order with unknown statuses appended
+// server-side, so the client renders them as given and never re-sorts.
+export interface BoardCard {
+  id: string
+  title: string
+  owner: string
+  /** "Jun 12" or null when the task has no due date. */
+  due_display: string | null
+  /** Zoho priority (None/Low/Medium/High) or null when unset. */
+  priority: string | null
+  /** Tasklist name, or null when Zoho omits it. */
+  tasklist: string | null
+  status: string
+}
+export interface BoardColumn {
+  status: string
+  /** Zoho status type (open/inprogress/closed) when known. */
+  status_type: string | null
+  count: number
+  cards: BoardCard[]
+}
+export interface BoardData {
+  scope: string
+  scope_label: string
+  project_id: string
+  project_name: string
+  columns: BoardColumn[]
+}
+
+// POST /api/it-support
+export interface ItSupportTicketData {
+  /** Zoho task id of the new ticket; null only if Zoho answered without one. */
+  ticket_id: string | null
 }
 
 // /api/tasks
