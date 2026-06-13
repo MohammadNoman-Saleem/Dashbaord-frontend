@@ -20,6 +20,8 @@ import { fixture as funnelsGeneralFixture } from './funnels-general'
 import { fixture as funnelsNovoFixture } from './funnels-novo'
 import { fixture as funnelsScheduledFixture } from './funnels-scheduled'
 import { fixture as funnelsUiuxFixture } from './funnels-uiux'
+import { fixture as growthEngagementFixture } from './growth-engagement'
+import { fixture as growthRetentionFixture } from './growth-retention'
 import { fixture as handoffsFixture } from './handoffs'
 import { fixture as kpiStripFixture } from './kpi-strip'
 import { fixture as kpiTargetsFixture } from './kpi-targets'
@@ -64,6 +66,8 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   funnels_uiux: funnelsUiuxFixture,
   funnels_scheduled: funnelsScheduledFixture,
   funnels_novo: funnelsNovoFixture,
+  growth_engagement: growthEngagementFixture,
+  growth_retention: growthRetentionFixture,
   agents: agentsFixture,
   tasks: tasksFixture,
   board: boardFixture,

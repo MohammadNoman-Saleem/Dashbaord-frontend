@@ -31,8 +31,11 @@ export function useRefreshableEnvelope<T>(options: {
   path: string
   params?: Params
   staleTime?: number
+  /** Gate the fetch (TanStack enabled). For secondary queries that only
+   *  apply to one tab of a page; defaults to true. */
+  enabled?: boolean
 }): RefreshableEnvelope<T> {
-  const { queryKey, endpoint, path, params, staleTime } = options
+  const { queryKey, endpoint, path, params, staleTime, enabled } = options
   const freshRef = useRef(false)
 
   const query = useQuery({
@@ -43,6 +46,7 @@ export function useRefreshableEnvelope<T>(options: {
         ...(freshRef.current ? { refresh: 1 } : {}),
       }),
     staleTime: staleTime ?? 5 * 60_000,
+    enabled: enabled ?? true,
   })
 
   const [refreshing, setRefreshing] = useState(false)
