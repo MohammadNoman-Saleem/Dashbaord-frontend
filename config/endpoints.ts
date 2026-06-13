@@ -40,6 +40,8 @@ export type EndpointKey =
   | 'agents'
   | 'tasks'
   | 'board'
+  | 'social_ga4'
+  | 'social_platforms'
   | 'it_support'
   | 'brief'
   | 'payouts_summary'
@@ -85,6 +87,8 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   agents: 'live',
   tasks: 'live',
   board: 'live',
+  social_ga4: 'live',
+  social_platforms: 'live',
   // POST-only seam for raising IT tickets; carries no fixture (mutateEnvelope
   // resolves null in fixture mode without ever reading one).
   it_support: 'live',

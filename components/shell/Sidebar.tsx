@@ -7,6 +7,7 @@ import {
   Home,
   Layers,
   Megaphone,
+  Share2,
   Split,
   SquareKanban,
   Target,
@@ -34,6 +35,11 @@ const WORKSPACE_NAV: NavEntry[] = [
   { href: "/board", label: "Board", icon: SquareKanban },
   { href: "/funnels", label: "Funnels & Behaviour", icon: Filter },
   { href: "/marketing", label: "Marketing", icon: Megaphone },
+  /* NOTE: Social is a tenth view that is NOT in the approved v3 mockup; it
+     is the legacy /social page (GA4 plus platform metrics) ported in the
+     existing design system and flagged for Khalid's review per the
+     parking-list rule. */
+  { href: "/social", label: "Social", icon: Share2 },
   { href: "/financials", label: "Financials", icon: Wallet },
 ];
 

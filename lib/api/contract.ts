@@ -14,7 +14,7 @@ export interface PatientRefData {
 }
 
 export interface DeepLink {
-  view: 'home' | 'cases' | 'board' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'payouts'
+  view: 'home' | 'cases' | 'board' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'payouts' | 'social'
   tab?: string
   focus?: string
 }
@@ -666,6 +666,100 @@ export interface BriefData {
   compiled_at: string
   highlights: Array<{ title: string; text: string; good: boolean }>
   sections: Array<{ title: string; content: string; ran_at: string }>
+}
+
+// /api/social/ga4?period=
+// GA4 website analytics for the Social view (legacy /social port). The six
+// reports come back already parsed; change fields are null when the
+// previous period had no baseline.
+export interface SocialGa4Data {
+  period: '7d' | '28d' | '90d' | 'mtd'
+  kpi: {
+    sessions: number
+    users: number
+    new_users: number
+    pageviews: number
+    bounce_rate: number
+    avg_session_duration: number
+    sessions_change: number | null
+    users_change: number | null
+    pageviews_change: number | null
+    bounce_change: number | null
+  }
+  sessions_over_time: Array<{ date: string; sessions: number; users: number }>
+  by_channel: Array<{ channel: string; sessions: number; users: number }>
+  by_device: Array<{ device: string; sessions: number }>
+  top_pages: Array<{ path: string; title: string; sessions: number; pageviews: number; avg_duration: number }>
+}
+
+// /api/social/platforms
+// Each platform block is null when its source is not wired or its token
+// expired; meta.reasons carries an authored reason whose key starts with
+// the platform name (e.g. tiktok_token_expired), and the card renders the
+// honest not-connected treatment from it.
+export interface SocialLinkedinBlock {
+  followers: number
+  page_views_30d: number
+  posts: Array<{
+    id: string
+    published_at: string | null
+    text: string
+    impressions: number
+    likes: number
+    comments: number
+    shares: number
+    clicks: number
+  }>
+}
+export interface SocialTiktokBlock {
+  display_name: string
+  followers: number
+  video_count: number
+  videos: Array<{
+    id: string
+    title: string
+    published_at: string | null
+    views: number
+    likes: number
+    comments: number
+    shares: number
+  }>
+}
+export interface SocialInstagramBlock {
+  followers: number
+  media_count: number
+  posts: Array<{
+    id: string
+    published_at: string | null
+    caption: string
+    media_type: string
+    likes: number
+    comments: number
+    impressions: number | null
+    reach: number | null
+    saves: number | null
+  }>
+}
+export interface SocialZohoBlock {
+  engagement_rate: number
+  total_reach: number
+  total_interactions: number
+  posts: Array<{
+    id: string
+    platform: string
+    content_preview: string
+    reach: number
+    likes: number
+    comments: number
+    shares: number
+    published_at: string | null
+  }>
+}
+export interface SocialPlatformsData {
+  linkedin: SocialLinkedinBlock | null
+  tiktok: SocialTiktokBlock | null
+  instagram: SocialInstagramBlock | null
+  zoho_social: SocialZohoBlock | null
 }
 
 // /api/payouts/*
