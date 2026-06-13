@@ -64,4 +64,8 @@ export const TITLES: Record<ViewKey, ViewTitle> = {
     title: 'Commission & Payouts',
     sub: 'Every booking split into patient paid, provider payout, and Saleem revenue',
   },
+  social: {
+    title: 'Social',
+    sub: 'Website traffic and the social accounts, side by side',
+  },
 }

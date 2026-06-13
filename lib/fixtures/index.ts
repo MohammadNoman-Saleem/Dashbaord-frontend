@@ -32,6 +32,8 @@ import { fixture as pipelineHealthFixture } from './pipeline-health'
 import { fixture as prioritiesFixture } from './priorities'
 import { fixture as providersFixture } from './providers'
 import { fixture as pulseFixture } from './pulse'
+import { fixture as socialGa4Fixture } from './social-ga4'
+import { fixture as socialPlatformsFixture } from './social-platforms'
 import { fixture as tasksFixture } from './tasks'
 import { fixture as urgentFixture } from './urgent'
 
@@ -67,6 +69,8 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   agents: agentsFixture,
   tasks: tasksFixture,
   board: boardFixture,
+  social_ga4: socialGa4Fixture,
+  social_platforms: socialPlatformsFixture,
   // POST-only endpoint: mutateEnvelope resolves null in fixture mode and
   // never calls getFixture, so this stub only satisfies the record type.
   it_support: () => ({
