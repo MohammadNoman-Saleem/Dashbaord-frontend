@@ -9,7 +9,9 @@ export type EndpointKey =
   | 'kpi_strip'
   | 'kpi_targets'
   | 'kpi_team_summary'
+  | 'kpi_drill'
   | 'deliverables'
+  | 'admin_users'
   | 'attention'
   | 'urgent'
   | 'blockers'
@@ -45,7 +47,11 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   kpi_strip: 'live',
   kpi_targets: 'live',
   kpi_team_summary: 'live',
+  kpi_drill: 'live',
   deliverables: 'live',
+  // Admin user management: list, add, reset password. Writes carry no
+  // fixture (mutateEnvelope resolves null in fixture mode).
+  admin_users: 'live',
   attention: 'live',
   urgent: 'live',
   blockers: 'live',

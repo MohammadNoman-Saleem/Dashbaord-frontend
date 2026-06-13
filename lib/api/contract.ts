@@ -62,6 +62,27 @@ export interface KpiTargetRow {
   unit: 'count' | 'bhd' | 'pct'
   updated_at: string
   can_edit: boolean
+  /** True when GET /api/kpi/drill can list the records behind the number. */
+  drillable: boolean
+}
+
+// /api/kpi/drill?metric_key=&month=
+// The reference-only record list behind an auto metric's number. Rows carry
+// initials through the PatientSerializer, never names; the shape is dynamic
+// (columns drive the table), so rows are an open map keyed by column key.
+export interface KpiDrillColumn {
+  key: string
+  label: string
+  numeric?: boolean
+}
+export interface KpiDrillData {
+  metric_key: string
+  month: string
+  columns: KpiDrillColumn[]
+  rows: Array<Record<string, string | number | null>>
+  /** Full count behind the number; rows may be a capped slice of it. */
+  total: number
+  summary: string | null
 }
 
 // /api/kpi/team-summary?month=
@@ -87,6 +108,32 @@ export interface DeliverableRow {
   measured_auto: boolean
   due_date: string | null
   updated_at: string
+  /** True when the viewer may change this row's status (admin any, dept
+   *  head own team). Controls render only where the server says so. */
+  can_edit: boolean
+}
+
+// /api/admin/users  (admin only; the real viewer, never ?as=)
+export interface AdminUserRow {
+  key: string
+  name: string
+  role: 'admin' | 'dept_head' | 'member'
+  department: string | null
+  last_login: string | null
+  must_reset: boolean
+}
+// POST /api/admin/users  -> the new row plus a one-time temporary password.
+export interface AdminUserCreated {
+  user: AdminUserRow
+  /** Shown once. Handed over out of band; never stored. */
+  temp_password: string
+}
+// POST /api/admin/users/:key/reset-password
+export interface PasswordReset {
+  key: string
+  /** Shown once. Handed over out of band; never stored. */
+  temp_password: string
+  must_reset: boolean
 }
 
 // /api/attention?person=

@@ -45,7 +45,18 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   kpi_strip: kpiStripFixture,
   kpi_targets: kpiTargetsFixture,
   kpi_team_summary: kpiTeamSummaryFixture,
+  // Live-only endpoints. The drill is a GET, but it is reached only from the
+  // live /kpis page; these stubs satisfy the record type (getFixture is never
+  // called for a live key, and admin writes resolve null in fixture mode).
+  kpi_drill: () => ({
+    data: { metric_key: '', month: '', columns: [], rows: [], total: 0, summary: null },
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
   deliverables: deliverablesFixture,
+  admin_users: () => ({
+    data: [],
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
   attention: attentionFixture,
   urgent: urgentFixture,
   blockers: blockersFixture,
