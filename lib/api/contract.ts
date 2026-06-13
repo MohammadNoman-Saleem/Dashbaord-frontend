@@ -252,6 +252,103 @@ export interface ProvidersData {
   unclassified: number
 }
 
+// /api/pipeline/staleness
+// One scope per pipeline plus "all", computed server-side, so the scope
+// switch never refetches. Owners lists only deals untouched for over 30
+// days, the weekly chase list.
+export interface StalenessBucket {
+  key: string
+  label: string
+  count: number
+  value_bhd: number
+}
+export interface StalenessOwnerRow {
+  owner: string
+  count: number
+  value_bhd: number
+  top_stage: string
+}
+export interface StalenessScope {
+  scope: string
+  label: string
+  buckets: StalenessBucket[]
+  owners: StalenessOwnerRow[]
+}
+export interface PipelineStalenessData {
+  scopes: StalenessScope[]
+}
+
+// /api/pipeline/momentum
+export interface MomentumPipeline {
+  pipeline: string
+  total: number
+  this_month: number
+  last_month: number
+  /** Null when last month had no new deals; nothing honest to compare. */
+  change_pct: number | null
+  open: number
+  won: number
+  lost: number
+  win_rate_pct: number
+  loss_rate_pct: number
+  total_value_bhd: number
+}
+export interface PipelineMomentumData {
+  /** Server-authored, e.g. "June so far vs May". */
+  compare_label: string
+  pipelines: MomentumPipeline[]
+}
+
+// /api/pipeline/losses
+// Trend bucketed on close date (last update as fallback), trailing 12
+// months. cross.rows[i].counts align with cross.sources by index.
+export interface LossMonth {
+  key: string
+  label: string
+  count: number
+  value_bhd: number
+}
+export interface LossOwnerRow {
+  owner: string
+  count: number
+  value_bhd: number
+}
+export interface LossCross {
+  sources: string[]
+  rows: Array<{ reason: string; counts: number[] }>
+}
+export interface PipelineLossesData {
+  months: LossMonth[]
+  owners: LossOwnerRow[]
+  cross: LossCross
+  totals: { lost_count: number; lost_value_bhd: number; top_reason: string | null }
+}
+
+// /api/pipeline/velocity
+// Open-deal stage ages are an approximation (days since the deal was
+// created, grouped by current stage); won is the real created-to-close
+// cycle time.
+export interface VelocityStats {
+  count: number
+  avg_days: number
+  min_days: number
+  max_days: number
+}
+export interface VelocityStage extends VelocityStats {
+  name: string
+}
+export interface VelocityPipeline {
+  pipeline: string
+  stages: VelocityStage[]
+  won: VelocityStats | null
+  fastest: { name: string; avg_days: number } | null
+  bottleneck: { name: string; avg_days: number } | null
+  open_avg_days: number
+}
+export interface PipelineVelocityData {
+  pipelines: VelocityPipeline[]
+}
+
 // /api/handoffs
 export interface HandoffsData {
   on_time_pct: number

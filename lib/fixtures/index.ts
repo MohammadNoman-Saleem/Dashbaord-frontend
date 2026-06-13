@@ -34,6 +34,10 @@ import { fixture as marketingFixture } from './marketing'
 import { fixture as meFixture } from './me'
 import { summaryFixture, bookingsFixture, rulesFixture } from './payouts'
 import { fixture as pipelineHealthFixture } from './pipeline-health'
+import { fixture as pipelineLossesFixture } from './pipeline-losses'
+import { fixture as pipelineMomentumFixture } from './pipeline-momentum'
+import { fixture as pipelineStalenessFixture } from './pipeline-staleness'
+import { fixture as pipelineVelocityFixture } from './pipeline-velocity'
 import { fixture as prioritiesFixture } from './priorities'
 import { fixture as providersFixture } from './providers'
 import { fixture as pulseFixture } from './pulse'
@@ -58,6 +62,10 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   leads_medical_travel: leadsMedicalTravelFixture,
   priorities: prioritiesFixture,
   pipeline_health: pipelineHealthFixture,
+  pipeline_staleness: pipelineStalenessFixture,
+  pipeline_momentum: pipelineMomentumFixture,
+  pipeline_losses: pipelineLossesFixture,
+  pipeline_velocity: pipelineVelocityFixture,
   providers: providersFixture,
   handoffs: handoffsFixture,
   appointments: appointmentsFixture,
