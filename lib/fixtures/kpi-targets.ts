@@ -38,6 +38,7 @@ const ROWS = [
     unit: 'count',
     updated_at: AUTO_SYNCED_AT,
     can_edit: true,
+    drillable: false,
   },
   {
     id: 'kt-02',
@@ -54,6 +55,7 @@ const ROWS = [
     unit: 'pct',
     updated_at: AUTO_SYNCED_AT,
     can_edit: true,
+    drillable: false,
   },
   {
     id: 'kt-03',
@@ -70,6 +72,7 @@ const ROWS = [
     unit: 'count',
     updated_at: AUTO_SYNCED_AT,
     can_edit: true,
+    drillable: false,
   },
   {
     id: 'kt-04',
@@ -86,6 +89,7 @@ const ROWS = [
     unit: 'bhd',
     updated_at: AUTO_SYNCED_AT,
     can_edit: true,
+    drillable: false,
   },
   {
     id: 'kt-05',
@@ -102,6 +106,7 @@ const ROWS = [
     unit: 'pct',
     updated_at: AUTO_SYNCED_AT,
     can_edit: true,
+    drillable: false,
   },
   {
     id: 'kt-06',
@@ -118,6 +123,7 @@ const ROWS = [
     unit: 'count',
     updated_at: SATURDAY_AT,
     can_edit: true,
+    drillable: false,
   },
   {
     id: 'kt-07',
@@ -134,6 +140,7 @@ const ROWS = [
     unit: 'count',
     updated_at: AUTO_SYNCED_AT,
     can_edit: true,
+    drillable: false,
   },
   {
     id: 'kt-08',
@@ -150,6 +157,7 @@ const ROWS = [
     unit: 'count',
     updated_at: AUTO_SYNCED_AT,
     can_edit: true,
+    drillable: false,
   },
   {
     id: 'kt-09',
@@ -166,6 +174,7 @@ const ROWS = [
     unit: 'count',
     updated_at: SATURDAY_AT,
     can_edit: true,
+    drillable: false,
   },
   {
     id: 'kt-10',
@@ -182,6 +191,7 @@ const ROWS = [
     unit: 'count',
     updated_at: AUTO_SYNCED_AT,
     can_edit: true,
+    drillable: false,
   },
   {
     id: 'kt-11',
@@ -198,6 +208,7 @@ const ROWS = [
     unit: 'count',
     updated_at: AUTO_SYNCED_AT,
     can_edit: true,
+    drillable: false,
   },
 ] satisfies KpiTargetRow[]
 

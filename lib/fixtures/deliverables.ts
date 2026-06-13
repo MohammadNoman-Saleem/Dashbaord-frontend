@@ -1,6 +1,7 @@
 // Fixture for GET /api/deliverables?month=
 // Values from the approved mockup, KPIs view, "June objectives" list
-// (seven rows; the home mini panel shows four of these).
+// (seven rows; the home mini panel shows four of these). can_edit is true on
+// every row because this fixture simulates an admin session.
 
 import type { DeliverableRow } from '@/lib/api/contract'
 import type { Envelope, Meta } from '@/lib/api/envelope'
@@ -26,6 +27,7 @@ const ROWS = [
     measured_auto: false,
     due_date: '2026-06-30',
     updated_at: '2026-06-05T16:20:00+03:00',
+    can_edit: true,
   },
   {
     id: 'd-02',
@@ -37,6 +39,7 @@ const ROWS = [
     measured_auto: true,
     due_date: '2026-06-30',
     updated_at: '2026-06-11T06:10:00+03:00',
+    can_edit: true,
   },
   {
     id: 'd-03',
@@ -48,6 +51,7 @@ const ROWS = [
     measured_auto: true,
     due_date: '2026-06-18',
     updated_at: '2026-06-10T15:05:00+03:00',
+    can_edit: true,
   },
   {
     id: 'd-04',
@@ -59,6 +63,7 @@ const ROWS = [
     measured_auto: false,
     due_date: '2026-06-30',
     updated_at: '2026-06-09T13:40:00+03:00',
+    can_edit: true,
   },
   {
     id: 'd-05',
@@ -70,6 +75,7 @@ const ROWS = [
     measured_auto: false,
     due_date: '2026-06-30',
     updated_at: '2026-06-10T11:25:00+03:00',
+    can_edit: true,
   },
   {
     id: 'd-06',
@@ -81,6 +87,7 @@ const ROWS = [
     measured_auto: false,
     due_date: '2026-06-12',
     updated_at: '2026-06-10T17:50:00+03:00',
+    can_edit: true,
   },
   {
     id: 'd-07',
@@ -92,6 +99,7 @@ const ROWS = [
     measured_auto: false,
     due_date: '2026-06-30',
     updated_at: '2026-06-06T19:48:00+03:00',
+    can_edit: true,
   },
 ] satisfies DeliverableRow[]
 

@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { CircleAlert, Pencil, Trash2 } from "lucide-react";
+import { CircleAlert, Pencil, Plus, Table2, Trash2 } from "lucide-react";
 
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
 import { Bar, type BarFill } from "@/components/ui/Bar";
@@ -26,6 +26,9 @@ import type { KpiTargetRow } from "@/lib/api/contract";
 import type { Envelope } from "@/lib/api/envelope";
 import { mutateEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
+import { useViewer } from "@/lib/viewer";
+import { AddTargetModal } from "@/components/kpis/AddTargetModal";
+import { DrillModal } from "@/components/kpis/DrillModal";
 
 const WRITE_FAILED =
   "Couldn't save. Your numbers are safe. Try again, or tell Al Saeed if it repeats.";
@@ -85,8 +88,13 @@ type TargetsCardProps = {
 };
 
 export function TargetsCard({ query, month }: TargetsCardProps) {
+  const { me } = useViewer();
+  const canAdd = (me?.capabilities.kpi_edit_scope ?? "none") !== "none";
+
   const [editing, setEditing] = useState<KpiTargetRow | null>(null);
   const [deleting, setDeleting] = useState<KpiTargetRow | null>(null);
+  const [drilling, setDrilling] = useState<KpiTargetRow | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const columns: DataTableColumn<DisplayRow>[] = [
     {
@@ -95,7 +103,23 @@ export function TargetsCard({ query, month }: TargetsCardProps) {
       render: (row) =>
         row.show_owner ? <b className="font-semibold text-title">{row.person_name}</b> : null,
     },
-    { key: "label", label: "Target" },
+    {
+      key: "label",
+      label: "Target",
+      render: (row) =>
+        row.drillable ? (
+          <button
+            type="button"
+            onClick={() => setDrilling(row)}
+            className="inline-flex items-center gap-[6px] text-left text-accent hover:underline"
+          >
+            {row.label}
+            <Table2 strokeWidth={1.8} className="h-[13px] w-[13px] shrink-0" aria-hidden="true" />
+          </button>
+        ) : (
+          row.label
+        ),
+    },
     {
       key: "progress",
       label: "Progress",
@@ -144,7 +168,16 @@ export function TargetsCard({ query, month }: TargetsCardProps) {
       <CardHeader
         title={`Targets, ${monthLabel(month)}`}
         subtitle="One number per person per metric. A full bar means done."
-        right={<Chip variant="info">Month: {monthShort(month)}</Chip>}
+        right={
+          canAdd ? (
+            <Button size="sm" onClick={() => setAdding(true)}>
+              <Plus strokeWidth={1.8} aria-hidden="true" />
+              Add a target
+            </Button>
+          ) : (
+            <Chip variant="info">Month: {monthShort(month)}</Chip>
+          )
+        }
       />
       <div className="px-[18px] pb-2 pt-2">
         <QueryPanel
@@ -166,6 +199,10 @@ export function TargetsCard({ query, month }: TargetsCardProps) {
       {deleting ? (
         <DeleteTargetModal row={deleting} month={month} onClose={() => setDeleting(null)} />
       ) : null}
+      {drilling ? (
+        <DrillModal row={drilling} month={month} onClose={() => setDrilling(null)} />
+      ) : null}
+      {adding ? <AddTargetModal month={month} onClose={() => setAdding(false)} /> : null}
     </Card>
   );
 }

@@ -11,6 +11,7 @@ import {
   Split,
   SquareKanban,
   Target,
+  Users,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -18,6 +19,7 @@ import {
 import { NavItem } from "@/components/shell/NavItem";
 import { PersonMenu } from "@/components/shell/PersonMenu";
 import { BeatIcon } from "@/components/ui/BeatIcon";
+import { useViewer } from "@/lib/viewer";
 
 /* Sidebar per 02 section 5.1 and the approved mockup: 250px sticky full
    height, collapsing to a 70px icon rail on desktop, and a fixed off-canvas
@@ -59,6 +61,12 @@ type SidebarProps = {
 export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobile }: SidebarProps) {
   /* The icon rail is desktop-only; the mobile drawer always shows labels. */
   const rail = collapsed && !mobileOpen;
+
+  /* User administration is admin-only: the nav item is gated on the real
+     signed-in role (the server refuses the routes regardless, but the link
+     should not appear for anyone else). */
+  const { me } = useViewer();
+  const isAdmin = me?.role === "admin";
 
   function navLabel(text: string) {
     if (rail) return null;
@@ -102,6 +110,18 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobil
         {MANAGE_NAV.map((entry) => (
           <NavItem key={entry.href} {...entry} collapsed={rail} onNavigate={onCloseMobile} />
         ))}
+        {isAdmin ? (
+          <>
+            {navLabel("Admin")}
+            <NavItem
+              href="/admin"
+              label="Users"
+              icon={Users}
+              collapsed={rail}
+              onNavigate={onCloseMobile}
+            />
+          </>
+        ) : null}
       </nav>
 
       <div className="border-t border-line-soft p-[10px]">
