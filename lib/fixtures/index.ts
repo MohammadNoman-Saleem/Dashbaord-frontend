@@ -15,6 +15,9 @@ import { fixture as casesSummaryFixture } from './cases-summary'
 import { fixture as crmFixture } from './crm'
 import { fixture as deliverablesFixture } from './deliverables'
 import { fixture as financialsFixture } from './financials'
+import { fixture as financialsBurnFixture } from './financials-burn'
+import { fixture as financialsForecastFixture } from './financials-forecast'
+import { fixture as financialsReceivablesFixture } from './financials-receivables'
 import { fixture as funnelsDirectFixture } from './funnels-direct'
 import { fixture as funnelsGeneralFixture } from './funnels-general'
 import { fixture as funnelsNovoFixture } from './funnels-novo'
@@ -57,6 +60,9 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   handoffs: handoffsFixture,
   appointments: appointmentsFixture,
   financials: financialsFixture,
+  financials_forecast: financialsForecastFixture,
+  financials_burn: financialsBurnFixture,
+  financials_receivables: financialsReceivablesFixture,
   crm: crmFixture,
   marketing: marketingFixture,
   funnels_general: funnelsGeneralFixture,

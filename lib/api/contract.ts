@@ -298,6 +298,58 @@ export interface FinancialsData {
   treatment_manual_bhd: number | null
 }
 
+// /api/financials/forecast
+// Pipeline-weighted revenue forecast: open deals bucketed by expected close
+// month, amounts weighted by per-deal Zoho probability with the pipeline
+// win-rate fallback. Overdue and undated buckets keep deals with past or
+// missing close dates visible.
+export interface ForecastBucket {
+  weighted_bhd: number
+  unweighted_bhd: number
+  deal_count: number
+}
+export interface ForecastMonth extends ForecastBucket {
+  key: string
+  label: string
+}
+export interface FinancialsForecastData {
+  months: ForecastMonth[]
+  overdue: ForecastBucket
+  undated: ForecastBucket
+  won_to_date_bhd: number
+  by_pipeline: Array<{ pipeline: string; weighted_bhd: number }>
+  /** Server-authored sentence describing which weights carried the number. */
+  weight_note: string
+}
+
+// /api/financials/burn
+export interface FinancialsBurnData {
+  this_month_bhd: number
+  last_month_bhd: number
+  change_pct: number
+  months: Array<{ key: string; label: string; burn_bhd: number; revenue_bhd: number }>
+  by_category: Array<{ category: string; total_bhd: number; this_month_bhd: number }>
+  /** Server-authored sentence naming the revenue definition in the join. */
+  revenue_note: string
+}
+
+// /api/financials/receivables
+// Customers here are partners and corporates, never patients.
+export interface FinancialsReceivablesData {
+  total_bhd: number
+  open_count: number
+  overdue_count: number
+  /** Null when nothing was invoiced in the trailing 90 days; meta carries why. */
+  dso_days: number | null
+  buckets: Array<{ key: string; label: string; invoice_count: number; amount_bhd: number }>
+  late_payers: Array<{
+    customer: string
+    open_invoices: number
+    balance_bhd: number
+    oldest_overdue_days: number
+  }>
+}
+
 // /api/crm?resource=&page=&page_size=
 export interface CrmSliceData {
   columns: Array<{ key: string; label: string; numeric?: boolean }>

@@ -21,6 +21,9 @@ export type EndpointKey =
   | 'handoffs'
   | 'appointments'
   | 'financials'
+  | 'financials_forecast'
+  | 'financials_burn'
+  | 'financials_receivables'
   | 'crm'
   | 'marketing'
   | 'funnels_general'
@@ -57,6 +60,9 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   handoffs: 'live',
   appointments: 'live',
   financials: 'live',
+  financials_forecast: 'live',
+  financials_burn: 'live',
+  financials_receivables: 'live',
   crm: 'live',
   marketing: 'live',
   funnels_general: 'live',
