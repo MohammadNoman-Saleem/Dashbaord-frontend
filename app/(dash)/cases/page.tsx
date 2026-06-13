@@ -2,6 +2,10 @@
 
 import { CrmSlice } from "@/components/cases/CrmSlice";
 import { CasesKpiRow } from "@/components/cases/KpiRow";
+import { LossesPanel } from "@/components/cases/Losses";
+import { MomentumPanel } from "@/components/cases/Momentum";
+import { StalenessPanel } from "@/components/cases/Staleness";
+import { VelocityPanel } from "@/components/cases/Velocity";
 import { MtlCard } from "@/components/mtl/MtlCard";
 import { AppointmentsPanel } from "@/components/panels/Appointments";
 import { LatePanel } from "@/components/panels/Late";
@@ -14,7 +18,10 @@ import { useFocusFlash } from "@/lib/deepLink";
    medical travel leads card (deep-link target mtl-card), deals running
    late, appointments with the refund rule, and the paginated CRM slice.
    The morning list is Fatima's queue for every viewer; whether names
-   render is decided server-side per the signed in viewer, never here. */
+   render is decided server-side per the signed in viewer, never here.
+   Below the slice sit the CRM analytics ported from the legacy dashboard:
+   month-over-month momentum, pipeline staleness, stage velocity, and lost
+   value. All aggregates; no deal or patient names. */
 
 export default function CasesPage() {
   useFocusFlash();
@@ -33,6 +40,18 @@ export default function CasesPage() {
       </div>
       <div className={spans.c5} data-focus-id="cases-appointments">
         <AppointmentsPanel variant="cases" />
+      </div>
+      <div className={spans.c12} data-focus-id="pipeline-momentum">
+        <MomentumPanel />
+      </div>
+      <div className={spans.c6} data-focus-id="pipeline-staleness">
+        <StalenessPanel />
+      </div>
+      <div className={spans.c6} data-focus-id="stage-velocity">
+        <VelocityPanel />
+      </div>
+      <div className={spans.c12} data-focus-id="lost-value">
+        <LossesPanel />
       </div>
       <div className={spans.c12} data-focus-id="crm-slice">
         <CrmSlice />

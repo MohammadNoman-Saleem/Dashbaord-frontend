@@ -17,6 +17,10 @@ export type EndpointKey =
   | 'leads_medical_travel'
   | 'priorities'
   | 'pipeline_health'
+  | 'pipeline_staleness'
+  | 'pipeline_momentum'
+  | 'pipeline_losses'
+  | 'pipeline_velocity'
   | 'providers'
   | 'handoffs'
   | 'appointments'
@@ -53,6 +57,10 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   leads_medical_travel: 'live',
   priorities: 'live',
   pipeline_health: 'live',
+  pipeline_staleness: 'live',
+  pipeline_momentum: 'live',
+  pipeline_losses: 'live',
+  pipeline_velocity: 'live',
   providers: 'live',
   handoffs: 'live',
   appointments: 'live',
