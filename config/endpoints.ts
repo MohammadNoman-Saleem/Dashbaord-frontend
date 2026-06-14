@@ -49,6 +49,8 @@ export type EndpointKey =
   | 'payouts_summary'
   | 'payouts_bookings'
   | 'payouts_rules'
+  | 'payouts_rule_patch'
+  | 'payouts_manual'
 
 export type EndpointMode = 'fixture' | 'live'
 
@@ -99,7 +101,11 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   // resolves null in fixture mode without ever reading one).
   it_support: 'live',
   brief: 'live',
-  payouts_summary: 'fixture',
-  payouts_bookings: 'fixture',
-  payouts_rules: 'fixture',
+  payouts_summary: 'live',
+  payouts_bookings: 'live',
+  payouts_rules: 'live',
+  // Write seams (PATCH a rule, POST/PATCH a free appointment); carry no
+  // fixture, mutateEnvelope resolves null in fixture mode.
+  payouts_rule_patch: 'live',
+  payouts_manual: 'live',
 }

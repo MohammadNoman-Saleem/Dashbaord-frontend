@@ -49,7 +49,7 @@ export const TITLES: Record<ViewKey, ViewTitle> = {
   },
   financials: {
     title: 'Financials',
-    sub: 'Money in, money owed, and where each number comes from',
+    sub: 'Money in, money owed, commission, and where each number comes from',
   },
   kpis: {
     title: 'KPIs & Deliverables',
@@ -62,13 +62,10 @@ export const TITLES: Record<ViewKey, ViewTitle> = {
     title: 'Agents & System Health',
     sub: 'The machinery behind this dashboard, and whether it is healthy',
   },
-  payouts: {
-    title: 'Commission & Payouts',
-    sub: 'Every booking split into patient paid, provider payout, and Saleem revenue',
-  },
-  // 'social' is no longer a standalone route: it is the Social tab inside the
-  // Marketing view (/marketing?tab=social). The key stays in the DeepLink
-  // union so back-compatible social deep links resolve there.
+  // 'social' is no longer a standalone route: it is the Social tab inside
+  // the Marketing view (/marketing?tab=social), and 'payouts' is the
+  // Commission tab inside Financials (/financials?tab=commission). Both keys
+  // stay in the DeepLink union so back-compatible deep links resolve.
   social: {
     title: 'Social',
     sub: 'Website traffic and the social accounts, side by side',

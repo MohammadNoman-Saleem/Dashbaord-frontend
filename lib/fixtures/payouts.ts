@@ -1,11 +1,14 @@
 // Fixtures for the /api/payouts/* endpoints.
-// Values from the approved mockup, Payouts view: the four tiles, the
-// "Recent bookings, split out" ledger, and the "How the split is decided"
-// rules cascade.
+//
+// These endpoints are now live (config/endpoints.ts), so these fixtures are
+// not served at runtime; they remain as the typed reference and so the
+// fixture index keeps compiling. Shapes mirror the live commission model:
+// gross (what the patient pays) and Saleem revenue (service charge plus
+// commission) are two SEPARATE figures, never summed. Free-to-patient ledger
+// rows use covers_bhd, never a negative share.
 //
 // Convention exception (stated in the task): this file exports three
-// functions, one per payouts endpoint, instead of the single `fixture`.
-// Free-to-patient ledger rows use covers_bhd, never a negative share.
+// functions, one per payouts read endpoint, instead of the single `fixture`.
 
 import type {
   PayoutsBookingsData,
@@ -24,11 +27,13 @@ const META = {
 
 // /api/payouts/summary
 const SUMMARY = {
-  patients_paid_bhd: 4180,
-  provider_payouts_bhd: 2610,
-  cycle_close_note: 'Cycle closes Jun 15',
+  cycle: '2026-06',
+  gross_bhd: 4180,
   saleem_revenue_bhd: 1570,
-  needs_review_count: 1,
+  provider_payouts_bhd: 2610,
+  booking_count: 6,
+  commission_unset_count: 1,
+  cycle_close_note: 'Cycle closes at month end',
 } satisfies PayoutsSummaryData
 
 // /api/payouts/bookings
@@ -37,64 +42,37 @@ const BOOKINGS = {
     {
       id: 'B-2848',
       provider: 'Dr. R. Almannai',
-      product: 'Scheduled, cardiology',
-      patient_paid_bhd: 26.0,
+      patient_ref: { zoho_id: 'P-2848', initials: 'A.K.' },
+      product: 'standard',
+      gross_bhd: 26,
+      saleem_revenue_bhd: 9.6,
       provider_payout_bhd: 21.4,
-      saleem_share_bhd: 4.6,
-      rule_label: 'Service charge',
+      rule_label: 'Scheduled appointment',
       manual: false,
     },
     {
       // Free to patient: Saleem covers the doctor fee. covers_bhd, no minus.
-      id: 'B-2846',
+      id: 'manual_demo_1',
       provider: 'Dr. Aysha A.',
+      patient_ref: { zoho_id: 'manual_demo_1', initials: '·' },
       product: 'Screening campaign',
-      patient_paid_bhd: 0.0,
-      provider_payout_bhd: 8.0,
-      covers_bhd: 8.0,
+      gross_bhd: 0,
+      saleem_revenue_bhd: 0,
+      covers_bhd: 8,
+      provider_payout_bhd: 0,
       rule_label: 'Free to patient',
-      manual: false,
-    },
-    {
-      id: 'B-2845',
-      provider: 'Dr. Layla H.',
-      product: 'Scheduled, dermatology',
-      patient_paid_bhd: 21.0,
-      provider_payout_bhd: 17.5,
-      saleem_share_bhd: 3.5,
-      rule_label: 'Service charge',
-      manual: false,
+      manual: true,
     },
     {
       id: 'B-2842',
       provider: 'Dr. S. Kareem',
-      product: 'Novo track',
-      patient_paid_bhd: 5.0,
-      provider_payout_bhd: 3.0,
-      saleem_share_bhd: 2.0,
-      rule_label: 'Campaign price',
+      patient_ref: { zoho_id: 'P-2842', initials: 'M.S.' },
+      product: 'novo_scheduled',
+      gross_bhd: 5,
+      saleem_revenue_bhd: 3,
+      provider_payout_bhd: 2,
+      rule_label: 'Novo appointment',
       manual: false,
-    },
-    {
-      id: 'B-2841',
-      provider: 'Dr. Aysha A.',
-      product: 'Consult Now',
-      patient_paid_bhd: 9.9,
-      provider_payout_bhd: 6.9,
-      saleem_share_bhd: 3.0,
-      rule_label: 'Fixed fee',
-      manual: false,
-    },
-    {
-      // Treatment is negotiated per case and entered by hand.
-      id: 'T-019',
-      provider: 'Partner hospital',
-      product: 'Treatment, spine',
-      patient_paid_bhd: 4900,
-      provider_payout_bhd: 4165,
-      saleem_share_bhd: 735,
-      rule_label: 'Manual entry',
-      manual: true,
     },
   ],
 } satisfies PayoutsBookingsData
@@ -104,34 +82,28 @@ const RULES = {
   rules: [
     {
       id: 1,
-      priority: 1,
-      rule_type: 'campaign',
-      label: 'Campaign price',
+      priority: 10,
+      rule_type: 'percent',
+      label: 'Scheduled appointment',
       params_display:
-        'Novo track: patient pays BHD 5.0, doctor gets 3.0, Saleem keeps 2.0.',
+        'Service charge BHD 5 plus commission from the doctor, then the hospital',
+      params: { service_charge_bhd: 5, commission_pct: 0 },
+      editable_keys: ['service_charge_bhd', 'commission_pct'],
+      updated_by: null,
+      updated_at: '2026-06-11T07:42:00+03:00',
+      can_edit: false,
     },
     {
       id: 2,
-      priority: 1,
-      rule_type: 'campaign',
-      label: 'Campaign price',
-      params_display:
-        'Screening week: free to the patient, doctor paid BHD 8.0 by Saleem.',
-    },
-    {
-      id: 3,
-      priority: 2,
+      priority: 20,
       rule_type: 'fixed_fee',
-      label: 'Fixed fee',
-      params_display: 'Consult Now: BHD 9.9 flat, doctor 6.9, Saleem 3.0.',
-    },
-    {
-      id: 4,
-      priority: 3,
-      rule_type: 'percent',
-      label: 'Percentage',
-      params_display:
-        'Scheduled default: doctor sets the fee, Saleem adds its service charge.',
+      label: 'Novo appointment',
+      params_display: 'Flat commission BHD 3, no service charge',
+      params: { service_charge_bhd: 0, commission_bhd: 3 },
+      editable_keys: ['service_charge_bhd', 'commission_bhd'],
+      updated_by: null,
+      updated_at: '2026-06-11T07:42:00+03:00',
+      can_edit: false,
     },
   ],
 } satisfies PayoutsRulesData

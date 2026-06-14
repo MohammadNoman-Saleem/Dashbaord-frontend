@@ -110,6 +110,17 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   payouts_summary: summaryFixture,
   payouts_bookings: bookingsFixture,
   payouts_rules: rulesFixture,
+  // Write-only endpoints (rule PATCH, manual add and edit): mutateEnvelope
+  // resolves null in fixture mode and never calls getFixture, so these stubs
+  // only satisfy the record type.
+  payouts_rule_patch: () => ({
+    data: { rules: [] },
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
+  payouts_manual: () => ({
+    data: null,
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
 }
 
 export function getFixture<T>(
