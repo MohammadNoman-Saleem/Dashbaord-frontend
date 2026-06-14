@@ -8,7 +8,6 @@ import {
   Layers,
   Megaphone,
   Share2,
-  Split,
   SquareKanban,
   Target,
   Users,
@@ -48,7 +47,6 @@ const WORKSPACE_NAV: NavEntry[] = [
 const MANAGE_NAV: NavEntry[] = [
   { href: "/kpis", label: "KPIs & Deliverables", icon: Target },
   { href: "/agents", label: "Agents & System Health", icon: Cpu },
-  { href: "/payouts", label: "Commission & Payouts", icon: Split },
 ];
 
 type SidebarProps = {

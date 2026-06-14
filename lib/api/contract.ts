@@ -14,7 +14,7 @@ export interface PatientRefData {
 }
 
 export interface DeepLink {
-  view: 'home' | 'cases' | 'board' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'payouts' | 'social'
+  view: 'home' | 'cases' | 'board' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'social'
   tab?: string
   focus?: string
 }
@@ -810,29 +810,56 @@ export interface SocialPlatformsData {
 }
 
 // /api/payouts/*
+// Gross (what the patient pays) and Saleem revenue (service charge plus
+// commission) are two SEPARATE figures, never summed. The commission model:
+// scheduled appointments earn a service charge plus commission; novo earns a
+// flat commission. Both amounts are set by editable payout rules.
 export interface PayoutsSummaryData {
-  patients_paid_bhd: number
-  provider_payouts_bhd: number
-  cycle_close_note: string
+  cycle: string
+  /** GROSS: total patient payments across the cycle. */
+  gross_bhd: number
+  /** SALEEM REVENUE: shown beside gross, never summed into it. */
   saleem_revenue_bhd: number
-  needs_review_count: number
+  provider_payouts_bhd: number
+  booking_count: number
+  /** Bookings whose commission percent fell back to the rule default. */
+  commission_unset_count: number
+  cycle_close_note: string
 }
 export interface PayoutBookingRow {
   id: string
   provider: string
+  patient_ref: PatientRefData
+  patient_name?: string
   product: string
-  patient_paid_bhd: number
-  provider_payout_bhd: number
-  /** Positive Saleem share. Mutually exclusive with covers_bhd. */
-  saleem_share_bhd?: number
+  /** GROSS: full amount the patient paid. */
+  gross_bhd: number
+  /** SALEEM REVENUE on this booking. Mutually exclusive with covers_bhd. */
+  saleem_revenue_bhd: number
   /** Free-to-patient rows: what Saleem covers. Never rendered as a minus. */
   covers_bhd?: number
+  provider_payout_bhd: number
   rule_label: string
   manual: boolean
 }
 export interface PayoutsBookingsData {
   rows: PayoutBookingRow[]
 }
+export interface PayoutRuleItem {
+  id: number
+  priority: number
+  rule_type: 'campaign' | 'fixed_fee' | 'percent'
+  label: string
+  params_display: string
+  /** Raw editable numeric params (service_charge_bhd, commission_bhd, commission_pct). */
+  params: Record<string, number | string | null>
+  /** Which param keys this rule exposes for editing. */
+  editable_keys: string[]
+  updated_by: string | null
+  updated_at: string
+  /** True when the signed-in viewer holds can_edit_payout_rules. */
+  can_edit: boolean
+}
 export interface PayoutsRulesData {
-  rules: Array<{ id: number; priority: number; rule_type: 'campaign' | 'fixed_fee' | 'percent'; label: string; params_display: string }>
+  rules: PayoutRuleItem[]
 }

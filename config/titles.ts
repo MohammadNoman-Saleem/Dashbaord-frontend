@@ -47,7 +47,7 @@ export const TITLES: Record<ViewKey, ViewTitle> = {
   },
   financials: {
     title: 'Financials',
-    sub: 'Money in, money owed, and where each number comes from',
+    sub: 'Money in, money owed, commission, and where each number comes from',
   },
   kpis: {
     title: 'KPIs & Deliverables',
@@ -59,10 +59,6 @@ export const TITLES: Record<ViewKey, ViewTitle> = {
   agents: {
     title: 'Agents & System Health',
     sub: 'The machinery behind this dashboard, and whether it is healthy',
-  },
-  payouts: {
-    title: 'Commission & Payouts',
-    sub: 'Every booking split into patient paid, provider payout, and Saleem revenue',
   },
   social: {
     title: 'Social',

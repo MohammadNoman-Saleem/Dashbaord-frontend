@@ -193,7 +193,7 @@ const ITEMS = {
       warn: false,
       title: 'The payout cycle closes Jun 15.',
       text: 'Review the computed splits, one campaign booking flagged.',
-      link: { view: 'payouts' },
+      link: { view: 'financials', tab: 'commission' },
     },
   ],
 } satisfies Record<string, AttentionItem[]>
