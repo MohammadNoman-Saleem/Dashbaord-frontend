@@ -1,8 +1,8 @@
-// Fixture for GET /api/board?scope=. Mirrors the live shape: legacy column
-// order, cards with owner, due, priority, and tasklist. Scope-aware so the
-// pills exercise real switching while the endpoint is in fixture mode.
-// All content is fictional team work, no patient data anywhere near this
-// board by design.
+// Fixture for GET /api/board?tab=&project=&tasklist=. Mirrors the live shape:
+// legacy column order, cards with owner, due, priority, and tasklist. The
+// board endpoint is live in this build; this fixture is kept type-aligned so
+// the contract change is caught at typecheck. All content is fictional team
+// work, no patient data anywhere near this board by design.
 import type { BoardColumn, BoardData } from '@/lib/api/contract'
 import type { Envelope, Meta } from '@/lib/api/envelope'
 
@@ -12,8 +12,7 @@ function meta(): Meta {
   return { updated_at: TS, cached: false, stale: false, reliable: true, reasons: [] }
 }
 
-function columns(scope: string): BoardColumn[] {
-  const tasklist = scope === 'cross' ? null : scope.charAt(0).toUpperCase() + scope.slice(1)
+function columns(tasklist: string | null): BoardColumn[] {
   const cards = {
     backlog: [
       { id: '900100', title: 'Doctor portal photo upload', owner: 'Mehran Ali', due_display: null, priority: 'Medium', tasklist, status: 'Backlog' },
@@ -44,23 +43,23 @@ function columns(scope: string): BoardColumn[] {
   ]
 }
 
-const SCOPE_LABELS: Record<string, string> = {
-  bugs: 'Bugs',
-  features: 'Features',
-  access: 'Access',
-  integrations: 'Integrations',
-  general: 'General',
-  cross: 'Cross-department',
+const TAB_LABELS: Record<string, string> = {
+  cross: 'Cross-Dept',
+  it: 'IT',
+  other: 'Other',
 }
 
 export function fixture(params?: Record<string, string | number | undefined>): Envelope<unknown> {
-  const scope = String(params?.scope ?? 'cross')
+  const tab = String(params?.tab ?? 'cross')
+  const tasklistId = params?.tasklist != null ? String(params.tasklist) : null
   const data = {
-    scope,
-    scope_label: SCOPE_LABELS[scope] ?? 'Cross-department',
-    project_id: scope === 'cross' ? '2599674000000344008' : '2599674000000342004',
-    project_name: scope === 'cross' ? 'Saleem Cross-Department' : 'Saleem IT and Product',
-    columns: columns(scope),
+    tab,
+    tab_label: TAB_LABELS[tab] ?? 'Cross-Dept',
+    project_id: tab === 'it' ? '2599674000000342004' : '2599674000000344008',
+    project_name: tab === 'it' ? 'Saleem IT and Product' : 'Saleem Cross-Department',
+    tasklist_id: tasklistId,
+    tasklist_name: tasklistId ? 'Sample tasklist' : null,
+    columns: columns(tasklistId ? 'Sample tasklist' : null),
   } satisfies BoardData
   return { data, meta: meta() }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { BoardView } from "@/components/board/BoardView";
@@ -46,31 +46,22 @@ export default function BoardPage() {
     staleTime: 5 * 60_000,
   });
 
-  const tabs = catalogQuery.data?.data.tabs ?? [];
+  const tabs = catalogQuery.data?.data?.tabs ?? [];
   const tabRef = tabs.find((t) => t.key === tab);
-  const projects: BoardProjectRef[] = useMemo(
-    () => tabRef?.projects ?? [],
-    [tabRef],
-  );
+  const projects: BoardProjectRef[] = tabRef?.projects ?? [];
 
-  /* Keep the project and tasklist selections valid as the tab or catalog
-     changes: default the project to the tab's first, the tasklist to the
-     project's first. Whole-project view (null tasklist) is never the default
-     so a tab always opens on a concrete list. */
+  /* Selections are derived, never stored-then-corrected, so no effect is
+     needed to keep them valid as the tab or catalog changes: the project
+     defaults to the tab's first when the stored id is not under this tab, and
+     the tasklist defaults to that project's first when the stored id is not
+     on it. A tab always opens on a concrete list; whole-project view is never
+     the default. */
   const activeProject =
     projects.find((p) => p.id === projectId) ?? projects[0] ?? null;
-
-  useEffect(() => {
-    if (!activeProject) return;
-    if (projectId !== activeProject.id) {
-      setProjectId(activeProject.id);
-    }
-    const lists = activeProject.tasklists;
-    const stillValid = lists.some((l) => l.id === tasklistId);
-    if (!stillValid) {
-      setTasklistId(lists[0]?.id ?? null);
-    }
-  }, [activeProject, projectId, tasklistId]);
+  const activeTasklistId =
+    activeProject?.tasklists.find((l) => l.id === tasklistId)?.id ??
+    activeProject?.tasklists[0]?.id ??
+    null;
 
   const tabItems =
     tabs.length > 0
@@ -122,7 +113,7 @@ export default function BoardPage() {
               {activeProject && activeProject.tasklists.length > 0 ? (
                 <FieldSelect
                   aria-label="Tasklist"
-                  value={tasklistId ?? activeProject.tasklists[0].id}
+                  value={activeTasklistId ?? ""}
                   onChange={(event) => setTasklistId(event.target.value)}
                   className="w-auto"
                 >
@@ -142,7 +133,7 @@ export default function BoardPage() {
         <BoardView
           tab={tab}
           projectId={activeProject.id}
-          tasklistId={tasklistId ?? activeProject.tasklists[0]?.id ?? null}
+          tasklistId={activeTasklistId}
         />
       ) : null}
     </div>
