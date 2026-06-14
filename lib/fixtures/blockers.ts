@@ -23,6 +23,7 @@ const OPEN = [
     repeat_of: 'blk_092',
     root_cause_flag: true,
     resolution_note: null,
+    zoho_task_id: null,
   },
   {
     id: 'blk_105',
@@ -36,6 +37,7 @@ const OPEN = [
     repeat_of: null,
     root_cause_flag: false,
     resolution_note: null,
+    zoho_task_id: '2599674000000669005',
   },
   {
     id: 'blk_104',
@@ -49,6 +51,7 @@ const OPEN = [
     repeat_of: null,
     root_cause_flag: false,
     resolution_note: null,
+    zoho_task_id: null,
   },
 ] satisfies BlockerItem[]
 
@@ -65,6 +68,7 @@ const RESOLVED = [
     repeat_of: null,
     root_cause_flag: false,
     resolution_note: 'Access granted, cause documented',
+    zoho_task_id: null,
   },
 ] satisfies BlockerItem[]
 
