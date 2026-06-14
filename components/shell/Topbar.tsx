@@ -5,7 +5,7 @@ import { Flag, Menu, MinusCircle } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import { BlockersDrawer } from "@/components/shell/BlockersDrawer";
+import { RaiseDrawer } from "@/components/shell/RaiseDrawer";
 import { UrgentDrawer } from "@/components/shell/UrgentDrawer";
 import { IconButton } from "@/components/ui/Button";
 import { ThemeTabs } from "@/components/ui/ThemeTabs";
@@ -16,10 +16,11 @@ import { qk } from "@/lib/api/keys";
 
 /* Sticky topbar per 02 section 5.1 plus 06 group F: hamburger (mobile
    only), page title and subtitle for the current route, "Updated {time}"
-   text, the Urgent pill with the open count, the Blockers pill directly
-   after it, and the theme tabs. Owns both drawer states; opening one drawer
-   closes the other, the two are never open together. Each drawer handles
-   Escape through onClose. */
+   text, the Urgent pill with the open count, the Raise pill directly after
+   it (the unified IT/Ops raise drawer, with the open-blockers count), and
+   the theme tabs. Owns both drawer states; opening one drawer closes the
+   other, the two are never open together. Each drawer handles Escape through
+   onClose. */
 
 /* "2026-06-11T07:42:00+03:00" renders as "7:42 AM" per the copy rules. */
 function formatUpdatedTime(iso: string): string {
@@ -107,7 +108,7 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
 
         <button type="button" onClick={() => setOpenDrawer("blockers")} className={PILL_CLASSES}>
           <MinusCircle strokeWidth={1.8} className="h-[15px] w-[15px]" aria-hidden="true" />
-          <span>Blockers</span>
+          <span>Raise</span>
           {blockerCount == null ? null : <span className={COUNT_CLASSES}>{blockerCount}</span>}
         </button>
 
@@ -115,7 +116,7 @@ export function Topbar({ onOpenMobileNav }: TopbarProps) {
       </div>
 
       <UrgentDrawer open={openDrawer === "urgent"} onClose={() => setOpenDrawer(null)} />
-      <BlockersDrawer open={openDrawer === "blockers"} onClose={() => setOpenDrawer(null)} />
+      <RaiseDrawer open={openDrawer === "blockers"} onClose={() => setOpenDrawer(null)} />
     </>
   );
 }
