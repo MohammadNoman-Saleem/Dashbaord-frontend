@@ -5,6 +5,9 @@
 // The mockup shows no explicit WhatsApp reply-rate target; 15 is assumed so
 // the 18% value reads as above target. The Instagram reach spark is invented
 // (the mockup tile has no chart), rising about 12% over May to land on 96k.
+// lead_quality is fictional too: of the 41 leads, 34 qualified (7 marked not
+// qualified), 7 won, 0 unclassified, so the live endpoint's real counts have
+// a shape to render against.
 
 import type { Envelope, Meta } from '@/lib/api/envelope'
 import type { MarketingData } from '@/lib/api/contract'
@@ -14,6 +17,7 @@ const UPDATED_AT = '2026-06-11T07:42:00+03:00'
 const MARKETING = {
   tiles: {
     leads: { value: 41, target: 60 },
+    lead_quality: { total: 41, qualified: 34, won: 7, unclassified: 0 },
     cpl: { value_bhd: 7.2, cap_bhd: 8.0 },
     whatsapp_reply_pct: { value: 18, target: 15 },
     ig_reach: { value: 96000, spark: [78000, 81000, 84500, 88000, 92000, 96000] },

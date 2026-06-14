@@ -37,16 +37,25 @@ const PRIORITY_VARIANTS: Record<string, ChipVariant> = {
 type BoardEnvelope = Envelope<BoardData>;
 
 type BoardViewProps = {
-  scope: string;
+  tab: string;
+  projectId: string;
+  tasklistId: string | null;
 };
 
-export function BoardView({ scope }: BoardViewProps) {
+export function BoardView({ tab, projectId, tasklistId }: BoardViewProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
 
+  const key = qk.board(tab, projectId, tasklistId ?? "");
+
   const query = useQuery({
-    queryKey: qk.board(scope),
-    queryFn: () => fetchEnvelope<BoardData>("board", "/board", { scope }),
+    queryKey: key,
+    queryFn: () =>
+      fetchEnvelope<BoardData>("board", "/board", {
+        tab,
+        project: projectId,
+        ...(tasklistId ? { tasklist: tasklistId } : {}),
+      }),
     staleTime: 60_000,
   });
 
@@ -54,12 +63,12 @@ export function BoardView({ scope }: BoardViewProps) {
     mutationFn: (input: { id: string; status: string }) =>
       mutateEnvelope<BoardCard>("board", "PATCH", `/board/task/${input.id}`, {
         status: input.status,
-        scope,
+        project: projectId,
       }),
     onMutate: async (input) => {
-      await queryClient.cancelQueries({ queryKey: qk.board(scope) });
-      const previous = queryClient.getQueryData<BoardEnvelope>(qk.board(scope));
-      queryClient.setQueryData<BoardEnvelope>(qk.board(scope), (old) => {
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<BoardEnvelope>(key);
+      queryClient.setQueryData<BoardEnvelope>(key, (old) => {
         if (!old?.data) return old;
         let moved: BoardCard | null = null;
         const stripped = old.data.columns.map((column) => {
@@ -85,7 +94,7 @@ export function BoardView({ scope }: BoardViewProps) {
     },
     onError: (_error, _variables, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(qk.board(scope), context.previous);
+        queryClient.setQueryData(key, context.previous);
       }
       toast(WRITE_FAILURE_COPY, AlertCircle);
     },
@@ -102,7 +111,7 @@ export function BoardView({ scope }: BoardViewProps) {
       {(data) => (
         <div
           className="flex items-start gap-[14px] overflow-x-auto pb-3"
-          aria-label={`${data.scope_label} board, ${data.project_name}`}
+          aria-label={`${data.project_name} board${data.tasklist_name ? `, ${data.tasklist_name.trim()}` : ""}`}
         >
           {data.columns.map((column) => (
             <section

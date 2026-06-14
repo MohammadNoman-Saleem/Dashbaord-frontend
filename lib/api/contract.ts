@@ -164,11 +164,25 @@ export interface BlockerItem {
   /** True on the second occurrence; triggers the root cause review. */
   root_cause_flag: boolean
   resolution_note: string | null
+  /** Zoho task id when raised as an Ops item (dual write); null otherwise. */
+  zoho_task_id: string | null
 }
 export interface BlockersData {
   open: BlockerItem[]
   /** Resolved in the last 7 days. */
   resolved: BlockerItem[]
+}
+
+// POST /api/blockers/ops
+// The Ops-type "Raise" dual write: one Zoho Cross-Dept/Ops task plus one
+// Postgres blocker for Aziz. Each leg is independent; a partial outcome is
+// reported honestly (the failed leg carries its reason, never silently
+// dropped).
+export interface OpsRaiseResultData {
+  zoho_task_id: string | null
+  blocker: BlockerItem | null
+  zoho_error: string | null
+  blocker_error: string | null
 }
 
 // /api/leads/medical-travel?from=&to=
@@ -509,6 +523,13 @@ export interface MarketingData {
    *  meta reason; the target is null when no KPI row exists this month. */
   tiles: {
     leads: { value: number; target: number | null }
+    /** Lead quality over the same window as the leads tile (this calendar
+     *  month to date), as real counts off the server-side lead status
+     *  classification. won is the converted count; qualified is total minus
+     *  the not-qualified count; unclassified counts leads whose Zoho status
+     *  the classifier does not recognize (surfaced, never folded into
+     *  qualified). */
+    lead_quality: { total: number; qualified: number; won: number; unclassified: number }
     cpl: { value_bhd: number; cap_bhd: number } | null
     whatsapp_reply_pct: { value: number; target: number } | null
     ig_reach: { value: number; spark: number[] } | null
@@ -665,11 +686,12 @@ export interface AgentsData {
   sources: SourceRow[]
 }
 
-// /api/board?scope=
-// Department kanban over Zoho Projects: the five department tasklists in
-// the IT project plus the whole cross-department project as one scope each.
-// Columns arrive in the legacy board order with unknown statuses appended
-// server-side, so the client renders them as given and never re-sorts.
+// /api/board?tab=&project=&tasklist=
+// Kanban over Zoho Projects, grouped into three tabs (Cross-Dept, IT, Other).
+// A tab groups projects, the second level picks one project's tasklist, and
+// the columns are that tasklist's statuses. Columns arrive in the legacy
+// board order with unknown statuses appended server-side, so the client
+// renders them as given and never re-sorts.
 export interface BoardCard {
   id: string
   title: string
@@ -690,11 +712,34 @@ export interface BoardColumn {
   cards: BoardCard[]
 }
 export interface BoardData {
-  scope: string
-  scope_label: string
+  tab: string
+  tab_label: string
   project_id: string
   project_name: string
+  tasklist_id: string | null
+  tasklist_name: string | null
   columns: BoardColumn[]
+}
+
+// /api/board/projects
+// The tab/project/tasklist catalog that backs the board's two selectors.
+export interface BoardTasklistRef {
+  id: string
+  name: string
+}
+export interface BoardProjectRef {
+  id: string
+  name: string
+  status: string | null
+  tasklists: BoardTasklistRef[]
+}
+export interface BoardTabRef {
+  key: string
+  label: string
+  projects: BoardProjectRef[]
+}
+export interface BoardCatalogData {
+  tabs: BoardTabRef[]
 }
 
 // POST /api/it-support
