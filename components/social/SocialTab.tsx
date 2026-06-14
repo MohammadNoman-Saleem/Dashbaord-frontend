@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Clapperboard, Image as ImageIcon, MessageSquare, Send } from "lucide-react";
 
@@ -20,14 +20,17 @@ import type { SocialGa4Data, SocialPlatformsData } from "@/lib/api/contract";
 import type { Meta, Reason } from "@/lib/api/envelope";
 import { fetchEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
-import { useFocusFlash } from "@/lib/deepLink";
-import { TITLES } from "@/config/titles";
 
-/* NOTE: Social is a tenth view that is NOT in the approved v3 mockup. It is
-   the legacy /social page (GA4 sessions, channels, devices, top pages, plus
-   LinkedIn, TikTok, Instagram, and Zoho Social account metrics) ported into
-   the new design system, and flagged for Khalid's review per the
-   parking-list rule.
+/* Social tab content (the GA4 section plus the per-platform cards), moved
+   wholesale from the standalone /social view into the Marketing view's
+   Social tab. The page header and the Suspense boundary now live in the
+   Marketing page shell; this component owns only the two sections and the
+   GA4 period state.
+
+   It is the legacy /social page (GA4 sessions, channels, devices, top
+   pages, plus LinkedIn, TikTok, Instagram, and Zoho Social account
+   metrics) ported into the new design system, and flagged for Khalid's
+   review per the parking-list rule.
 
    Honesty rules: a platform block the API serves as null renders the muted
    not-connected treatment with the authored reason from meta.reasons (keyed
@@ -459,27 +462,13 @@ function PlatformsSection() {
   );
 }
 
-function SocialContent() {
-  useFocusFlash();
-  const title = TITLES.social;
+export function SocialTab() {
   const [period, setPeriod] = useState<Period>("28d");
 
   return (
     <>
-      <div className="mb-4 mt-[10px]">
-        <h2 className="mb-1 text-[26px] max-[880px]:text-[22px]">{title.title}</h2>
-        <p className="text-[13.5px] text-ink-2">{title.sub}</p>
-      </div>
       <Ga4Section period={period} setPeriod={setPeriod} />
       <PlatformsSection />
     </>
-  );
-}
-
-export default function SocialPage() {
-  return (
-    <Suspense fallback={null}>
-      <SocialContent />
-    </Suspense>
   );
 }

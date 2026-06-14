@@ -14,8 +14,20 @@ import type { DeepLink } from '@/lib/api/contract'
  * Maps a DeepLink from the API contract to an href. View 'home' maps to '/',
  * every other view to '/<view>'. Appends ?tab= and &focus= when present and
  * preserves the current &as= override (pass it from useSearchParams).
+ *
+ * The 'social' view stays in the contract for back-compatible deep links,
+ * but the standalone /social route was folded into the Marketing view's
+ * Social tab, so a social link resolves to /marketing?tab=social. A tab on
+ * a social link is ignored: the Social tab has no sub-tabs of its own.
  */
 export function buildDeepLink(link: DeepLink, currentAs?: string): string {
+  if (link.view === 'social') {
+    const search = new URLSearchParams()
+    search.set('tab', 'social')
+    if (link.focus) search.set('focus', link.focus)
+    if (currentAs) search.set('as', currentAs)
+    return `/marketing?${search.toString()}`
+  }
   const path = link.view === 'home' ? '/' : `/${link.view}`
   const search = new URLSearchParams()
   if (link.tab) search.set('tab', link.tab)
