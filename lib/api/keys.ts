@@ -45,4 +45,8 @@ export const qk = {
   payoutsSummary: (cycle: string) => ['payouts', 'summary', cycle] as const,
   payoutsBookings: (cycle: string) => ['payouts', 'bookings', cycle] as const,
   payoutsRules: () => ['payouts', 'rules'] as const,
+  cockpitQueue: (person: string) => ['cockpit', 'queue', person] as const,
+  cockpitCase: (id: string) => ['cockpit', 'case', id] as const,
+  cockpitParked: (person: string) => ['cockpit', 'parked', person] as const,
+  cockpitSlaPolicy: () => ['cockpit', 'sla-policy'] as const,
 }

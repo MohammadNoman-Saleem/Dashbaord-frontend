@@ -29,6 +29,10 @@ export const TITLES: Record<ViewKey, ViewTitle> = {
       return `${today} · one calm place for the whole team`
     },
   },
+  cockpit: {
+    title: 'Cockpit',
+    sub: 'Every active lead with its next step and the clock that governs it',
+  },
   cases: {
     title: 'Cases & Pipeline',
     sub: "Patients, deals, and today's appointments in one place",
