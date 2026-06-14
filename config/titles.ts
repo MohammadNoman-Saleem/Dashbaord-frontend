@@ -41,9 +41,11 @@ export const TITLES: Record<ViewKey, ViewTitle> = {
     title: 'Funnels & Behaviour',
     sub: 'How the site and booking flows are performing · refreshes hourly',
   },
+  // The Marketing view carries two tabs (?tab=marketing|social). This entry
+  // titles the Marketing tab; the 'social' entry below titles the Social tab.
   marketing: {
     title: 'Marketing',
-    sub: 'Leads, spend, and channel performance',
+    sub: 'Leads, lead quality, spend, and channel performance',
   },
   financials: {
     title: 'Financials',
@@ -64,6 +66,9 @@ export const TITLES: Record<ViewKey, ViewTitle> = {
     title: 'Commission & Payouts',
     sub: 'Every booking split into patient paid, provider payout, and Saleem revenue',
   },
+  // 'social' is no longer a standalone route: it is the Social tab inside the
+  // Marketing view (/marketing?tab=social). The key stays in the DeepLink
+  // union so back-compatible social deep links resolve there.
   social: {
     title: 'Social',
     sub: 'Website traffic and the social accounts, side by side',

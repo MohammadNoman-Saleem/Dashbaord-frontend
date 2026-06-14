@@ -509,6 +509,13 @@ export interface MarketingData {
    *  meta reason; the target is null when no KPI row exists this month. */
   tiles: {
     leads: { value: number; target: number | null }
+    /** Lead quality over the same window as the leads tile (this calendar
+     *  month to date), as real counts off the server-side lead status
+     *  classification. won is the converted count; qualified is total minus
+     *  the not-qualified count; unclassified counts leads whose Zoho status
+     *  the classifier does not recognize (surfaced, never folded into
+     *  qualified). */
+    lead_quality: { total: number; qualified: number; won: number; unclassified: number }
     cpl: { value_bhd: number; cap_bhd: number } | null
     whatsapp_reply_pct: { value: number; target: number } | null
     ig_reach: { value: number; spark: number[] } | null
