@@ -14,7 +14,7 @@ export interface PatientRefData {
 }
 
 export interface DeepLink {
-  view: 'home' | 'cases' | 'board' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'social'
+  view: 'home' | 'cockpit' | 'cases' | 'board' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'social'
   tab?: string
   focus?: string
 }
@@ -907,4 +907,161 @@ export interface PayoutRuleItem {
 }
 export interface PayoutsRulesData {
   rules: PayoutRuleItem[]
+}
+
+// /api/cockpit/* (cockpit-sla-spec.md). Read-only operational cockpit for the
+// medical-travel case manager. Every SLA clock is driven by the best available
+// Zoho timestamp; when the precise event field is empty the clock falls back to
+// a proxy and is marked approx; when there is no backing field at all (provider
+// clocks) the clock is null with the reason "Not tracked in Zoho yet". Patient
+// names ride patient_name, served only to sees_patient_names viewers and
+// rendered only by PatientRef.
+
+// The six cockpit steps plus the parked lot. The string is shared by the queue
+// item step, the case file step_current, and each stepper entry's key.
+export type CockpitStepKey =
+  | 'first_contact'
+  | 'info_collected'
+  | 'partner_quotes'
+  | 'quotation'
+  | 'decision'
+  | 'treatment'
+  | 'parked'
+
+// The governing clock's classification for one active lead. due_now is the only
+// attention state; tones map kind to a Chip variant in the UI (due_now warn,
+// due_today and soon info, on_track good, parked mut).
+export type CockpitDueKind = 'due_now' | 'due_today' | 'soon' | 'on_track'
+
+export interface CockpitDue {
+  label: string
+  tone: 'warn' | 'info' | 'good' | 'mut'
+  kind: CockpitDueKind
+}
+
+// GET /api/cockpit/queue?person=
+export interface CockpitTile {
+  count: number
+  note: string
+}
+export interface CockpitQueueItem {
+  lead_ref: PatientRefData
+  patient_name?: string
+  step: string
+  next_action: string
+  /** "Origin -> Destination", e.g. "Bahrain -> Czech Republic". */
+  route: string
+  condition: string
+  due: CockpitDue
+  sla_key: string
+  /** True when the governing clock fell back to a proxy timestamp. */
+  approx: boolean
+}
+export interface CockpitQueueData {
+  tiles: {
+    due_now: CockpitTile
+    due_today: CockpitTile
+    waiting_partners: CockpitTile
+    parked: CockpitTile
+  }
+  active: CockpitQueueItem[]
+  parked_count: number
+}
+
+// GET /api/cockpit/case/:id  (id = lead or deal zoho id)
+export interface CockpitStep {
+  key: string
+  label: string
+  state: 'done' | 'cur' | 'todo'
+}
+export interface CockpitNextAction {
+  label: string
+  due_label: string
+  sla_rule: string
+  approx: boolean
+  /** Null in v1: the drafted-message preview is not wired to a source yet. */
+  draft_message: string | null
+}
+export interface CockpitDetail {
+  k: string
+  v: string
+}
+export interface CockpitChecklistItem {
+  label: string
+  done: boolean
+  /** "Jun 6" or null when the item is open. */
+  date: string | null
+}
+export interface CockpitNote {
+  title: string
+  body: string
+  source: string
+}
+export interface CockpitPartner {
+  label: string
+  detail: string
+  state: 'good' | 'info' | 'mut'
+}
+export interface CockpitDocument {
+  label: string
+  detail: string
+  status: string
+}
+export interface CockpitActivity {
+  label: string
+  detail: string
+}
+export interface CockpitCaseData {
+  lead_ref: PatientRefData
+  patient_name?: string
+  route: string
+  condition: string
+  source: string
+  in_funnel_days: number
+  step_current: string
+  steps: CockpitStep[]
+  next_action: CockpitNextAction
+  details: CockpitDetail[]
+  checklist: CockpitChecklistItem[]
+  notes: CockpitNote[]
+  partners: CockpitPartner[]
+  documents: CockpitDocument[]
+  activity: CockpitActivity[]
+}
+
+// GET /api/cockpit/parked?person=
+export interface CockpitParkedRow {
+  lead_ref: PatientRefData
+  patient_name?: string
+  /** "May 30" style. */
+  parked_date: string
+  reason: string
+  /** Null when no revival nudge is scheduled. */
+  revival_nudge: { label: string; tone: 'warn' | 'mut' } | null
+}
+export interface CockpitParkedData {
+  rows: CockpitParkedRow[]
+}
+
+// GET /api/cockpit/sla-policy  (static authored content, no upstream)
+export interface CockpitPatientSlaRule {
+  key: string
+  rule: string
+  threshold: string
+  counting: 'business' | 'elapsed' | 'mixed'
+  anchor_field: string
+  proxy_fallback: string
+  applies_in: string
+}
+export interface CockpitProviderSlaRule {
+  key: string
+  rule: string
+  threshold: string
+  backing: string
+}
+export interface CockpitSlaPolicyData {
+  patient: CockpitPatientSlaRule[]
+  provider: CockpitProviderSlaRule[]
+  /** Plain summary of the business-day rule shown above the tables. */
+  business_day_note: string
 }

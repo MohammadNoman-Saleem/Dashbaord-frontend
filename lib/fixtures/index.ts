@@ -12,6 +12,10 @@ import { fixture as blockersFixture } from './blockers'
 import { fixture as boardFixture } from './board'
 import { fixture as briefFixture } from './brief'
 import { fixture as casesSummaryFixture } from './cases-summary'
+import { fixture as cockpitCaseFixture } from './cockpit-case'
+import { fixture as cockpitParkedFixture } from './cockpit-parked'
+import { fixture as cockpitQueueFixture } from './cockpit-queue'
+import { fixture as cockpitSlaPolicyFixture } from './cockpit-sla-policy'
 import { fixture as crmFixture } from './crm'
 import { fixture as deliverablesFixture } from './deliverables'
 import { fixture as financialsFixture } from './financials'
@@ -121,6 +125,10 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
     data: null,
     meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
   }),
+  cockpit_queue: cockpitQueueFixture,
+  cockpit_case: cockpitCaseFixture,
+  cockpit_parked: cockpitParkedFixture,
+  cockpit_sla_policy: cockpitSlaPolicyFixture,
 }
 
 export function getFixture<T>(

@@ -51,6 +51,10 @@ export type EndpointKey =
   | 'payouts_rules'
   | 'payouts_rule_patch'
   | 'payouts_manual'
+  | 'cockpit_queue'
+  | 'cockpit_case'
+  | 'cockpit_parked'
+  | 'cockpit_sla_policy'
 
 export type EndpointMode = 'fixture' | 'live'
 
@@ -108,4 +112,12 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   // fixture, mutateEnvelope resolves null in fixture mode.
   payouts_rule_patch: 'live',
   payouts_manual: 'live',
+  // V4 Cockpit. The web frontend is built fixtures-first against the contract
+  // while the backend lands on the same branch; these flip to live as each
+  // /api/cockpit endpoint is wired. Set live so the page reads the real API
+  // when it is up, with the fixtures serving dev smoke until then.
+  cockpit_queue: 'live',
+  cockpit_case: 'live',
+  cockpit_parked: 'live',
+  cockpit_sla_policy: 'live',
 }
