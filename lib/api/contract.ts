@@ -953,6 +953,12 @@ export interface CockpitTile {
   count: number
   note: string
 }
+// The queue and parked tabs split on these. record_type is the Leads vs Deals
+// divide (a lead is an unconverted lead, a deal is anything else); pipeline is
+// the Deals sub-tab divide and is null for leads, which have no pipeline.
+export type CockpitRecordType = 'lead' | 'deal'
+export type CockpitPipeline = 'Treatment' | 'Telemedicine'
+
 export interface CockpitQueueItem {
   lead_ref: PatientRefData
   patient_name?: string
@@ -965,6 +971,9 @@ export interface CockpitQueueItem {
   sla_key: string
   /** True when the governing clock fell back to a proxy timestamp. */
   approx: boolean
+  record_type: CockpitRecordType
+  /** Treatment or Telemedicine for deals; null for leads. */
+  pipeline: CockpitPipeline | null
 }
 export interface CockpitQueueData {
   tiles: {
@@ -1047,7 +1056,17 @@ export interface CockpitParkedRow {
   reason: string
   /** Null when no revival nudge is scheduled. */
   revival_nudge: { label: string; tone: 'warn' | 'mut' } | null
+  record_type: CockpitRecordType
+  /** Treatment or Telemedicine for deals; null for leads. */
+  pipeline: CockpitPipeline | null
 }
+// Parked tab bucket the parked endpoint paginates within. leads is the
+// Not-Qualified lead pool; deals_treatment and deals_telemedicine are the Lost
+// or Inactive deals split by pipeline. Omitting it returns the whole pool.
+export type CockpitParkedBucket =
+  | 'leads'
+  | 'deals_treatment'
+  | 'deals_telemedicine'
 export interface CockpitParkedData {
   rows: CockpitParkedRow[]
   /** Server-side pagination over the parked pool (default page size 12). */

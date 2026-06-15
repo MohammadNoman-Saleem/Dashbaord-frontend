@@ -24,6 +24,8 @@ const ACTIVE = [
     due: { label: 'Due now', tone: 'warn', kind: 'due_now' },
     sla_key: 'first_contact',
     approx: true,
+    record_type: 'lead',
+    pipeline: null,
   },
   {
     lead_ref: { zoho_id: '7064208000011120019', initials: 'M.S.', ref: 'L19', ref_is_fallback: false },
@@ -34,6 +36,8 @@ const ACTIVE = [
     due: { label: 'Due now', tone: 'warn', kind: 'due_now' },
     sla_key: 'reports_window',
     approx: true,
+    record_type: 'lead',
+    pipeline: null,
   },
   {
     lead_ref: { zoho_id: '7064208000011120001', initials: 'S.A.', ref: 'L01', ref_is_fallback: false },
@@ -44,6 +48,8 @@ const ACTIVE = [
     due: { label: 'In 18h', tone: 'info', kind: 'due_today' },
     sla_key: 'post_quote_followup',
     approx: true,
+    record_type: 'deal',
+    pipeline: 'Treatment',
   },
   {
     lead_ref: { zoho_id: '7064208000011120022', initials: 'R.K.', ref: 'L22', ref_is_fallback: false },
@@ -54,6 +60,8 @@ const ACTIVE = [
     due: { label: 'Tomorrow', tone: 'info', kind: 'soon' },
     sla_key: 'provider_quote_followup',
     approx: true,
+    record_type: 'deal',
+    pipeline: 'Treatment',
   },
   {
     lead_ref: { zoho_id: '7064208000011120020', initials: 'H.A.', ref: 'L20', ref_is_fallback: false },
@@ -64,6 +72,8 @@ const ACTIVE = [
     due: { label: 'Tomorrow', tone: 'info', kind: 'soon' },
     sla_key: 'post_intro_followup',
     approx: false,
+    record_type: 'lead',
+    pipeline: null,
   },
   {
     lead_ref: { zoho_id: '7064208000011120013', initials: 'N.F.', ref: 'L13', ref_is_fallback: false },
@@ -74,6 +84,8 @@ const ACTIVE = [
     due: { label: 'Jun 13', tone: 'info', kind: 'soon' },
     sla_key: 'final_response',
     approx: true,
+    record_type: 'deal',
+    pipeline: 'Telemedicine',
   },
   {
     lead_ref: { zoho_id: '7064208000011120024', initials: 'D.M.', ref: 'L24', ref_is_fallback: false },
@@ -84,6 +96,8 @@ const ACTIVE = [
     due: { label: 'Jun 13', tone: 'mut', kind: 'soon' },
     sla_key: 'not_qualified',
     approx: true,
+    record_type: 'lead',
+    pipeline: null,
   },
   {
     lead_ref: { zoho_id: '7064208000011120029', initials: 'F.Q.', ref: 'L29', ref_is_fallback: false },
@@ -94,6 +108,8 @@ const ACTIVE = [
     due: { label: 'On track', tone: 'good', kind: 'on_track' },
     sla_key: 'reports_window',
     approx: true,
+    record_type: 'lead',
+    pipeline: null,
   },
 ] satisfies CockpitQueueItem[]
 

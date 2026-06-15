@@ -1,21 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { PatientRef } from "@/components/ui/PatientRef";
-import type { CockpitQueueData, CockpitQueueItem } from "@/lib/api/contract";
+import { Pills } from "@/components/ui/Pills";
+import { Tabs } from "@/components/ui/Tabs";
+import type { CockpitPipeline, CockpitQueueData, CockpitQueueItem } from "@/lib/api/contract";
 
 const QUEUE_PAGE_SIZE = 12;
 
-/* The queue, sorted by what is due now. Each row mirrors the mockup .qcard: a
-   bold lead reference with initials (via PatientRef, the only component allowed
-   a name), the next-action label, then route, condition and the arrival or
-   window line. The due chip's variant comes straight from the row's due.tone,
-   so the kind drives the color (due_now warn, due_today and soon info, on_track
-   good, parked mut). Selecting a row lifts its id so the case file loads.
+/* The queue, sorted by what is due now, grouped into tabs. The top level splits
+   the active set into Leads (unconverted leads) and Deals (everything else); the
+   Deals tab carries a Treatment | Telemedicine sub-tab row, matching the split
+   the backend tags each item with (record_type and pipeline). The filtering is
+   purely client-side over the already-fetched active set, so the four KPI tiles,
+   which are computed server-side over the full set, are untouched. The
+   Previous/Next pager runs within the selected tab.
+
+   Each row mirrors the mockup .qcard: a bold lead reference with initials (via
+   PatientRef, the only component allowed a name), the next-action label, then
+   route, condition and the arrival or window line. The due chip's variant comes
+   straight from the row's due.tone, so the kind drives the color (due_now warn,
+   due_today and soon info, on_track good, parked mut). Selecting a row lifts its
+   id so the case file loads.
 
    The approx hint marks a clock that fell back to a proxy timestamp: the
    honesty rule says such a clock is shown but flagged, never as an exact time. */
@@ -25,6 +35,8 @@ type QueueProps = {
   selectedId: string | null;
   onSelect: (id: string) => void;
 };
+
+type TopTab = "leads" | "deals";
 
 function QueueRow({
   item,
@@ -64,16 +76,51 @@ function QueueRow({
 }
 
 export function CockpitQueue({ data, selectedId, onSelect }: QueueProps) {
-  /* Client-side pagination over the active set. The whole queue arrives in one
-     payload (and the KPI tiles are computed server-side over the full set), so
-     paging here only limits the rendered rows, never the counts. The queue is
-     already sorted most-due first, so page 1 is the work that matters most. */
+  const [topTab, setTopTab] = useState<TopTab>("leads");
+  const [pipeline, setPipeline] = useState<CockpitPipeline>("Treatment");
   const [page, setPage] = useState(1);
-  const total = data.active.length;
+
+  /* Split the active set on the same fields the backend tagged. Leads are the
+     unconverted leads; deals are everything else, sub-split by pipeline. */
+  const leads = useMemo(
+    () => data.active.filter((i) => i.record_type === "lead"),
+    [data.active],
+  );
+  const dealsTreatment = useMemo(
+    () => data.active.filter((i) => i.record_type === "deal" && i.pipeline === "Treatment"),
+    [data.active],
+  );
+  const dealsTelemedicine = useMemo(
+    () => data.active.filter((i) => i.record_type === "deal" && i.pipeline === "Telemedicine"),
+    [data.active],
+  );
+  const dealsTotal = dealsTreatment.length + dealsTelemedicine.length;
+
+  /* The rows for the selected tab. Picking a tab or sub-tab resets the pager to
+     page 1 so the user never lands on an out-of-range page. */
+  const visibleSet =
+    topTab === "leads"
+      ? leads
+      : pipeline === "Treatment"
+        ? dealsTreatment
+        : dealsTelemedicine;
+
+  const total = visibleSet.length;
   const pages = Math.max(1, Math.ceil(total / QUEUE_PAGE_SIZE));
   const current = Math.min(page, pages);
   const start = (current - 1) * QUEUE_PAGE_SIZE;
-  const visible = data.active.slice(start, start + QUEUE_PAGE_SIZE);
+  const visible = visibleSet.slice(start, start + QUEUE_PAGE_SIZE);
+
+  function selectTop(key: string) {
+    setTopTab(key as TopTab);
+    setPage(1);
+  }
+  function selectPipeline(key: string) {
+    setPipeline(key as CockpitPipeline);
+    setPage(1);
+  }
+
+  const tabNoun = topTab === "leads" ? "lead" : "deal";
 
   return (
     <Card className="flex flex-col">
@@ -84,9 +131,35 @@ export function CockpitQueue({ data, selectedId, onSelect }: QueueProps) {
           <Chip variant="info">{`${data.active.length} active · ${data.parked_count} parked`}</Chip>
         }
       />
-      <div className="px-[18px] pb-3 pt-2">
-        {data.active.length === 0 ? (
-          <p className="py-2 text-[13px] text-ink-2">Nothing is due right now. Every active lead is on track.</p>
+      <div className="px-[18px] pt-2">
+        <Tabs
+          aria-label="Queue record type"
+          value={topTab}
+          onChange={selectTop}
+          items={[
+            { key: "leads", label: `Leads (${leads.length})` },
+            { key: "deals", label: `Deals (${dealsTotal})` },
+          ]}
+        />
+        {topTab === "deals" ? (
+          <div className="mb-3 -mt-1">
+            <Pills
+              aria-label="Deal pipeline"
+              value={pipeline}
+              onChange={selectPipeline}
+              items={[
+                { key: "Treatment", label: `Treatment (${dealsTreatment.length})` },
+                { key: "Telemedicine", label: `Telemedicine (${dealsTelemedicine.length})` },
+              ]}
+            />
+          </div>
+        ) : null}
+      </div>
+      <div className="px-[18px] pb-3 pt-1">
+        {total === 0 ? (
+          <p className="py-2 text-[13px] text-ink-2">
+            Nothing is due in this tab right now. Every {tabNoun} here is on track.
+          </p>
         ) : (
           visible.map((item) => (
             <QueueRow
@@ -102,7 +175,7 @@ export function CockpitQueue({ data, selectedId, onSelect }: QueueProps) {
         <CardFooter
           note={
             <span className="num">
-              Page {current} of {pages} · {total} active
+              Page {current} of {pages} · {total} in this tab
             </span>
           }
           right={
