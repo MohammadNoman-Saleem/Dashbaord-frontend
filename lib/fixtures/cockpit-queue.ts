@@ -16,7 +16,7 @@ function meta(): Meta {
 
 const ACTIVE = [
   {
-    lead_ref: { zoho_id: 'L26', initials: 'A.H.' },
+    lead_ref: { zoho_id: '7064208000011120026', initials: 'A.H.', ref: 'L26', ref_is_fallback: false },
     step: 'first_contact',
     next_action: 'First contact: call the intro, Arabic first',
     route: 'Bahrain -> Czech Republic',
@@ -26,7 +26,7 @@ const ACTIVE = [
     approx: true,
   },
   {
-    lead_ref: { zoho_id: 'L19', initials: 'M.S.' },
+    lead_ref: { zoho_id: '7064208000011120019', initials: 'M.S.', ref: 'L19', ref_is_fallback: false },
     step: 'info_collected',
     next_action: 'Collecting info: ask for the MRI disc',
     route: 'Oman -> India',
@@ -36,7 +36,7 @@ const ACTIVE = [
     approx: true,
   },
   {
-    lead_ref: { zoho_id: 'L01', initials: 'S.A.' },
+    lead_ref: { zoho_id: '7064208000011120001', initials: 'S.A.', ref: 'L01', ref_is_fallback: false },
     step: 'quotation',
     next_action: 'Quotation follow-up: 24h check-in on Q-2031',
     route: 'Saudi Arabia -> India',
@@ -46,7 +46,7 @@ const ACTIVE = [
     approx: true,
   },
   {
-    lead_ref: { zoho_id: 'L22', initials: 'R.K.' },
+    lead_ref: { zoho_id: '7064208000011120022', initials: 'R.K.', ref: 'L22', ref_is_fallback: false },
     step: 'partner_quotes',
     next_action: 'Partner chase: Apollo quote request, day 2 of 3',
     route: 'Saudi Arabia -> India',
@@ -56,7 +56,7 @@ const ACTIVE = [
     approx: true,
   },
   {
-    lead_ref: { zoho_id: 'L20', initials: 'H.A.' },
+    lead_ref: { zoho_id: '7064208000011120020', initials: 'H.A.', ref: 'L20', ref_is_fallback: false },
     step: 'info_collected',
     next_action: 'Post-intro follow-up: the 48h touch',
     route: 'Bahrain -> Jordan',
@@ -66,7 +66,7 @@ const ACTIVE = [
     approx: false,
   },
   {
-    lead_ref: { zoho_id: 'L13', initials: 'N.F.' },
+    lead_ref: { zoho_id: '7064208000011120013', initials: 'N.F.', ref: 'L13', ref_is_fallback: false },
     step: 'decision',
     next_action: 'Decision window: final response check',
     route: 'Bahrain -> Flexible',
@@ -76,7 +76,7 @@ const ACTIVE = [
     approx: true,
   },
   {
-    lead_ref: { zoho_id: 'L24', initials: 'D.M.' },
+    lead_ref: { zoho_id: '7064208000011120024', initials: 'D.M.', ref: 'L24', ref_is_fallback: false },
     step: 'decision',
     next_action: 'Last check-in, then park if quiet',
     route: 'Saudi Arabia -> No preference',
@@ -86,7 +86,7 @@ const ACTIVE = [
     approx: true,
   },
   {
-    lead_ref: { zoho_id: 'L29', initials: 'F.Q.' },
+    lead_ref: { zoho_id: '7064208000011120029', initials: 'F.Q.', ref: 'L29', ref_is_fallback: false },
     step: 'info_collected',
     next_action: 'Reports window: day 4 of 10, nothing to do yet',
     route: 'Saudi Arabia -> Czech Republic',

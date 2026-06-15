@@ -28,11 +28,11 @@ import { useViewer } from "@/lib/viewer";
 type NavEntry = { href: string; label: string; icon: LucideIcon };
 
 const WORKSPACE_NAV: NavEntry[] = [
-  /* The cockpit is the case manager's working surface: every active lead with
-     its next step and the clock that governs it. Placed first in the
-     workspace group at the build lead's request. */
-  { href: "/cockpit", label: "Cockpit", icon: Gauge },
   { href: "/", label: "Command Center", icon: Home },
+  /* The cockpit is the case manager's working surface: every active lead with
+     its next step and the clock that governs it. Placed immediately after
+     Command Center (second position) at the build lead's request. */
+  { href: "/cockpit", label: "Cockpit", icon: Gauge },
   { href: "/cases", label: "Cases & Pipeline", icon: Layers },
   /* Team board is NOT in the approved v3 mockup; it is the legacy kanban
      port, styled with the existing design system and flagged for Khalid's

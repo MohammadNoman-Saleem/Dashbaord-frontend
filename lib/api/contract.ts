@@ -9,8 +9,17 @@
 // that everyone else's payloads do not contain the field at all.
 
 export interface PatientRefData {
+  /** Internal Zoho record id. The case-file lookup key; never shown to users. */
   zoho_id: string
   initials: string
+  /** Human-readable Zoho reference the team identifies records by (Leads
+   *  "Zoho Lead ID" autonumber, Deals "Zoho ID" text). Shown next to the
+   *  initials. Only the cockpit serves it today; optional elsewhere. */
+  ref?: string
+  /** True when the record had no Zoho_ID and ref falls back to the internal
+   *  record id. The UI marks the fallback rather than passing it off as a
+   *  real Zoho number. */
+  ref_is_fallback?: boolean
 }
 
 export interface DeepLink {
@@ -1041,6 +1050,10 @@ export interface CockpitParkedRow {
 }
 export interface CockpitParkedData {
   rows: CockpitParkedRow[]
+  /** Server-side pagination over the parked pool (default page size 12). */
+  page: number
+  pages: number
+  total: number
 }
 
 // GET /api/cockpit/sla-policy  (static authored content, no upstream)
