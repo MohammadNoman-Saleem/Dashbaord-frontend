@@ -14,25 +14,25 @@ function meta(): Meta {
 
 const ROWS = [
   {
-    lead_ref: { zoho_id: 'L07', initials: 'K.B.' },
+    lead_ref: { zoho_id: '7064208000011119016', initials: 'K.B.', ref: 'L07', ref_is_fallback: false },
     parked_date: 'May 30',
     reason: 'No response after the final check',
     revival_nudge: { label: 'Jun 14', tone: 'warn' },
   },
   {
-    lead_ref: { zoho_id: 'L11', initials: 'T.R.' },
+    lead_ref: { zoho_id: '7064208000011119024', initials: 'T.R.', ref: 'L11', ref_is_fallback: false },
     parked_date: 'Jun 2',
     reason: 'Declined the quote, may revisit after Eid',
     revival_nudge: { label: 'Jun 28', tone: 'warn' },
   },
   {
-    lead_ref: { zoho_id: 'L04', initials: 'W.N.' },
+    lead_ref: { zoho_id: '7064208000011119031', initials: 'W.N.', ref: 'L04', ref_is_fallback: false },
     parked_date: 'Jun 4',
     reason: 'Budget below the case minimum',
     revival_nudge: null,
   },
   {
-    lead_ref: { zoho_id: 'L23', initials: 'J.D.' },
+    lead_ref: { zoho_id: '7064208000011119048', initials: 'J.D.', ref: 'L23', ref_is_fallback: false },
     parked_date: 'Jun 8',
     reason: 'Chose another provider',
     revival_nudge: null,
@@ -40,6 +40,11 @@ const ROWS = [
 ] satisfies CockpitParkedRow[]
 
 export function fixture(): Envelope<unknown> {
-  const data = { rows: ROWS } satisfies CockpitParkedData
+  const data = {
+    rows: ROWS,
+    page: 1,
+    pages: 1,
+    total: ROWS.length,
+  } satisfies CockpitParkedData
   return { data, meta: meta() }
 }

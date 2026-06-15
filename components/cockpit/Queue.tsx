@@ -1,9 +1,14 @@
 "use client";
 
+import { useState } from "react";
+
+import { Button } from "@/components/ui/Button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { PatientRef } from "@/components/ui/PatientRef";
 import type { CockpitQueueData, CockpitQueueItem } from "@/lib/api/contract";
+
+const QUEUE_PAGE_SIZE = 12;
 
 /* The queue, sorted by what is due now. Each row mirrors the mockup .qcard: a
    bold lead reference with initials (via PatientRef, the only component allowed
@@ -59,6 +64,17 @@ function QueueRow({
 }
 
 export function CockpitQueue({ data, selectedId, onSelect }: QueueProps) {
+  /* Client-side pagination over the active set. The whole queue arrives in one
+     payload (and the KPI tiles are computed server-side over the full set), so
+     paging here only limits the rendered rows, never the counts. The queue is
+     already sorted most-due first, so page 1 is the work that matters most. */
+  const [page, setPage] = useState(1);
+  const total = data.active.length;
+  const pages = Math.max(1, Math.ceil(total / QUEUE_PAGE_SIZE));
+  const current = Math.min(page, pages);
+  const start = (current - 1) * QUEUE_PAGE_SIZE;
+  const visible = data.active.slice(start, start + QUEUE_PAGE_SIZE);
+
   return (
     <Card className="flex flex-col">
       <CardHeader
@@ -72,7 +88,7 @@ export function CockpitQueue({ data, selectedId, onSelect }: QueueProps) {
         {data.active.length === 0 ? (
           <p className="py-2 text-[13px] text-ink-2">Nothing is due right now. Every active lead is on track.</p>
         ) : (
-          data.active.map((item) => (
+          visible.map((item) => (
             <QueueRow
               key={item.lead_ref.zoho_id}
               item={item}
@@ -82,7 +98,37 @@ export function CockpitQueue({ data, selectedId, onSelect }: QueueProps) {
           ))
         )}
       </div>
-      <CardFooter note="Every active lead is here or parked. A lead cannot exist without a next step and a date." />
+      {total > QUEUE_PAGE_SIZE ? (
+        <CardFooter
+          note={
+            <span className="num">
+              Page {current} of {pages} · {total} active
+            </span>
+          }
+          right={
+            <span className="flex gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={current <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={current >= pages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </span>
+          }
+        />
+      ) : (
+        <CardFooter note="Every active lead is here or parked. A lead cannot exist without a next step and a date." />
+      )}
     </Card>
   );
 }

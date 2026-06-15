@@ -2,7 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 
+import { Button } from "@/components/ui/Button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
@@ -12,6 +14,8 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import type { CockpitParkedData, CockpitParkedRow } from "@/lib/api/contract";
 import { fetchEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
+
+const PARKED_PAGE_SIZE = 12;
 
 /* Parked, with a way back. Not Qualified is a parking lot, not a grave: each
    row shows the lead reference, when it was parked, why, and a revival nudge
@@ -52,24 +56,28 @@ function ParkedSkeleton() {
 export function CockpitParked() {
   const searchParams = useSearchParams();
   const viewAs = searchParams.get("as") ?? undefined;
+  const [page, setPage] = useState(1);
 
   const query = useQuery({
-    queryKey: qk.cockpitParked(viewAs ?? "self"),
+    queryKey: qk.cockpitParked(viewAs ?? "self", page, PARKED_PAGE_SIZE),
     queryFn: () =>
       fetchEnvelope<CockpitParkedData>("cockpit_parked", "/cockpit/parked", {
         person: viewAs,
         viewer: viewAs,
+        page,
+        page_size: PARKED_PAGE_SIZE,
       }),
   });
 
-  const count = query.data?.data?.rows.length ?? null;
+  const data = query.data?.data;
+  const total = data?.total ?? null;
 
   return (
     <Card className="flex flex-col">
       <CardHeader
         title="Parked, with a way back"
         subtitle="Not Qualified is a parking lot, not a grave. One tap returns a lead to Waiting Quote."
-        right={count != null ? <Chip variant="mut">{`${count} parked`}</Chip> : undefined}
+        right={total != null ? <Chip variant="mut">{`${total} parked`}</Chip> : undefined}
       />
       <div className="px-[18px] pb-3 pt-2">
         <QueryPanel
@@ -83,7 +91,37 @@ export function CockpitParked() {
           )}
         </QueryPanel>
       </div>
-      <CardFooter note="At 300 leads a month this pool becomes a revenue source, not a write-off." />
+      {data && data.total > 0 ? (
+        <CardFooter
+          note={
+            <span className="num">
+              Page {data.page} of {data.pages} · {data.total} parked
+            </span>
+          }
+          right={
+            <span className="flex gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={data.page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={data.page >= data.pages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </Button>
+            </span>
+          }
+        />
+      ) : (
+        <CardFooter note="At 300 leads a month this pool becomes a revenue source, not a write-off." />
+      )}
     </Card>
   );
 }

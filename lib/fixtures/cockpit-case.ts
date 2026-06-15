@@ -26,40 +26,45 @@ const STEP_LABELS: Array<{ key: string; label: string }> = [
   { key: 'treatment', label: 'Treatment' },
 ]
 
+// The fixture keys by the INTERNAL Zoho record id (the case-file lookup key the
+// queue row carries in lead_ref.zoho_id), matching the live contract where the
+// human ref is for display only and the internal id is the navigation key.
+const L01_ID = '7064208000011120001'
+
 // The current step per queue id, so any selected row resolves a coherent
 // stepper. Defaults to first_contact for ids the fixture has no entry for.
 const CURRENT_STEP: Record<string, string> = {
-  L26: 'first_contact',
-  L19: 'info_collected',
-  L01: 'quotation',
-  L22: 'partner_quotes',
-  L20: 'info_collected',
-  L13: 'decision',
-  L24: 'decision',
-  L29: 'info_collected',
+  '7064208000011120026': 'first_contact',
+  '7064208000011120019': 'info_collected',
+  '7064208000011120001': 'quotation',
+  '7064208000011120022': 'partner_quotes',
+  '7064208000011120020': 'info_collected',
+  '7064208000011120013': 'decision',
+  '7064208000011120024': 'decision',
+  '7064208000011120029': 'info_collected',
 }
 
-const REF: Record<string, { initials: string; route: string; condition: string }> = {
-  L26: { initials: 'A.H.', route: 'Bahrain -> Czech Republic', condition: 'Disc surgery' },
-  L19: { initials: 'M.S.', route: 'Oman -> India', condition: 'Pediatric neurosurgery' },
-  L01: { initials: 'S.A.', route: 'Saudi Arabia -> India', condition: 'Stroke' },
-  L22: { initials: 'R.K.', route: 'Saudi Arabia -> India', condition: 'Stroke rehab' },
-  L20: { initials: 'H.A.', route: 'Bahrain -> Jordan', condition: 'Autoimmune disease' },
-  L13: { initials: 'N.F.', route: 'Bahrain -> Flexible', condition: 'Breast reduction' },
-  L24: { initials: 'D.M.', route: 'Saudi Arabia -> No preference', condition: 'Dental implants' },
-  L29: { initials: 'F.Q.', route: 'Saudi Arabia -> Czech Republic', condition: 'Multiple sclerosis' },
+const REF: Record<string, { initials: string; ref: string; route: string; condition: string }> = {
+  '7064208000011120026': { initials: 'A.H.', ref: 'L26', route: 'Bahrain -> Czech Republic', condition: 'Disc surgery' },
+  '7064208000011120019': { initials: 'M.S.', ref: 'L19', route: 'Oman -> India', condition: 'Pediatric neurosurgery' },
+  '7064208000011120001': { initials: 'S.A.', ref: 'L01', route: 'Saudi Arabia -> India', condition: 'Stroke' },
+  '7064208000011120022': { initials: 'R.K.', ref: 'L22', route: 'Saudi Arabia -> India', condition: 'Stroke rehab' },
+  '7064208000011120020': { initials: 'H.A.', ref: 'L20', route: 'Bahrain -> Jordan', condition: 'Autoimmune disease' },
+  '7064208000011120013': { initials: 'N.F.', ref: 'L13', route: 'Bahrain -> Flexible', condition: 'Breast reduction' },
+  '7064208000011120024': { initials: 'D.M.', ref: 'L24', route: 'Saudi Arabia -> No preference', condition: 'Dental implants' },
+  '7064208000011120029': { initials: 'F.Q.', ref: 'L29', route: 'Saudi Arabia -> Czech Republic', condition: 'Multiple sclerosis' },
 }
 
 // Fictional names, served only to a Fatima or Razan session.
 const NAMES: Record<string, string> = {
-  L26: 'Aisha Hamad',
-  L19: 'Maryam Saleh',
-  L01: 'Sara Abdulla',
-  L22: 'Rania Kamal',
-  L20: 'Hessa Ali',
-  L13: 'Noor Fadel',
-  L24: 'Dalal Mansoor',
-  L29: 'Fatin Qassim',
+  '7064208000011120026': 'Aisha Hamad',
+  '7064208000011120019': 'Maryam Saleh',
+  '7064208000011120001': 'Sara Abdulla',
+  '7064208000011120022': 'Rania Kamal',
+  '7064208000011120020': 'Hessa Ali',
+  '7064208000011120013': 'Noor Fadel',
+  '7064208000011120024': 'Dalal Mansoor',
+  '7064208000011120029': 'Fatin Qassim',
 }
 
 function steps(current: string): CockpitCaseData['steps'] {
@@ -74,7 +79,7 @@ function steps(current: string): CockpitCaseData['steps'] {
 // The full L01 case from the mockup.
 function l01(): CockpitCaseData {
   return {
-    lead_ref: { zoho_id: 'L01', initials: 'S.A.' },
+    lead_ref: { zoho_id: L01_ID, initials: 'S.A.', ref: 'L01', ref_is_fallback: false },
     route: 'Saudi Arabia -> India',
     condition: 'Stroke',
     source: 'Meta lead form',
@@ -148,10 +153,13 @@ function l01(): CockpitCaseData {
 
 // A lean case for any other queue id, honest about the thinner Zoho backing.
 function other(id: string): CockpitCaseData {
-  const ref = REF[id] ?? { initials: id, route: 'Origin not set -> Destination not set', condition: 'Not set' }
+  const ref = REF[id] ?? { initials: '·', ref: id, route: 'Origin not set -> Destination not set', condition: 'Not set' }
   const current = CURRENT_STEP[id] ?? 'first_contact'
+  // No Zoho_ID known for an unmapped id, so ref falls back to the record id and
+  // the fallback marker says so, mirroring the live honesty rule.
+  const isFallback = REF[id] == null
   return {
-    lead_ref: { zoho_id: id, initials: ref.initials },
+    lead_ref: { zoho_id: id, initials: ref.initials, ref: ref.ref, ref_is_fallback: isFallback },
     route: ref.route,
     condition: ref.condition,
     source: 'Meta lead form',
@@ -188,11 +196,11 @@ function other(id: string): CockpitCaseData {
 }
 
 export function fixture(params?: Record<string, string | number | undefined>): Envelope<unknown> {
-  const id = String(params?.id ?? 'L01')
+  const id = String(params?.id ?? L01_ID)
   const viewer = String(params?.viewer ?? '')
   const withName = viewer === 'fatima' || viewer === 'razan'
 
-  const base = id === 'L01' ? l01() : other(id)
+  const base = id === L01_ID ? l01() : other(id)
   const name = NAMES[id]
   const data: CockpitCaseData = withName && name ? { ...base, patient_name: name } : base
   return { data, meta: meta() }
