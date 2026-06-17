@@ -1126,6 +1126,10 @@ export interface CockpitCaseData {
   record_type: CockpitRecordType
   /** Current next-follow-up date (Deals Next_Follow_up), or null. */
   next_follow_up: string | null
+  /** Current Deals stage, or null for an unconverted lead. */
+  stage: string | null
+  /** Treatment or Telemedicine for deals; null for leads. */
+  pipeline: CockpitPipeline | null
   in_funnel_days: number
   step_current: string
   steps: CockpitStep[]
@@ -1141,13 +1145,31 @@ export interface CockpitCaseData {
 // Cockpit write gate (Saleem Cockpit Implementation Plan, Phase 1). Two-step:
 // POST /api/write-gate/prepare returns a plain-language change list and a
 // short-lived change_id; POST /api/write-gate/commit applies it after the case
-// manager confirms. Phase 1a wires only the set-follow-up change.
+// manager confirms. Phase 1a wired the set-follow-up change; Phase 1b adds the
+// stage move and the four mark-event stamps.
 export interface WriteGateChangeSetFollowUp {
   kind: 'set_follow_up'
   /** YYYY-MM-DD. */
   date: string
 }
-export type WriteGateChange = WriteGateChangeSetFollowUp
+export interface WriteGateChangeMoveStage {
+  kind: 'move_stage'
+  to_stage: string
+  /** Required only when moving to Lost / Inactive; null otherwise. */
+  reason_for_loss?: string | null
+}
+export interface WriteGateChangeStamp {
+  kind: 'stamp'
+  event:
+    | 'first_contact'
+    | 'quotation_sent'
+    | 'partner_quote_requested'
+    | 'partner_more_time'
+}
+export type WriteGateChange =
+  | WriteGateChangeSetFollowUp
+  | WriteGateChangeMoveStage
+  | WriteGateChangeStamp
 export interface WriteGatePrepareBody {
   resourceType: 'deal'
   resourceId: string
@@ -1171,6 +1193,15 @@ export interface WriteGateCommitData {
   committed: boolean
   change_list: string[]
   resource_id: string
+}
+
+// GET /api/write-gate/stage-options?pipeline=&stage=
+// The target stages the current stage may move to, plus the loss reasons to
+// pick from when the target is Lost / Inactive. Both lists are CRM config, not
+// patient data.
+export interface WriteGateStageOptionsData {
+  targets: string[]
+  loss_reasons: string[]
 }
 
 // GET /api/cockpit/parked?person=
