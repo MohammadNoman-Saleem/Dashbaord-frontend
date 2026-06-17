@@ -10,6 +10,8 @@ import { fixture as appointmentsFixture } from './appointments'
 import { fixture as attentionFixture } from './attention'
 import { fixture as blockersFixture } from './blockers'
 import { fixture as boardFixture } from './board'
+import { fixture as boardAssignableUsersFixture } from './board-assignable-users'
+import { fixture as boardTaskDetailFixture } from './board-task-detail'
 import { fixture as briefFixture } from './brief'
 import { fixture as casesSummaryFixture } from './cases-summary'
 import { fixture as cockpitCaseFixture } from './cockpit-case'
@@ -102,6 +104,8 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   agents: agentsFixture,
   tasks: tasksFixture,
   board: boardFixture,
+  board_task_detail: boardTaskDetailFixture,
+  board_assignable_users: boardAssignableUsersFixture,
   social_ga4: socialGa4Fixture,
   social_platforms: socialPlatformsFixture,
   // POST-only endpoint: mutateEnvelope resolves null in fixture mode and

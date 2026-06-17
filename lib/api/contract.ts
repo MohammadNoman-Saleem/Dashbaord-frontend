@@ -751,6 +751,88 @@ export interface BoardCatalogData {
   tabs: BoardTabRef[]
 }
 
+// Priority is the closed Zoho set the board edits. None is the unset value;
+// the contract carries it as a real choice rather than null so the selector
+// can offer "clear the priority" as a deliberate write.
+export type BoardPriority = 'None' | 'Low' | 'Medium' | 'High'
+
+// One assignable owner from the Postgres users table (zoho_zpuid not null,
+// admin excluded). key is the stable app user key, zpuid the Zoho person id
+// the write sends as person_responsible.
+export interface BoardAssignableUser {
+  key: string
+  name: string
+  zpuid: string
+}
+
+// One recent comment on a task. Read-only history; the add box posts content
+// and the detail query refetches to pick the new one up.
+export interface BoardComment {
+  author: string
+  content: string
+  time_display: string
+}
+
+// GET /api/board/task/:id?project=<zohoProjectId>
+// The card detail panel's source. priority may be null when Zoho leaves it
+// unset; owner and the display dates are null when Zoho omits them.
+// priority_editable is false when the backend's probe found Zoho rejects a
+// priority write on an existing task, so the UI renders priority read-only
+// with a note rather than shipping a control that silently fails.
+export interface BoardTaskDetail {
+  id: string
+  name: string
+  description: string
+  status: string
+  status_type: string | null
+  priority: BoardPriority | null
+  owner: string | null
+  owner_zpuid: string | null
+  due_display: string | null
+  created_display: string | null
+  modified_display: string | null
+  url: string | null
+  comments: BoardComment[]
+  assignable_users: BoardAssignableUser[]
+  /** False when the backend's priority-write probe failed; the UI then shows
+   *  priority read-only. Optional so an older payload that omits it is treated
+   *  as editable. */
+  priority_editable?: boolean
+}
+
+// PATCH /api/board/task/:id body. Any subset; each provided field is one
+// audited Zoho write. project is always required to scope the task.
+export interface BoardTaskPatchBody {
+  project: string
+  status?: string
+  owner_zpuid?: string
+  priority?: BoardPriority
+}
+
+// POST /api/board/task/:id/comment body.
+export interface BoardCommentBody {
+  project: string
+  content: string
+}
+export interface BoardCommentResult {
+  added: true
+}
+
+// POST /api/board/task body. due_date is YYYY-MM-DD; the backend reformats to
+// Zoho's MM-dd-yyyy. owner_zpuid and priority are optional.
+export interface BoardCreateTaskBody {
+  project: string
+  tasklist_id: string
+  name: string
+  description?: string
+  owner_zpuid?: string
+  priority?: BoardPriority
+  due_date?: string
+}
+export interface BoardCreateTaskResult {
+  task_id: string
+}
+
 // POST /api/it-support
 export interface ItSupportTicketData {
   /** Zoho task id of the new ticket; null only if Zoho answered without one. */
