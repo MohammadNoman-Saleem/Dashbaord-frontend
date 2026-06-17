@@ -705,6 +705,10 @@ export interface BoardCard {
   id: string
   title: string
   owner: string
+  /** Stable Zoho user id of the owner, or null when unassigned. The assignee
+   *  filter matches on this, not the display name (Zoho shows a fuller name
+   *  than the users table stores, so name matching misses). */
+  owner_zpuid: string | null
   /** "Jun 12" or null when the task has no due date. */
   due_display: string | null
   /** Zoho priority (None/Low/Medium/High) or null when unset. */

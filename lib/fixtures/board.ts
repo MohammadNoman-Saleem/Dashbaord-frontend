@@ -15,20 +15,20 @@ function meta(): Meta {
 function columns(tasklist: string | null): BoardColumn[] {
   const cards = {
     backlog: [
-      { id: '900100', title: 'Doctor portal photo upload', owner: 'Mehran Ali', due_display: null, priority: 'Medium', tasklist, status: 'Backlog' },
+      { id: '900100', title: 'Doctor portal photo upload', owner: 'Mehran Ali', owner_zpuid: '900000000000001', due_display: null, priority: 'Medium', tasklist, status: 'Backlog' },
     ],
     open: [
-      { id: '900101', title: 'Safari date picker fix', owner: 'Mehran Ali', due_display: 'Jun 20', priority: 'High', tasklist, status: 'Open' },
-      { id: '900102', title: 'Weekly brief copy review', owner: 'Afaf Dhahi', due_display: 'Jun 14', priority: 'Low', tasklist, status: 'Open' },
+      { id: '900101', title: 'Safari date picker fix', owner: 'Mehran Ali', owner_zpuid: '900000000000001', due_display: 'Jun 20', priority: 'High', tasklist, status: 'Open' },
+      { id: '900102', title: 'Weekly brief copy review', owner: 'Afaf Dhahi', owner_zpuid: '900000000000002', due_display: 'Jun 14', priority: 'Low', tasklist, status: 'Open' },
     ],
     inProgress: [
-      { id: '900103', title: 'Payout rules editor', owner: 'Mohammad Noman', due_display: 'Jun 18', priority: 'Medium', tasklist, status: 'In Progress' },
+      { id: '900103', title: 'Payout rules editor', owner: 'Mohammad Noman', owner_zpuid: '900000000000003', due_display: 'Jun 18', priority: 'Medium', tasklist, status: 'In Progress' },
     ],
     toBeTested: [
-      { id: '900104', title: 'Novo funnel definition', owner: 'Mohammad Noman', due_display: 'Jun 12', priority: 'High', tasklist, status: 'To be Tested' },
+      { id: '900104', title: 'Novo funnel definition', owner: 'Mohammad Noman', owner_zpuid: '900000000000003', due_display: 'Jun 12', priority: 'High', tasklist, status: 'To be Tested' },
     ],
     closed: [
-      { id: '900105', title: 'Payment waiting state', owner: 'Mehran Ali', due_display: 'Jun 8', priority: 'Low', tasklist, status: 'Closed' },
+      { id: '900105', title: 'Payment waiting state', owner: 'Mehran Ali', owner_zpuid: '900000000000001', due_display: 'Jun 8', priority: 'Low', tasklist, status: 'Closed' },
     ],
   }
   return [

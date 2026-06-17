@@ -161,7 +161,7 @@ export function BoardView({ tab, projectId, tasklistId }: BoardViewProps) {
      whose priority is null or the literal "None". */
   const matches = useMemo(() => {
     return (card: BoardCard) => {
-      if (assigneeFilter && card.owner !== assigneeFilter) return false;
+      if (assigneeFilter && card.owner_zpuid !== assigneeFilter) return false;
       if (priorityFilter) {
         const p = card.priority ?? "None";
         if (p !== priorityFilter) return false;
@@ -181,7 +181,7 @@ export function BoardView({ tab, projectId, tasklistId }: BoardViewProps) {
         >
           <option value="">All assignees</option>
           {users.map((user) => (
-            <option key={user.key} value={user.name}>
+            <option key={user.key} value={user.zpuid}>
               {user.name}
             </option>
           ))}
