@@ -59,6 +59,7 @@ export type EndpointKey =
   | 'cockpit_sla_policy'
   | 'write_gate_prepare'
   | 'write_gate_commit'
+  | 'write_gate_stage_options'
 
 export type EndpointMode = 'fixture' | 'live'
 
@@ -136,4 +137,8 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   // is on server-side, so merging this does not enable any write.
   write_gate_prepare: 'live',
   write_gate_commit: 'live',
+  // Phase 1b stage-move policy read: which target stages the current stage may
+  // move to, plus the loss reasons. A GET, live with the backend on this
+  // branch; the fixture serves dev smoke until the API is up.
+  write_gate_stage_options: 'live',
 }

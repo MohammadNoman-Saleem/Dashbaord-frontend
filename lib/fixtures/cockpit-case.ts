@@ -85,6 +85,8 @@ function l01(): CockpitCaseData {
     source: 'Meta lead form',
     record_type: 'deal',
     next_follow_up: '2026-06-20',
+    stage: 'Quote Proposed',
+    pipeline: 'Treatment',
     in_funnel_days: 11,
     step_current: 'quotation',
     steps: steps('quotation'),
@@ -160,18 +162,19 @@ function other(id: string): CockpitCaseData {
   // No Zoho_ID known for an unmapped id, so ref falls back to the record id and
   // the fallback marker says so, mirroring the live honesty rule.
   const isFallback = REF[id] == null
+  // Lead-stage cases are unconverted leads; later steps are deals. The
+  // set-follow-up, stage-move and mark-event controls show for deals only.
+  const isLead = current === 'first_contact' || current === 'info_collected'
   return {
     lead_ref: { zoho_id: id, initials: ref.initials, ref: ref.ref, ref_is_fallback: isFallback },
     route: ref.route,
     condition: ref.condition,
     source: 'Meta lead form',
-    // Lead-stage cases are unconverted leads; later steps are deals. The
-    // set-follow-up control shows for deals only.
-    record_type:
-      current === 'first_contact' || current === 'info_collected'
-        ? 'lead'
-        : 'deal',
+    record_type: isLead ? 'lead' : 'deal',
     next_follow_up: null,
+    // Leads have no pipeline or stage; deals carry a plausible Treatment stage.
+    stage: isLead ? null : 'Consultation Completed',
+    pipeline: isLead ? null : 'Treatment',
     in_funnel_days: 4,
     step_current: current,
     steps: steps(current),

@@ -144,6 +144,15 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
     data: null,
     meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
   }),
+  // Phase 1b stage-move policy read (GET). Target stages plus loss reasons,
+  // both CRM config; the live API replaces this once it is up.
+  write_gate_stage_options: () => ({
+    data: {
+      targets: ['Quote Proposed', 'Consultation Scheduled', 'Lost / Inactive'],
+      loss_reasons: ['Price/Affordability', 'No Response', 'Other'],
+    },
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
 }
 
 export function getFixture<T>(

@@ -21,6 +21,8 @@ import type {
 import { fetchEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
 import { SetFollowUp } from "@/components/cockpit/SetFollowUp";
+import { StageMove } from "@/components/cockpit/StageMove";
+import { MarkEvents } from "@/components/cockpit/MarkEvents";
 
 /* The case file: the right-hand detail card the queue feeds. Mirrors the
    mockup #caseFile: the stepper with done, current and todo states; the next
@@ -114,10 +116,20 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
       <NextAction data={data} />
 
       {data.record_type === "deal" ? (
-        <SetFollowUp
-          resourceId={data.lead_ref.zoho_id}
-          currentFollowUp={data.next_follow_up}
-        />
+        <>
+          <SetFollowUp
+            resourceId={data.lead_ref.zoho_id}
+            currentFollowUp={data.next_follow_up}
+          />
+          {data.pipeline != null ? (
+            <StageMove
+              resourceId={data.lead_ref.zoho_id}
+              pipeline={data.pipeline}
+              currentStage={data.stage}
+            />
+          ) : null}
+          <MarkEvents resourceId={data.lead_ref.zoho_id} />
+        </>
       ) : null}
 
       <GrpLabel>Case file</GrpLabel>
