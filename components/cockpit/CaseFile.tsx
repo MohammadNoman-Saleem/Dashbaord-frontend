@@ -24,6 +24,7 @@ import { SetFollowUp } from "@/components/cockpit/SetFollowUp";
 import { StageMove } from "@/components/cockpit/StageMove";
 import { MarkEvents } from "@/components/cockpit/MarkEvents";
 import { SendFirstContact } from "@/components/cockpit/SendFirstContact";
+import { EditCaseDetails } from "@/components/cockpit/EditCaseDetails";
 
 /* The case file: the right-hand detail card the queue feeds. Mirrors the
    mockup #caseFile: the stepper with done, current and todo states; the next
@@ -133,6 +134,12 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
             />
           ) : null}
           <MarkEvents resourceId={data.lead_ref.zoho_id} />
+          <EditCaseDetails
+            resourceId={data.lead_ref.zoho_id}
+            currentBudget={data.patient_budget}
+            currentTreatmentStart={data.treatment_start}
+            currentTreatmentEnd={data.treatment_end}
+          />
         </>
       ) : null}
 
