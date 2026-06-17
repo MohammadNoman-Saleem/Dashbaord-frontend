@@ -23,6 +23,7 @@ import { qk } from "@/lib/api/keys";
 import { SetFollowUp } from "@/components/cockpit/SetFollowUp";
 import { StageMove } from "@/components/cockpit/StageMove";
 import { MarkEvents } from "@/components/cockpit/MarkEvents";
+import { SendFirstContact } from "@/components/cockpit/SendFirstContact";
 
 /* The case file: the right-hand detail card the queue feeds. Mirrors the
    mockup #caseFile: the stepper with done, current and todo states; the next
@@ -117,6 +118,9 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
 
       {data.record_type === "deal" ? (
         <>
+          {data.steps.find((s) => s.state === "cur")?.key === "first_contact" ? (
+            <SendFirstContact resourceId={data.lead_ref.zoho_id} />
+          ) : null}
           <SetFollowUp
             resourceId={data.lead_ref.zoho_id}
             currentFollowUp={data.next_follow_up}

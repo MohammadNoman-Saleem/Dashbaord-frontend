@@ -1166,10 +1166,17 @@ export interface WriteGateChangeStamp {
     | 'partner_quote_requested'
     | 'partner_more_time'
 }
+// Phase 2: send the fixed first-contact WhatsApp template and log it. The send
+// itself runs server-side through a no-op adapter until the provider lands and
+// writes are enabled; the change carries no payload (the template is fixed).
+export interface WriteGateChangeSendFirstContact {
+  kind: 'send_first_contact'
+}
 export type WriteGateChange =
   | WriteGateChangeSetFollowUp
   | WriteGateChangeMoveStage
   | WriteGateChangeStamp
+  | WriteGateChangeSendFirstContact
 export interface WriteGatePrepareBody {
   resourceType: 'deal'
   resourceId: string
@@ -1193,6 +1200,14 @@ export interface WriteGateCommitData {
   committed: boolean
   change_list: string[]
   resource_id: string
+}
+
+// GET /api/whatsapp/template/first_contact (Phase 2). The fixed, non-clinical
+// first-contact greeting the send-and-log control previews. The text is the
+// template only; the live send is a server-side no-op until the provider lands.
+export interface WhatsAppTemplateData {
+  id: string
+  text: string
 }
 
 // GET /api/write-gate/stage-options?pipeline=&stage=

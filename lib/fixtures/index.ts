@@ -153,6 +153,16 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
     },
     meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
   }),
+  // Phase 2 first-contact template read (GET). A neutral, non-clinical
+  // placeholder greeting; the live API replaces this once it is up, and the
+  // real text still needs sign-off before any send is enabled.
+  whatsapp_first_contact_template: () => ({
+    data: {
+      id: 'first_contact',
+      text: 'Hello from Saleem, your medical-travel coordinator will be in touch shortly. (preview, pending sign-off)',
+    },
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
 }
 
 export function getFixture<T>(

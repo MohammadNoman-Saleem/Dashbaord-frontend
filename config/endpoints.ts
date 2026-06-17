@@ -60,6 +60,7 @@ export type EndpointKey =
   | 'write_gate_prepare'
   | 'write_gate_commit'
   | 'write_gate_stage_options'
+  | 'whatsapp_first_contact_template'
 
 export type EndpointMode = 'fixture' | 'live'
 
@@ -141,4 +142,8 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   // move to, plus the loss reasons. A GET, live with the backend on this
   // branch; the fixture serves dev smoke until the API is up.
   write_gate_stage_options: 'live',
+  // Phase 2 first-contact template read (GET). The fixed non-clinical greeting
+  // the send-and-log control previews; live with the backend on this branch,
+  // the fixture serves dev smoke until the API is up.
+  whatsapp_first_contact_template: 'live',
 }
