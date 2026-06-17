@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import type { QueryKey } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
@@ -21,6 +22,7 @@ import type {
 } from "@/lib/api/contract";
 import { fetchEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
+import { ReviveDeal } from "@/components/cockpit/ReviveDeal";
 
 const PARKED_PAGE_SIZE = 12;
 
@@ -35,26 +37,41 @@ const PARKED_PAGE_SIZE = 12;
    nudge chip (warn when a date is set, mut "None" when nothing is scheduled).
    Lead names ride through PatientRef alone; everyone else sees the reference. */
 
-const COLUMNS: DataTableColumn<CockpitParkedRow>[] = [
-  {
-    key: "lead",
-    label: "Lead",
-    render: (row) => <PatientRef patient={{ ...row, ...row.lead_ref }} className="font-semibold text-title" />,
-  },
-  { key: "parked_date", label: "Parked", render: (row) => <span className="num">{row.parked_date}</span> },
-  { key: "reason", label: "Why" },
-  {
-    key: "revival_nudge",
-    label: "Revival nudge",
-    numeric: true,
-    render: (row) =>
-      row.revival_nudge ? (
-        <Chip variant={row.revival_nudge.tone}>{row.revival_nudge.label}</Chip>
-      ) : (
-        <Chip variant="mut">None</Chip>
-      ),
-  },
-];
+/* The Revive control shows on parked DEAL rows (a Lost or Inactive deal with a
+   pipeline). Reviving reuses the stage-move flow, so it invalidates the active
+   parked query (passed in as parkedKey) to drop the row off the list. Lead rows
+   get no revive control: a parked lead has no pipeline to scope the move. */
+function columns(parkedKey: QueryKey): DataTableColumn<CockpitParkedRow>[] {
+  return [
+    {
+      key: "lead",
+      label: "Lead",
+      render: (row) => <PatientRef patient={{ ...row, ...row.lead_ref }} className="font-semibold text-title" />,
+    },
+    { key: "parked_date", label: "Parked", render: (row) => <span className="num">{row.parked_date}</span> },
+    { key: "reason", label: "Why" },
+    {
+      key: "revival_nudge",
+      label: "Revival nudge",
+      numeric: true,
+      render: (row) =>
+        row.revival_nudge ? (
+          <Chip variant={row.revival_nudge.tone}>{row.revival_nudge.label}</Chip>
+        ) : (
+          <Chip variant="mut">None</Chip>
+        ),
+    },
+    {
+      key: "revive",
+      label: "Way back",
+      numeric: true,
+      render: (row) =>
+        row.record_type === "deal" && row.pipeline != null ? (
+          <ReviveDeal resourceId={row.lead_ref.zoho_id} pipeline={row.pipeline} parkedKey={parkedKey} />
+        ) : null,
+    },
+  ];
+}
 
 function ParkedSkeleton() {
   return (
@@ -104,6 +121,7 @@ export function CockpitParked() {
   const [page, setPage] = useState(1);
 
   const bucket = bucketFor(topTab, pipeline);
+  const parkedKey = qk.cockpitParked(person, bucket, page, PARKED_PAGE_SIZE);
 
   const leadsCount = useBucketCount(person, "leads");
   const treatmentCount = useBucketCount(person, "deals_treatment");
@@ -114,7 +132,7 @@ export function CockpitParked() {
       : (treatmentCount ?? 0) + (telemedicineCount ?? 0);
 
   const query = useQuery({
-    queryKey: qk.cockpitParked(person, bucket, page, PARKED_PAGE_SIZE),
+    queryKey: parkedKey,
     queryFn: () =>
       fetchEnvelope<CockpitParkedData>("cockpit_parked", "/cockpit/parked", {
         person: viewAs,
@@ -175,7 +193,7 @@ export function CockpitParked() {
           emptyCopy="Nothing is parked in this tab right now."
         >
           {(d) => (
-            <DataTable columns={COLUMNS} rows={d.rows} rowKey={(row) => row.lead_ref.zoho_id} />
+            <DataTable columns={columns(parkedKey)} rows={d.rows} rowKey={(row) => row.lead_ref.zoho_id} />
           )}
         </QueryPanel>
       </div>

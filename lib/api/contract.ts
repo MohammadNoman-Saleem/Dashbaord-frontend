@@ -1126,6 +1126,13 @@ export interface CockpitCaseData {
   record_type: CockpitRecordType
   /** Current next-follow-up date (Deals Next_Follow_up), or null. */
   next_follow_up: string | null
+  /** Current patient budget in BHD (Deals field), or null when unset. The
+   *  edit-case-details control prefills and writes this. */
+  patient_budget: number | null
+  /** Current treatment start date (YYYY-MM-DD), or null when unset. */
+  treatment_start: string | null
+  /** Current treatment end date (YYYY-MM-DD), or null when unset. */
+  treatment_end: string | null
   /** Current Deals stage, or null for an unconverted lead. */
   stage: string | null
   /** Treatment or Telemedicine for deals; null for leads. */
@@ -1172,11 +1179,20 @@ export interface WriteGateChangeStamp {
 export interface WriteGateChangeSendFirstContact {
   kind: 'send_first_contact'
 }
+// Phase 4: edit a single case detail (budget or treatment dates) through the
+// gate. patient_budget carries a decimal string in BHD, e.g. "4500";
+// treatment_start and treatment_end carry a YYYY-MM-DD date.
+export interface WriteGateChangeEditField {
+  kind: 'edit_field'
+  field: 'patient_budget' | 'treatment_start' | 'treatment_end'
+  value: string
+}
 export type WriteGateChange =
   | WriteGateChangeSetFollowUp
   | WriteGateChangeMoveStage
   | WriteGateChangeStamp
   | WriteGateChangeSendFirstContact
+  | WriteGateChangeEditField
 export interface WriteGatePrepareBody {
   resourceType: 'deal'
   resourceId: string
