@@ -1121,6 +1121,11 @@ export interface CockpitCaseData {
   route: string
   condition: string
   source: string
+  /** Deal or unconverted lead. The set-follow-up control shows only for deals
+   *  (leads have no Next_Follow_up field). */
+  record_type: CockpitRecordType
+  /** Current next-follow-up date (Deals Next_Follow_up), or null. */
+  next_follow_up: string | null
   in_funnel_days: number
   step_current: string
   steps: CockpitStep[]
@@ -1131,6 +1136,41 @@ export interface CockpitCaseData {
   partners: CockpitPartner[]
   documents: CockpitDocument[]
   activity: CockpitActivity[]
+}
+
+// Cockpit write gate (Saleem Cockpit Implementation Plan, Phase 1). Two-step:
+// POST /api/write-gate/prepare returns a plain-language change list and a
+// short-lived change_id; POST /api/write-gate/commit applies it after the case
+// manager confirms. Phase 1a wires only the set-follow-up change.
+export interface WriteGateChangeSetFollowUp {
+  kind: 'set_follow_up'
+  /** YYYY-MM-DD. */
+  date: string
+}
+export type WriteGateChange = WriteGateChangeSetFollowUp
+export interface WriteGatePrepareBody {
+  resourceType: 'deal'
+  resourceId: string
+  change: WriteGateChange
+}
+export interface WriteGatePrepareData {
+  change_id: string
+  /** One plain-language line per change, e.g. "Set next follow-up to 25 Jun 2026". */
+  change_list: string[]
+  /** 1 for a normal change, 2 for a high-impact one (a second confirm). */
+  confirmations_required: number
+  base_modified_time: string | null
+  /** False when writes are turned off; commit will refuse. */
+  writes_enabled: boolean
+}
+export interface WriteGateCommitBody {
+  change_id: string
+  confirmations: number
+}
+export interface WriteGateCommitData {
+  committed: boolean
+  change_list: string[]
+  resource_id: string
 }
 
 // GET /api/cockpit/parked?person=

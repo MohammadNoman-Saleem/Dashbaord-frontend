@@ -57,6 +57,8 @@ export type EndpointKey =
   | 'cockpit_case'
   | 'cockpit_parked'
   | 'cockpit_sla_policy'
+  | 'write_gate_prepare'
+  | 'write_gate_commit'
 
 export type EndpointMode = 'fixture' | 'live'
 
@@ -128,4 +130,10 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   cockpit_case: 'live',
   cockpit_parked: 'live',
   cockpit_sla_policy: 'live',
+  // Cockpit write gate (Phase 1). POST-only seams; mutateEnvelope resolves
+  // null in fixture mode and never reads a fixture. Live so the confirm-commit
+  // flow reaches the real gate; commit still refuses unless WRITE_GATE_ENABLED
+  // is on server-side, so merging this does not enable any write.
+  write_gate_prepare: 'live',
+  write_gate_commit: 'live',
 }

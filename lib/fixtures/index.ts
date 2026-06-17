@@ -133,6 +133,17 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   cockpit_case: cockpitCaseFixture,
   cockpit_parked: cockpitParkedFixture,
   cockpit_sla_policy: cockpitSlaPolicyFixture,
+  // Write-gate POST seams (prepare/commit): mutateEnvelope resolves null in
+  // fixture mode and never calls getFixture, so these stubs only satisfy the
+  // record type.
+  write_gate_prepare: () => ({
+    data: null,
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
+  write_gate_commit: () => ({
+    data: null,
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
 }
 
 export function getFixture<T>(
