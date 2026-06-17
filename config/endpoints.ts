@@ -42,6 +42,8 @@ export type EndpointKey =
   | 'agents'
   | 'tasks'
   | 'board'
+  | 'board_task_detail'
+  | 'board_assignable_users'
   | 'social_ga4'
   | 'social_platforms'
   | 'it_support'
@@ -99,6 +101,12 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   agents: 'live',
   tasks: 'live',
   board: 'live',
+  // The two new board GET keys go live with the backend on this branch. The
+  // fixtures stay type-aligned and serve dev smoke until the API is up. The
+  // board writes (PATCH task, POST comment, POST task) route through
+  // mutateEnvelope and carry no fixture, resolving null in fixture mode.
+  board_task_detail: 'live',
+  board_assignable_users: 'live',
   social_ga4: 'live',
   social_platforms: 'live',
   // POST-only seam for raising IT tickets; carries no fixture (mutateEnvelope

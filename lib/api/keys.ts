@@ -39,6 +39,8 @@ export const qk = {
   board: (tab: string, project: string, tasklist: string) =>
     ['board', tab, project, tasklist] as const,
   boardCatalog: () => ['board', 'catalog'] as const,
+  boardTaskDetail: (id: string) => ['board', 'task', id] as const,
+  boardAssignableUsers: () => ['board', 'assignable-users'] as const,
   socialGa4: (period: string) => ['social', 'ga4', period] as const,
   socialPlatforms: () => ['social', 'platforms'] as const,
   brief: () => ['brief'] as const,
