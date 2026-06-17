@@ -83,6 +83,8 @@ function l01(): CockpitCaseData {
     route: 'Saudi Arabia -> India',
     condition: 'Stroke',
     source: 'Meta lead form',
+    record_type: 'deal',
+    next_follow_up: '2026-06-20',
     in_funnel_days: 11,
     step_current: 'quotation',
     steps: steps('quotation'),
@@ -163,6 +165,13 @@ function other(id: string): CockpitCaseData {
     route: ref.route,
     condition: ref.condition,
     source: 'Meta lead form',
+    // Lead-stage cases are unconverted leads; later steps are deals. The
+    // set-follow-up control shows for deals only.
+    record_type:
+      current === 'first_contact' || current === 'info_collected'
+        ? 'lead'
+        : 'deal',
+    next_follow_up: null,
     in_funnel_days: 4,
     step_current: current,
     steps: steps(current),

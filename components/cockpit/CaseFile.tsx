@@ -20,6 +20,7 @@ import type {
 } from "@/lib/api/contract";
 import { fetchEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
+import { SetFollowUp } from "@/components/cockpit/SetFollowUp";
 
 /* The case file: the right-hand detail card the queue feeds. Mirrors the
    mockup #caseFile: the stepper with done, current and todo states; the next
@@ -111,6 +112,13 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
     <div className="px-[18px] pb-3 pt-2">
       <Stepper steps={data.steps} />
       <NextAction data={data} />
+
+      {data.record_type === "deal" ? (
+        <SetFollowUp
+          resourceId={data.lead_ref.zoho_id}
+          currentFollowUp={data.next_follow_up}
+        />
+      ) : null}
 
       <GrpLabel>Case file</GrpLabel>
       <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3 max-[520px]:grid-cols-1">
