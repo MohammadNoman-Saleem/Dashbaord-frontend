@@ -1332,6 +1332,85 @@ export interface DocumentsQuotationData {
   drive_file_id: string | null
 }
 
+// POST /api/documents/referral/draft and /api/documents/referral/build (Phase 3
+// cockpit documents). Draft assembles the clinical referral content from pasted
+// report text and a few defaults; the case manager reviews and edits it, then
+// build renders the branded DOCX and returns it as base64 for download. Deals
+// only, and only for staff who may see patient names; the backend gates the
+// same way. ReferralContent mirrors the document-builder skill's referral
+// schema. Referral mode carries patient case data by design; Dr. Razan's
+// clearance is required before any drafted referral leaves Saleem.
+//
+// functional_findings accepts a plain string or a dated-group array; the v1
+// editor treats it as a string, so the typed shape carries both forms.
+export interface ReferralFunctionalGroup {
+  subhead: string
+  items: string[]
+}
+export interface ReferralSections {
+  chief_complaint: string
+  hpi: string
+  pmh: string
+  surgical_history: string
+  medications: string
+  allergies: string
+  social_history: string
+  family_history: string
+  functional_findings: string | ReferralFunctionalGroup[]
+  investigations: string
+  prior_treatment: string
+  assessment: string
+  goals: string
+  /** Renders as a numbered list in the document. */
+  requested: string[]
+  attachments: string
+}
+export interface ReferralContent {
+  /** Human date string as it prints, e.g. "3 June 2026". */
+  date: string
+  /** The 6-digit Saleem case number. */
+  case_reference: string
+  prepared_by: string
+  prepared_for: string
+  /** A pseudonym by default, e.g. "Patient A". A real identity is used only
+   *  with confirmed consent, captured manually outside the document. */
+  patient_label: string
+  /** Dates of the underlying reports, for recency. */
+  source_records: string
+  /** Google Drive link to the identified reports; auto-embedded when present. */
+  medical_documents_link: string
+  sections: ReferralSections
+}
+export interface DraftReferralBody {
+  deal_id: string
+  /** The pasted report text or clinical notes the draft is assembled from. */
+  report_text: string
+  prepared_for?: string
+  patient_label?: string
+  source_records?: string
+  medical_documents_link?: string
+}
+export interface ReferralDraftData {
+  content: ReferralContent
+  /** True when the drafted content is clinical case data; the UI shows the
+   *  clearance reminder when so (referral mode always carries case data). */
+  razan_clearance_required: boolean
+  /** Plain-language reminder the UI renders verbatim in the clearance banner. */
+  reminder: string
+}
+export interface BuildReferralBody {
+  deal_id: string
+  content: ReferralContent
+}
+export interface ReferralBuildData {
+  filename: string
+  /** The generated DOCX, base64 encoded, for the browser to download. */
+  content_base64: string
+  /** Drive file id when the backend stored it; null when it only returned the
+   *  download (Drive storage is gated server-side). */
+  drive_file_id: string | null
+}
+
 // GET /api/cockpit/parked?person=
 export interface CockpitParkedRow {
   lead_ref: PatientRefData
