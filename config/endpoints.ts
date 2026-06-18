@@ -62,6 +62,8 @@ export type EndpointKey =
   | 'write_gate_stage_options'
   | 'whatsapp_first_contact_template'
   | 'documents_quotation'
+  | 'documents_referral_draft'
+  | 'documents_referral_build'
 
 export type EndpointMode = 'fixture' | 'live'
 
@@ -151,4 +153,11 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   // inputs and receives the generated DOCX as base64. A POST-only seam;
   // mutateEnvelope resolves null in fixture mode and never reads a fixture.
   documents_quotation: 'live',
+  // Phase 3 referral drafting (POST seams). Draft assembles the clinical
+  // content from pasted report text; build renders the DOCX as base64. Both
+  // POST-only; mutateEnvelope resolves null in fixture mode and never reads a
+  // fixture. Live so the draft-review-build flow reaches the real backend; the
+  // backend still gates the draft endpoint and may return it turned off.
+  documents_referral_draft: 'live',
+  documents_referral_build: 'live',
 }

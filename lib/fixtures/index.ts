@@ -170,6 +170,18 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
     data: null,
     meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
   }),
+  // Phase 3 referral drafting (POST seams). Both resolve null in fixture mode
+  // via mutateEnvelope, which never calls getFixture; these stubs only satisfy
+  // the record type. No content is drafted and no document is generated until
+  // the endpoints flip to live.
+  documents_referral_draft: () => ({
+    data: null,
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
+  documents_referral_build: () => ({
+    data: null,
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
 }
 
 export function getFixture<T>(

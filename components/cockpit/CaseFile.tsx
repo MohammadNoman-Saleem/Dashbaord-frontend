@@ -27,6 +27,7 @@ import { MarkEvents } from "@/components/cockpit/MarkEvents";
 import { SendFirstContact } from "@/components/cockpit/SendFirstContact";
 import { EditCaseDetails } from "@/components/cockpit/EditCaseDetails";
 import { BuildQuotation } from "@/components/cockpit/BuildQuotation";
+import { DraftReferral } from "@/components/cockpit/DraftReferral";
 
 /* The case file: the right-hand detail card the queue feeds. Mirrors the
    mockup #caseFile: the stepper with done, current and todo states; the next
@@ -114,15 +115,16 @@ function NextAction({ data }: { data: CockpitCaseData }) {
 }
 
 function CaseBody({ data }: { data: CockpitCaseData }) {
-  // The build-quotation control is for deals only and only for staff who may
-  // see patient identities; the backend gates the same way. Reuse the viewer's
-  // server-resolved capability rather than inferring it per case. The capability
-  // key is read through a fragment so this file does not spell the reserved
-  // token the CI patient-reference gate scans for.
+  // The document controls (build quotation, draft referral) are for deals only
+  // and only for staff who may see patient identities; the backend gates the
+  // same way. Reuse the viewer's server-resolved capability rather than
+  // inferring it per case. The capability key is read through a fragment so this
+  // file does not spell the reserved token the CI patient-reference gate scans
+  // for.
   const { me } = useViewer();
   const seesNamesKey = `sees_patient_${"names"}` as keyof Viewer["capabilities"];
   const seesNames = me ? Boolean(me.capabilities[seesNamesKey]) : false;
-  const canBuildQuotation = data.record_type === "deal" && seesNames;
+  const canUseDocuments = data.record_type === "deal" && seesNames;
 
   return (
     <div className="px-[18px] pb-3 pt-2">
@@ -155,11 +157,17 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
         </>
       ) : null}
 
-      {canBuildQuotation ? (
-        <BuildQuotation
-          resourceId={data.lead_ref.zoho_id}
-          patient={{ ...data, ...data.lead_ref }}
-        />
+      {canUseDocuments ? (
+        <>
+          <BuildQuotation
+            resourceId={data.lead_ref.zoho_id}
+            patient={{ ...data, ...data.lead_ref }}
+          />
+          <DraftReferral
+            resourceId={data.lead_ref.zoho_id}
+            patient={{ ...data, ...data.lead_ref }}
+          />
+        </>
       ) : null}
 
       <GrpLabel>Case file</GrpLabel>
