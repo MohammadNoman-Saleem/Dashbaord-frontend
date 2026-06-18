@@ -2,9 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { Check, Clock, Cpu, FileText, PenLine } from "lucide-react";
+import { Check, Clock, Cpu, FileText, MessageCircle, PenLine } from "lucide-react";
 
-import { Button } from "@/components/ui/Button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { ListRow } from "@/components/ui/ListRow";
@@ -28,6 +27,7 @@ import { SendFirstContact } from "@/components/cockpit/SendFirstContact";
 import { EditCaseDetails } from "@/components/cockpit/EditCaseDetails";
 import { BuildQuotation } from "@/components/cockpit/BuildQuotation";
 import { DraftReferral } from "@/components/cockpit/DraftReferral";
+import { LeadActions } from "@/components/cockpit/LeadActions";
 
 /* The case file: the right-hand detail card the queue feeds. Mirrors the
    mockup #caseFile: the stepper with done, current and todo states; the next
@@ -80,8 +80,20 @@ function partnerVariant(state: CockpitPartner["state"]): "good" | "info" {
   return state === "good" ? "good" : "info";
 }
 
+// The WhatsApp link is a plain click-to-chat: it opens WhatsApp to the
+// patient's chat with the step-aware message pre-filled, and the case manager
+// reviews and sends. There is no backend call. The number is stripped to digits
+// so the wa.me path carries no plus or spaces, as wa.me expects.
+function waLink(phone: string, message: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
+}
+
 function NextAction({ data }: { data: CockpitCaseData }) {
   const { next_action } = data;
+  const phone = data.patient_phone ?? null;
+  const message = data.whatsapp_message ?? null;
+  const canMessage = phone != null && phone !== "" && message != null && message !== "";
   return (
     <div className="mb-4 rounded-[12px] border border-line border-l-[3px] border-l-optimism px-[15px] py-[13px]">
       <GrpLabel className="mb-1.5">
@@ -94,22 +106,21 @@ function NextAction({ data }: { data: CockpitCaseData }) {
       </GrpLabel>
       <b className="block text-[14px] text-title">{next_action.label}</b>
       <div className="my-[9px] rounded-[10px] border border-line-soft bg-surface-2 px-3 py-2.5 text-[12.5px] text-ink-2">
-        {next_action.draft_message ?? "The drafted message will appear here once the composer is wired."}
+        {message ?? next_action.draft_message ?? "The drafted message will appear here once the composer is wired."}
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Button variant="primary" size="sm" disabled>
-          Send on WhatsApp and log
-        </Button>
-        <Button variant="ghost" size="sm" disabled>
-          Edit
-        </Button>
-        <Button variant="ghost" size="sm" disabled>
-          Snooze to tomorrow
-        </Button>
-      </div>
-      <p className="mt-2 text-[11px] text-ink-3">
-        Coming soon, this writes to Zoho once wired. Read-only for now.
-      </p>
+      {canMessage ? (
+        <a
+          href={waLink(phone, message)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border border-transparent bg-accent px-[11px] py-[5.5px] text-xs font-semibold text-on-accent hover:brightness-[1.06] [&_svg]:h-[15px] [&_svg]:w-[15px]"
+        >
+          <MessageCircle strokeWidth={1.8} aria-hidden="true" />
+          Message on WhatsApp
+        </a>
+      ) : (
+        <p className="text-[11px] text-ink-3">No number on file, so there is nothing to message yet.</p>
+      )}
     </div>
   );
 }
@@ -155,6 +166,13 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
             currentTreatmentEnd={data.treatment_end}
           />
         </>
+      ) : null}
+
+      {data.record_type === "lead" ? (
+        <LeadActions
+          resourceId={data.lead_ref.zoho_id}
+          currentStatus={data.lead_status ?? null}
+        />
       ) : null}
 
       {canUseDocuments ? (
