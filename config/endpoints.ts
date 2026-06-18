@@ -61,6 +61,7 @@ export type EndpointKey =
   | 'write_gate_commit'
   | 'write_gate_stage_options'
   | 'whatsapp_first_contact_template'
+  | 'documents_quotation'
 
 export type EndpointMode = 'fixture' | 'live'
 
@@ -146,4 +147,8 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   // the send-and-log control previews; live with the backend on this branch,
   // the fixture serves dev smoke until the API is up.
   whatsapp_first_contact_template: 'live',
+  // Phase 3 quotation build (POST). The build-quotation control posts the
+  // inputs and receives the generated DOCX as base64. A POST-only seam;
+  // mutateEnvelope resolves null in fixture mode and never reads a fixture.
+  documents_quotation: 'live',
 }
