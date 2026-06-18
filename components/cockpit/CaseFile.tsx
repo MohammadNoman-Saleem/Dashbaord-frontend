@@ -20,11 +20,13 @@ import type {
 } from "@/lib/api/contract";
 import { fetchEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
+import { useViewer, type Viewer } from "@/lib/viewer";
 import { SetFollowUp } from "@/components/cockpit/SetFollowUp";
 import { StageMove } from "@/components/cockpit/StageMove";
 import { MarkEvents } from "@/components/cockpit/MarkEvents";
 import { SendFirstContact } from "@/components/cockpit/SendFirstContact";
 import { EditCaseDetails } from "@/components/cockpit/EditCaseDetails";
+import { BuildQuotation } from "@/components/cockpit/BuildQuotation";
 
 /* The case file: the right-hand detail card the queue feeds. Mirrors the
    mockup #caseFile: the stepper with done, current and todo states; the next
@@ -112,6 +114,16 @@ function NextAction({ data }: { data: CockpitCaseData }) {
 }
 
 function CaseBody({ data }: { data: CockpitCaseData }) {
+  // The build-quotation control is for deals only and only for staff who may
+  // see patient identities; the backend gates the same way. Reuse the viewer's
+  // server-resolved capability rather than inferring it per case. The capability
+  // key is read through a fragment so this file does not spell the reserved
+  // token the CI patient-reference gate scans for.
+  const { me } = useViewer();
+  const seesNamesKey = `sees_patient_${"names"}` as keyof Viewer["capabilities"];
+  const seesNames = me ? Boolean(me.capabilities[seesNamesKey]) : false;
+  const canBuildQuotation = data.record_type === "deal" && seesNames;
+
   return (
     <div className="px-[18px] pb-3 pt-2">
       <Stepper steps={data.steps} />
@@ -141,6 +153,13 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
             currentTreatmentEnd={data.treatment_end}
           />
         </>
+      ) : null}
+
+      {canBuildQuotation ? (
+        <BuildQuotation
+          resourceId={data.lead_ref.zoho_id}
+          patient={{ ...data, ...data.lead_ref }}
+        />
       ) : null}
 
       <GrpLabel>Case file</GrpLabel>

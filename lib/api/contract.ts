@@ -1235,6 +1235,103 @@ export interface WriteGateStageOptionsData {
   loss_reasons: string[]
 }
 
+// POST /api/documents/quotation (Phase 3 cockpit documents). Build the
+// patient-facing treatment quotation from inputs the case manager enters, and
+// return the generated DOCX as base64 for the browser to download. Deals only,
+// and only for staff who may see patient names; the backend gates the same way.
+//
+// QuotationContent mirrors the document-builder skill's quotation schema. The
+// patient-facing price is entered by the case manager and is NEVER the partner
+// price. Payment default: leave deposit and balance_due empty for full payment
+// upfront; provide both together only when a deposit structure applies.
+export interface QuotationLineItem {
+  item: string
+  details: string
+  /** Decimal string in the quoted currency, e.g. "3,200.000". */
+  amount: string
+  /** Optional hyperlink target rendered on the line item. */
+  url?: string
+}
+export interface QuotationContentPatient {
+  full_name: string
+  first_name: string
+  /** The 6-digit Saleem case number. */
+  case_reference: string
+}
+export interface QuotationContentConsultation {
+  physician: string
+  date: string
+  physician_url?: string
+}
+export interface QuotationContentTreatment {
+  procedure: string
+  hospital: string
+  physician: string
+  /** "Assisted journey" or "Self-managed journey". */
+  journey_type: string
+  hospital_location?: string
+  hospital_url?: string
+  physician_url?: string
+  window?: string
+  stay_nights?: string
+  room_type?: string
+}
+export interface QuotationContentPricing {
+  currency: string
+  /** Non-empty; the build script verifies the items sum to total. */
+  line_items: QuotationLineItem[]
+  total: string
+  currency_note?: string
+}
+export interface QuotationContentJourneyArrangement {
+  label: string
+  name: string
+  url?: string
+  note?: string
+}
+export interface QuotationContentPayment {
+  /** Plain-language cancellation summary from the case manager. */
+  cancellation: string
+  /** Empty for full payment upfront; set with balance_due for a deposit. */
+  deposit?: string
+  balance_due?: string
+  payment_link?: string
+}
+export interface QuotationContentContact {
+  whatsapp?: string
+  phone?: string
+  email?: string
+}
+export interface QuotationContent {
+  quote_reference: string
+  /** Human date strings as they print, e.g. "10 June 2026". */
+  date_issued: string
+  valid_until: string
+  patient: QuotationContentPatient
+  consultation: QuotationContentConsultation
+  treatment: QuotationContentTreatment
+  pricing: QuotationContentPricing
+  payment: QuotationContentPayment
+  included?: string[]
+  excluded?: string[]
+  /** Required by the skill when the journey type is assisted. */
+  journey_support_note?: string
+  journey_arrangements?: QuotationContentJourneyArrangement[]
+  contact?: QuotationContentContact
+}
+export interface DocumentsQuotationBody {
+  deal_id: string
+  content: QuotationContent
+}
+export interface DocumentsQuotationData {
+  filename: string
+  /** The generated DOCX, base64 encoded, for the browser to download. */
+  content_base64: string
+  /** Drive file id when the backend stored it; null when it only returned the
+   *  download (Drive storage is gated server-side). */
+  drive_file_id: string | null
+}
+
 // GET /api/cockpit/parked?person=
 export interface CockpitParkedRow {
   lead_ref: PatientRefData
