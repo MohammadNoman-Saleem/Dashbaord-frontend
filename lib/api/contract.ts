@@ -1137,6 +1137,17 @@ export interface CockpitCaseData {
   stage: string | null
   /** Treatment or Telemedicine for deals; null for leads. */
   pipeline: CockpitPipeline | null
+  /** The patient phone (E.164, e.g. "+97300000000"), served only to viewers
+   *  who may see patient identities, and only for deals (name-seers). Null
+   *  when no number is on file. Powers the click-to-chat WhatsApp link. */
+  patient_phone?: string | null
+  /** The step-aware drafted WhatsApp line for the click-to-chat link, served
+   *  only to name-seers (deals). The case manager reviews it in WhatsApp and
+   *  sends; never sent by the dashboard. Null when no draft is available. */
+  whatsapp_message?: string | null
+  /** The Leads Lead_Status value for an unconverted lead, or null for a deal.
+   *  Prefills the update-status control. */
+  lead_status?: string | null
   in_funnel_days: number
   step_current: string
   steps: CockpitStep[]
@@ -1187,14 +1198,34 @@ export interface WriteGateChangeEditField {
   field: 'patient_budget' | 'treatment_start' | 'treatment_end'
   value: string
 }
+// Lead-stage writes through the same gate (resourceType 'lead'). Convert turns
+// an unconverted lead into a deal in the chosen pipeline at the chosen open
+// stage; set_lead_status updates the Leads Lead_Status; park marks the lead Not
+// Qualified with a required reason.
+export interface WriteGateChangeConvertLead {
+  kind: 'convert_lead'
+  pipeline: CockpitPipeline
+  stage: string
+}
+export interface WriteGateChangeSetLeadStatus {
+  kind: 'set_lead_status'
+  status: string
+}
+export interface WriteGateChangeParkLead {
+  kind: 'park_lead'
+  reason: string
+}
 export type WriteGateChange =
   | WriteGateChangeSetFollowUp
   | WriteGateChangeMoveStage
   | WriteGateChangeStamp
   | WriteGateChangeSendFirstContact
   | WriteGateChangeEditField
+  | WriteGateChangeConvertLead
+  | WriteGateChangeSetLeadStatus
+  | WriteGateChangeParkLead
 export interface WriteGatePrepareBody {
-  resourceType: 'deal'
+  resourceType: 'deal' | 'lead'
   resourceId: string
   change: WriteGateChange
 }

@@ -90,6 +90,11 @@ function l01(): CockpitCaseData {
     treatment_end: '2026-07-29',
     stage: 'Quote Proposed',
     pipeline: 'Treatment',
+    // Fictional number and a generic, non-clinical line; deals served to a
+    // name-seer carry both so the click-to-chat link renders in fixture mode.
+    patient_phone: '+97300000000',
+    whatsapp_message: 'Hello, following up on your quotation. Happy to walk you through the next step whenever you are ready.',
+    lead_status: null,
     in_funnel_days: 11,
     step_current: 'quotation',
     steps: steps('quotation'),
@@ -181,6 +186,13 @@ function other(id: string): CockpitCaseData {
     // Leads have no pipeline or stage; deals carry a plausible Treatment stage.
     stage: isLead ? null : 'Consultation Completed',
     pipeline: isLead ? null : 'Treatment',
+    // Deals served to a name-seer carry a fictional number and a generic line so
+    // the click-to-chat link renders; leads carry a Lead_Status and no number.
+    patient_phone: isLead ? null : '+97300000000',
+    whatsapp_message: isLead
+      ? null
+      : 'Hello, checking in on your case. Let me know if there is anything you need from us.',
+    lead_status: isLead ? 'Intro Call Done' : null,
     in_funnel_days: 4,
     step_current: current,
     steps: steps(current),
