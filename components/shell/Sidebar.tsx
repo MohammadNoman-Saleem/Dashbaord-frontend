@@ -17,6 +17,7 @@ import {
 
 import { NavItem } from "@/components/shell/NavItem";
 import { PersonMenu } from "@/components/shell/PersonMenu";
+import { LogoutButton } from "@/components/shell/LogoutButton";
 import { BeatIcon } from "@/components/ui/BeatIcon";
 import { useViewer } from "@/lib/viewer";
 
@@ -127,6 +128,7 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobil
 
       <div className="border-t border-line-soft p-[10px]">
         <PersonMenu collapsed={rail} />
+        <LogoutButton collapsed={rail} />
         <button
           type="button"
           onClick={onToggleCollapsed}
