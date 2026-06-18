@@ -38,11 +38,14 @@ export function PatientRef({ patient, className }: PatientRefProps) {
   ) : null;
 
   if (patient.patient_name) {
+    /* Name-seers (Fatima, Razan) see the patient name and the ID together. The
+       initials are dropped here: they are only the privacy stand-in for when
+       the name is hidden, so beside the full name they are redundant. */
     return (
       <span className={`block ${className ?? ""}`}>
         <b className="block text-[13px] font-semibold text-title">{patient.patient_name}</b>
         <span className="num block text-[11.5px] text-ink-3">
-          {reference}
+          {display}
           {marker}
         </span>
       </span>
