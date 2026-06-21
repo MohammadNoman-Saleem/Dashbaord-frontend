@@ -17,7 +17,10 @@ import { buildDeepLink } from "@/lib/deepLink";
    current value against the month's goal, optimism fill when behind,
    recovery fill when ahead. */
 
-const MONTH = "2026-06";
+/* Current month as YYYY-MM, resolved in Bahrain time (Asia/Bahrain, no DST)
+   so the panel tracks the real month instead of a frozen literal. en-CA
+   formats as YYYY-MM-DD, so the first seven characters are the month. */
+const MONTH = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bahrain" }).slice(0, 7);
 const MONTH_LABEL = new Date(`${MONTH}-01T00:00:00`).toLocaleDateString("en-US", {
   month: "long",
 });

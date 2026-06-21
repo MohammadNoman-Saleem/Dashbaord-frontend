@@ -5,6 +5,7 @@
    mocked as plain envelope objects cast to the query result shape. */
 
 import { useState, type ReactNode } from "react";
+import { notFound } from "next/navigation";
 import type { UseQueryResult } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -455,6 +456,12 @@ function QueryPanelDemos({ theme }: { theme: ThemeName }) {
 /* ============ Page ============ */
 
 export default function GalleryPage() {
+  /* Dev tool only. The route guard proxy intentionally excludes this path, so
+     it would otherwise ship unauthenticated. Hide it entirely in production. */
+  if (process.env.NODE_ENV === "production") {
+    notFound();
+  }
+
   return (
     <Providers>
       <main className="mx-auto w-full max-w-[1460px] px-5 py-8">

@@ -18,7 +18,10 @@ import { fetchEnvelope } from '@/lib/api/fetcher'
 import { qk } from '@/lib/api/keys'
 import { buildDeepLink } from '@/lib/deepLink'
 
-const MONTH = '2026-06'
+/* Current month as YYYY-MM, resolved in Bahrain time (Asia/Bahrain, no DST)
+   so the board tracks the real month instead of a frozen literal. en-CA
+   formats as YYYY-MM-DD, so the first seven characters are the month. */
+const MONTH = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bahrain' }).slice(0, 7)
 const SHOWN = 4
 
 const STATUS_CHIP: Record<DeliverableRow['status'], { variant: ChipVariant; label: string }> = {
