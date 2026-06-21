@@ -1,4 +1,4 @@
-# Saleem Web — Project Status
+# Saleem Web: Project Status
 
 Frontend for the Saleem internal dashboard and the medical-travel case-manager
 **cockpit**. Next.js 16 (App Router) + React 19 + TypeScript, Tailwind v4,
@@ -76,8 +76,9 @@ gate (nothing writes until the case manager confirms; the server enforces the
 
 `npm run ci` runs: `check:dashes` (no em/en dashes), `check:red` (no color
 literals outside tokens), `check:hype` (no hype words), `check:patient`
-(`patient_name` only in `PatientRef`), `typecheck`, `lint`. Plus
-`smoke:fixtures` and `build`. All green on `main`.
+(`patient_name` only in `PatientRef`), `typecheck`, `lint`. The `smoke:fixtures`
+and `build` scripts are separate and not yet chained into `ci`, and no CI
+workflow enforces any of these yet (see `docs/GO_LIVE_REMEDIATION.md`, FE-CI-1).
 
 ## 5. Implemented
 
