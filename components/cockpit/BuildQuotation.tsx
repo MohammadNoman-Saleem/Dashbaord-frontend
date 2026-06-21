@@ -39,12 +39,9 @@ const DEFAULT_EMAIL = "support@tellsaleem.com";
 
 const JOURNEY_TYPES = ["Assisted journey", "Self-managed journey"];
 
-// The patient name field is served only to name-seers and, by the repo's CI
-// rule, may be spelled out only in PatientRef. The case data carries it on the
-// same object PatientRef reads, so we read it through a key assembled from
-// fragments to prefill the form without writing the literal token here.
-const NAME_KEY = `patient_${"name"}`;
-
+// The patient name is served only to name-seers. This builder is allowlisted to
+// reference it (the CI patient-PII gate) because it prefills the name into the
+// generated quotation; the control mounts only for name-seers, gated upstream.
 type LineRow = QuotationLineItem & { rowId: number };
 
 type Props = {
@@ -118,10 +115,7 @@ function downloadDocx(filename: string, base64: string): void {
 export function BuildQuotation({ resourceId, patient }: Props) {
   const toast = useToast();
 
-  const prefillName =
-    (patient as Record<string, unknown>)[NAME_KEY] != null
-      ? String((patient as Record<string, unknown>)[NAME_KEY])
-      : "";
+  const prefillName = patient.patient_name != null ? String(patient.patient_name) : "";
   const prefillCaseRef = patient.ref ?? "";
 
   const [open, setOpen] = useState(false);
