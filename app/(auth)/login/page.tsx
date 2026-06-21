@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
+import { qk } from "@/lib/api/keys";
 import { BeatIcon } from "@/components/ui/BeatIcon";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -57,6 +59,7 @@ function ProblemNote({ children }: { children: ReactNode }) {
 
 export default function LoginPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [step, setStep] = useState<"signin" | "reset">("signin");
   const [username, setUsername] = useState("");
@@ -83,6 +86,10 @@ export default function LoginPage() {
         setStep("reset");
         return;
       }
+      // The viewer query (qk.me) uses staleTime Infinity, so without this it
+      // could serve a stale or null value in the authenticated app. Invalidate
+      // before navigating so the dashboard fetches a fresh /api/me.
+      await queryClient.invalidateQueries({ queryKey: qk.me() });
       router.replace("/");
     } catch {
       setOffline(true);
@@ -105,6 +112,9 @@ export default function LoginPage() {
         setProblem(body?.meta?.error?.message_plain ?? RESET_FAILED);
         return;
       }
+      // Same reason as the sign in path: refresh the viewer before entering the
+      // authenticated app so the Infinity staleTime me query is not stale.
+      await queryClient.invalidateQueries({ queryKey: qk.me() });
       router.replace("/");
     } catch {
       setOffline(true);
