@@ -232,6 +232,14 @@ export function fixture(params?: Record<string, string | number | undefined>): E
 
   const base = id === L01_ID ? l01() : other(id)
   const name = NAMES[id]
-  const data: CockpitCaseData = withName && name ? { ...base, patient_name: name } : base
+  // patient_name, patient_phone and whatsapp_message are patient PII. The base
+  // case carries the phone and message for deals; a non-seer viewer must get
+  // none of the three, mirroring the server rule. So strip the WhatsApp fields
+  // for non-seers and append the name only for a Fatima or Razan session.
+  const data: CockpitCaseData = withName
+    ? name
+      ? { ...base, patient_name: name }
+      : base
+    : { ...base, patient_phone: null, whatsapp_message: null }
   return { data, meta: meta() }
 }

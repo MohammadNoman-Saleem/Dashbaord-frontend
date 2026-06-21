@@ -19,7 +19,7 @@ import type {
 } from "@/lib/api/contract";
 import { fetchEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
-import { useViewer, type Viewer } from "@/lib/viewer";
+import { useViewer } from "@/lib/viewer";
 import { SetFollowUp } from "@/components/cockpit/SetFollowUp";
 import { StageMove } from "@/components/cockpit/StageMove";
 import { MarkEvents } from "@/components/cockpit/MarkEvents";
@@ -89,10 +89,13 @@ function waLink(phone: string, message: string): string {
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
-function NextAction({ data }: { data: CockpitCaseData }) {
+function NextAction({ data, seesNames }: { data: CockpitCaseData; seesNames: boolean }) {
   const { next_action } = data;
-  const phone = data.patient_phone ?? null;
-  const message = data.whatsapp_message ?? null;
+  // The phone and the drafted message are patient PII. A viewer who may not see
+  // patient names must never render them even if the payload carries them, so
+  // treat both as absent unless the viewer sees names.
+  const phone = seesNames ? data.patient_phone ?? null : null;
+  const message = seesNames ? data.whatsapp_message ?? null : null;
   const canMessage = phone != null && phone !== "" && message != null && message !== "";
   return (
     <div className="mb-4 rounded-[12px] border border-line border-l-[3px] border-l-optimism px-[15px] py-[13px]">
@@ -129,18 +132,16 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
   // The document controls (build quotation, draft referral) are for deals only
   // and only for staff who may see patient identities; the backend gates the
   // same way. Reuse the viewer's server-resolved capability rather than
-  // inferring it per case. The capability key is read through a fragment so this
-  // file does not spell the reserved token the CI patient-reference gate scans
-  // for.
+  // inferring it per case. The same capability gates the patient phone and the
+  // drafted WhatsApp message in the next-action block.
   const { me } = useViewer();
-  const seesNamesKey = `sees_patient_${"names"}` as keyof Viewer["capabilities"];
-  const seesNames = me ? Boolean(me.capabilities[seesNamesKey]) : false;
+  const seesNames = me ? Boolean(me.capabilities.sees_patient_names) : false;
   const canUseDocuments = data.record_type === "deal" && seesNames;
 
   return (
     <div className="px-[18px] pb-3 pt-2">
       <Stepper steps={data.steps} />
-      <NextAction data={data} />
+      <NextAction data={data} seesNames={seesNames} />
 
       {data.record_type === "deal" ? (
         <>
