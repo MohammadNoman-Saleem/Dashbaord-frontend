@@ -16,6 +16,6 @@ Hard rules for all code and copy in this repo:
 4. UI copy: sentence case, plain verbs, severity in words not color. BHD formatted "BHD 4,180", times "7:42 AM", dates "Jun 20".
 5. patient_name may be referenced only by `components/ui/PatientRef.tsx` (CI enforced). Everything else renders the patient reference: Zoho ID + initials.
 6. Visual source of truth: `Saleem_Dashboard_Redesign.html` in the Analytics-Dashboard repo under `Saleem Implementation plan/`. Behavior source of truth: `02_Frontend_Spec.md` there.
-7. Response types are GENERATED from the saleem-api OpenAPI artifact. Never hand-write response types.
+7. Response types are hand-written in `lib/api/contract.ts` and must stay in sync with the saleem-api OpenAPI artifact. Codegen is not currently wired; sync is enforced by review. The intent stands: types must match the backend contract exactly.
 
 Run `npm run ci` before committing.

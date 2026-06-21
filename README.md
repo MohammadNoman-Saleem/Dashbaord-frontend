@@ -1,36 +1,30 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# saleem-web
 
-## Getting Started
+Internal Saleem dashboard and medical-travel case-manager cockpit. Built with Next.js App Router, React, and TanStack Query. The browser talks only to saleem-api over a `{ data, meta }` envelope; no client code calls a third party.
 
-First, run the development server:
+## Run locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Point at the backend with `NEXT_PUBLIC_API_BASE` (default `http://localhost:4000`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Data seam
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`lib/api/fetcher.ts` is the single HTTP entry point. `config/endpoints.ts` holds a fixture/live switch: set `NEXT_PUBLIC_USE_FIXTURES=true` to run against local JSON fixtures without a running backend.
 
-## Learn More
+## Privacy rule
 
-To learn more about Next.js, take a look at the following resources:
+`patient_name`, `patient_phone`, and `patient_whatsapp` may only be referenced inside allowlisted components (`components/ui/PatientRef.tsx`). Everything else renders Zoho ID plus initials. The CI check `npm run check:patient` enforces this.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## CI gates
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Run before every commit:
 
-## Deploy on Vercel
+```bash
+npm run ci
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This covers: `check:dashes`, `check:red`, `check:hype`, `check:patient`, `typecheck`, `lint`, `smoke:fixtures`, and `build`. All gates are enforced by the CI workflow on push.
