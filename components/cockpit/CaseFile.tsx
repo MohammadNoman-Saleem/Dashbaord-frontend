@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { Check, Clock, Cpu, FileText, MessageCircle, PenLine } from "lucide-react";
+import { Check, Clock, Cpu, FileText, MessageCircle, PenLine, StickyNote } from "lucide-react";
 
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
@@ -11,6 +11,13 @@ import { PatientRef } from "@/components/ui/PatientRef";
 import { QueryPanel } from "@/components/ui/QueryPanel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { GrpLabel } from "@/components/ui/Stat";
+import { fmtAgo } from "@/lib/format/datetime";
+import {
+  moduleForRecordType,
+  useCaseNotes,
+  type CaseNote,
+  type NoteModule,
+} from "@/components/cockpit/useCaseNotes";
 import type {
   CockpitCaseData,
   CockpitNote,
@@ -136,7 +143,10 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
   // drafted WhatsApp message in the next-action block.
   const { me } = useViewer();
   const seesNames = me ? Boolean(me.capabilities.sees_patient_names) : false;
-  const canUseDocuments = data.record_type === "deal" && seesNames;
+  // Temporarily disabled per request: BuildQuotation + DraftReferral (document
+  // generation is deferred). Restore by reverting this line to:
+  // data.record_type === "deal" && seesNames
+  const canUseDocuments = false;
 
   return (
     <div className="px-[18px] pb-3 pt-2">
@@ -226,6 +236,19 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
         </>
       ) : null}
 
+      {/* Zoho CRM notes (READ-ONLY). The Notes related-list on the deal/lead
+          record. Patient working text, so gated to name-seers; the server
+          enforces the same gate. Loads from the notes sub-resource (which reads
+          Zoho), not the cached case file. The module is derived from the case
+          record_type so the route reads the right related-list. */}
+      {seesNames ? (
+        <CaseNotes
+          caseId={data.lead_ref.zoho_id}
+          module={moduleForRecordType(data.record_type)}
+          seesNames={seesNames}
+        />
+      ) : null}
+
       {data.partners.length > 0 ? (
         <>
           <GrpLabel>Partners on this case</GrpLabel>
@@ -271,6 +294,83 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
         </>
       ) : null}
     </div>
+  );
+}
+
+// One note row: optional title, body, author and relative time. The note is
+// read-only (authored in Zoho CRM), so there is no delete affordance. The body
+// is patient working text rendered as plain escaped text; never logged.
+function NoteRow({ note }: { note: CaseNote }) {
+  return (
+    <div className="flex items-start gap-[11px] border-b border-line-soft px-0.5 py-2.5 last:border-b-0">
+      <span
+        aria-hidden="true"
+        className="mt-[1px] grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[9px] bg-accessible-soft text-title"
+      >
+        <StickyNote className="h-[15px] w-[15px]" strokeWidth={1.8} />
+      </span>
+      <div className="min-w-0 flex-1">
+        {note.title ? (
+          <p className="break-words text-[13px] font-semibold text-title">{note.title}</p>
+        ) : null}
+        {note.body ? (
+          // Server-sanitized in lib/server/services/zoho-notes.ts (sanitize-html,
+          // allowlisted tags, all attributes stripped), so this HTML is safe.
+          <div
+            className="break-words text-[13px] leading-relaxed text-title [&_b]:font-semibold [&_strong]:font-semibold [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:ml-0"
+            dangerouslySetInnerHTML={{ __html: note.body }}
+          />
+        ) : null}
+        <span className="mt-0.5 block text-[11px] text-ink-3">
+          {note.author_name || "Unknown"} · {fmtAgo(note.created_at)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// The notes panel: a read-only list of the Zoho CRM Notes related-list for the
+// case (newest first), with loading and empty states in the cockpit style.
+// There is no add or delete affordance: notes are authored in Zoho and the
+// cockpit only displays them. Rendered only for viewers who may see patient
+// names; the server enforces the same gate.
+function CaseNotes({
+  caseId,
+  module,
+  seesNames,
+}: {
+  caseId: string;
+  module: NoteModule;
+  seesNames: boolean;
+}) {
+  const notes = useCaseNotes(caseId, module, seesNames);
+  const list = notes.data?.data ?? [];
+
+  return (
+    <>
+      <GrpLabel>Notes</GrpLabel>
+      <p className="mb-2 text-[11px] text-ink-3">
+        Read-only notes from Zoho CRM. Add or edit them in Zoho.
+      </p>
+      <div className="mb-4">
+        {notes.isPending ? (
+          <div className="flex flex-col gap-2 py-1">
+            <Skeleton height={14} width="80%" />
+            <Skeleton height={14} width="55%" />
+          </div>
+        ) : notes.isError ? (
+          <p className="py-2 text-[12px] text-ink-3">
+            Couldn&apos;t load notes right now. They will appear once the connection recovers.
+          </p>
+        ) : list.length === 0 ? (
+          <p className="py-2 text-[12px] text-ink-3">
+            No notes on this record in Zoho CRM yet.
+          </p>
+        ) : (
+          list.map((note) => <NoteRow key={note.id} note={note} />)
+        )}
+      </div>
+    </>
   );
 }
 

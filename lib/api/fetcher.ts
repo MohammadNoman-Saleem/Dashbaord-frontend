@@ -1,12 +1,15 @@
 // The single seam between panels and data. Each endpoint resolves to either
 // its fixture (loaded from lib/fixtures, wrapped in a realistic envelope) or
-// the live saleem-api, per config/endpoints.ts. Panels call the typed hooks
-// and never know which path served them.
+// the live same-origin API routes under /api/*, per config/endpoints.ts.
+// Panels call the typed hooks and never know which path served them.
 import type { Envelope } from './envelope'
 import { ENDPOINT_MODES, type EndpointKey } from '@/config/endpoints'
 import { getFixture } from '@/lib/fixtures'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000'
+// Default empty so requests resolve same-origin (/api/...). The backend now
+// lives in this app's own route handlers; set NEXT_PUBLIC_API_BASE only to
+// point at a separate origin (legacy/dev).
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? ''
 
 export class ApiError extends Error {
   constructor(
