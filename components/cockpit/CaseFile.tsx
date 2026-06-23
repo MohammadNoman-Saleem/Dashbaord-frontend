@@ -314,7 +314,12 @@ function NoteRow({ note }: { note: CaseNote }) {
           <p className="break-words text-[13px] font-semibold text-title">{note.title}</p>
         ) : null}
         {note.body ? (
-          <p className="whitespace-pre-wrap break-words text-[13px] text-title">{note.body}</p>
+          // Server-sanitized in lib/server/services/zoho-notes.ts (sanitize-html,
+          // allowlisted tags, all attributes stripped), so this HTML is safe.
+          <div
+            className="break-words text-[13px] leading-relaxed text-title [&_b]:font-semibold [&_strong]:font-semibold [&_p]:my-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:ml-0"
+            dangerouslySetInnerHTML={{ __html: note.body }}
+          />
         ) : null}
         <span className="mt-0.5 block text-[11px] text-ink-3">
           {note.author_name || "Unknown"} · {fmtAgo(note.created_at)}

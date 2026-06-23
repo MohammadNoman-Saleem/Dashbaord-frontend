@@ -10,6 +10,8 @@
 // handler's global PII sweep is the backstop. Keep it that way.
 //
 // SERVER ONLY. Node runtime (the read client pulls in the auth/token path).
+import sanitizeHtml from 'sanitize-html';
+
 import { getZohoClient } from '@/lib/server/integrations/zoho/client';
 
 // The read client's get() takes a FULL url (it does not prepend a base); every
@@ -43,6 +45,20 @@ interface ZohoNotesResponse {
   data?: ZohoNote[];
 }
 
+// Zoho note bodies are rich-text HTML (bold section labels, bullets, inline
+// styles). Sanitize to a small structural allowlist and strip ALL attributes,
+// so inline colors/styles and any script are removed before the HTML leaves the
+// server; the client renders the result. Plain-text notes carry newlines rather
+// than <br>, so convert those first to keep line breaks.
+const ALLOWED_NOTE_TAGS = ['b', 'strong', 'i', 'em', 'u', 'br', 'p', 'ul', 'ol', 'li'];
+
+function sanitizeNoteBody(raw: string): string {
+  if (!raw) return '';
+  const hasTags = /<\/?[a-z][\s\S]*>/i.test(raw);
+  const input = hasTags ? raw : raw.replace(/\r?\n/g, '<br>');
+  return sanitizeHtml(input, { allowedTags: ALLOWED_NOTE_TAGS, allowedAttributes: {} }).trim();
+}
+
 /** List the Notes related-list for one CRM record, newest first.
  *  GET crm/v3/{module}/{recordId}/Notes with sort_by=Created_Time desc and the
  *  four fields we map. Zoho answers 204 (empty body -> get() returns {}) when
@@ -64,7 +80,7 @@ export async function listForRecord(
   return rows.map((n) => ({
     id: n.id ?? '',
     title: n.Note_Title ?? '',
-    body: n.Note_Content ?? '',
+    body: sanitizeNoteBody(n.Note_Content ?? ''),
     author_name: n.Created_By?.name ?? '',
     created_at: n.Created_Time ?? '',
   }));
