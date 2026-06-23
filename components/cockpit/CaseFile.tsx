@@ -147,7 +147,10 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
   // drafted WhatsApp message in the next-action block.
   const { me } = useViewer();
   const seesNames = me ? Boolean(me.capabilities.sees_patient_names) : false;
-  const canUseDocuments = data.record_type === "deal" && seesNames;
+  // Temporarily disabled per request: BuildQuotation + DraftReferral (document
+  // generation is deferred). Restore by reverting this line to:
+  // data.record_type === "deal" && seesNames
+  const canUseDocuments = false;
 
   return (
     <div className="px-[18px] pb-3 pt-2">
