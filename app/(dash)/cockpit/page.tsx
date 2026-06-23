@@ -8,6 +8,7 @@ import { CockpitAiCard } from "@/components/cockpit/AiCard";
 import { CockpitCaseFile } from "@/components/cockpit/CaseFile";
 import { CockpitKpiTiles } from "@/components/cockpit/KpiTiles";
 import { CockpitParked } from "@/components/cockpit/Parked";
+import { PatientSearch } from "@/components/cockpit/PatientSearch";
 import { CockpitQueue } from "@/components/cockpit/Queue";
 import { CockpitSlaPolicy } from "@/components/cockpit/SlaPolicy";
 import { Grid, spans } from "@/components/shell/Grid";
@@ -18,6 +19,7 @@ import type { CockpitQueueData } from "@/lib/api/contract";
 import { fetchEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
 import { useFocusFlash } from "@/lib/deepLink";
+import { useViewer } from "@/lib/viewer";
 
 /* The V4 Cockpit (cockpit-sla-spec.md, mockup lines 719-835). The case
    manager's working surface: every active lead with its next step and the
@@ -40,6 +42,12 @@ function CockpitInner() {
   const viewAs = searchParams.get("as") ?? undefined;
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // Phone search is an identifiable patient lookup. The route gates it to
+  // name-seers and 403s everyone else, so only render the box for a viewer who
+  // may see patient names (matches the CaseFile document-control gating).
+  const { me } = useViewer();
+  const seesNames = me ? Boolean(me.capabilities.sees_patient_names) : false;
+
   const query = useQuery({
     queryKey: qk.cockpitQueue(viewAs ?? "self"),
     queryFn: () =>
@@ -55,6 +63,12 @@ function CockpitInner() {
   return (
     <Grid>
       <CockpitKpiTiles tiles={data?.tiles ?? null} />
+
+      {seesNames ? (
+        <div className={spans.c12} data-focus-id="cockpit-patient-search">
+          <PatientSearch onSelect={setSelectedId} />
+        </div>
+      ) : null}
 
       <div className={spans.c5} data-focus-id="cockpit-queue">
         <QueryPanel

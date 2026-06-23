@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { Check, Clock, Cpu, FileText, MessageCircle, PenLine } from "lucide-react";
+import { AlertCircle, Check, Clock, Cpu, FileText, MessageCircle, PenLine, StickyNote, Trash2 } from "lucide-react";
 
+import { Button } from "@/components/ui/Button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { ListRow } from "@/components/ui/ListRow";
@@ -11,6 +13,15 @@ import { PatientRef } from "@/components/ui/PatientRef";
 import { QueryPanel } from "@/components/ui/QueryPanel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { GrpLabel } from "@/components/ui/Stat";
+import { useToast } from "@/components/ui/Toast";
+import { ApiError } from "@/lib/api/fetcher";
+import { fmtAgo } from "@/lib/format/datetime";
+import {
+  useAddCaseNote,
+  useCaseNotes,
+  useDeleteCaseNote,
+  type CaseNote,
+} from "@/components/cockpit/useCaseNotes";
 import type {
   CockpitCaseData,
   CockpitNote,
@@ -226,6 +237,11 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
         </>
       ) : null}
 
+      {/* Case-manager notes (read + add + delete). Patient working text, so
+          gated to name-seers; the server enforces the same gate. Loads from the
+          notes sub-resource, not the cached case file. */}
+      {seesNames ? <CaseNotes caseId={data.lead_ref.zoho_id} seesNames={seesNames} /> : null}
+
       {data.partners.length > 0 ? (
         <>
           <GrpLabel>Partners on this case</GrpLabel>
@@ -271,6 +287,155 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
         </>
       ) : null}
     </div>
+  );
+}
+
+// One note row: body, author, relative time, and a delete affordance shown
+// only when the note is the viewer's own (note.mine). The body is patient
+// working text rendered as plain escaped text; never logged anywhere.
+function NoteRow({
+  note,
+  onDelete,
+  deleting,
+}: {
+  note: CaseNote;
+  onDelete: (id: string) => void;
+  deleting: boolean;
+}) {
+  return (
+    <div className="flex items-start gap-[11px] border-b border-line-soft px-0.5 py-2.5 last:border-b-0">
+      <span
+        aria-hidden="true"
+        className="mt-[1px] grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[9px] bg-accessible-soft text-title"
+      >
+        <StickyNote className="h-[15px] w-[15px]" strokeWidth={1.8} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="whitespace-pre-wrap break-words text-[13px] text-title">{note.body}</p>
+        <span className="mt-0.5 block text-[11px] text-ink-3">
+          {note.author_name} · {fmtAgo(note.created_at)}
+        </span>
+      </div>
+      {note.mine ? (
+        <button
+          type="button"
+          aria-label="Delete this note"
+          disabled={deleting}
+          onClick={() => onDelete(note.id)}
+          className="mt-[1px] grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-[8px] border border-transparent text-ink-3 hover:border-line hover:bg-surface hover:text-title disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:h-[14px] [&_svg]:w-[14px]"
+        >
+          <Trash2 strokeWidth={1.8} aria-hidden="true" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+// The notes panel: list (newest first), loading and empty states in the
+// cockpit style, and a textarea + Save wired to the add mutation. On a
+// successful add or delete the hook invalidates the notes query, so the list
+// refreshes itself. Rendered only for viewers who may see patient names; the
+// server enforces the same gate.
+function CaseNotes({ caseId, seesNames }: { caseId: string; seesNames: boolean }) {
+  const toast = useToast();
+  const [draft, setDraft] = useState("");
+
+  const notes = useCaseNotes(caseId, seesNames);
+  const add = useAddCaseNote(caseId);
+  const remove = useDeleteCaseNote(caseId);
+
+  const ADD_FAILURE = "Couldn't save the note. Nothing changed. Try again.";
+  const DELETE_FAILURE = "Couldn't remove the note. Nothing changed. Try again.";
+
+  function handleSave() {
+    const body = draft.trim();
+    if (!body || add.isPending) return;
+    add.mutate(body, {
+      onSuccess: () => {
+        setDraft("");
+        toast("Note saved.");
+      },
+      onError: (error) => {
+        toast(
+          error instanceof ApiError && error.messagePlain ? error.messagePlain : ADD_FAILURE,
+          AlertCircle,
+        );
+      },
+    });
+  }
+
+  function handleDelete(noteId: string) {
+    remove.mutate(noteId, {
+      onSuccess: () => toast("Note removed."),
+      onError: (error) => {
+        toast(
+          error instanceof ApiError && error.messagePlain ? error.messagePlain : DELETE_FAILURE,
+          AlertCircle,
+        );
+      },
+    });
+  }
+
+  const list = notes.data?.data ?? [];
+
+  return (
+    <>
+      <GrpLabel>Notes</GrpLabel>
+      <div className="mb-3">
+        {notes.isPending ? (
+          <div className="flex flex-col gap-2 py-1">
+            <Skeleton height={14} width="80%" />
+            <Skeleton height={14} width="55%" />
+          </div>
+        ) : notes.isError ? (
+          <p className="py-2 text-[12px] text-ink-3">
+            Couldn&apos;t load notes right now. They will appear once the connection recovers.
+          </p>
+        ) : list.length === 0 ? (
+          <p className="py-2 text-[12px] text-ink-3">
+            No notes yet. Add the first one below.
+          </p>
+        ) : (
+          list.map((note) => (
+            <NoteRow
+              key={note.id}
+              note={note}
+              onDelete={handleDelete}
+              deleting={remove.isPending}
+            />
+          ))
+        )}
+      </div>
+
+      <div className="mb-4 rounded-[12px] border border-line px-[15px] py-[13px]">
+        <label
+          htmlFor="case-note-body"
+          className="mb-2 block text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-3"
+        >
+          Add a note
+        </label>
+        <textarea
+          id="case-note-body"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          maxLength={4000}
+          rows={3}
+          placeholder="Case manager note. Stored in the dashboard, visible to staff who may see patient names."
+          className="w-full resize-y rounded-inner border border-line bg-surface-2 px-[11px] py-[8.5px] text-[13.5px] text-ink focus:border-transparent focus:outline-2 focus:outline-accent focus:outline-offset-0"
+        />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className="text-[11px] text-ink-3">{draft.length}/4000</span>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={draft.trim().length === 0 || add.isPending}
+            onClick={handleSave}
+          >
+            {add.isPending ? "Saving…" : "Save note"}
+          </Button>
+        </div>
+      </div>
+    </>
   );
 }
 
