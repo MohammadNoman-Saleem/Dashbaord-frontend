@@ -1,11 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { AlertCircle, Check, Clock, Cpu, FileText, MessageCircle, PenLine, StickyNote, Trash2 } from "lucide-react";
+import { Check, Clock, Cpu, FileText, MessageCircle, PenLine, StickyNote } from "lucide-react";
 
-import { Button } from "@/components/ui/Button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { ListRow } from "@/components/ui/ListRow";
@@ -13,14 +11,12 @@ import { PatientRef } from "@/components/ui/PatientRef";
 import { QueryPanel } from "@/components/ui/QueryPanel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { GrpLabel } from "@/components/ui/Stat";
-import { useToast } from "@/components/ui/Toast";
-import { ApiError } from "@/lib/api/fetcher";
 import { fmtAgo } from "@/lib/format/datetime";
 import {
-  useAddCaseNote,
+  moduleForRecordType,
   useCaseNotes,
-  useDeleteCaseNote,
   type CaseNote,
+  type NoteModule,
 } from "@/components/cockpit/useCaseNotes";
 import type {
   CockpitCaseData,
@@ -240,10 +236,18 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
         </>
       ) : null}
 
-      {/* Case-manager notes (read + add + delete). Patient working text, so
-          gated to name-seers; the server enforces the same gate. Loads from the
-          notes sub-resource, not the cached case file. */}
-      {seesNames ? <CaseNotes caseId={data.lead_ref.zoho_id} seesNames={seesNames} /> : null}
+      {/* Zoho CRM notes (READ-ONLY). The Notes related-list on the deal/lead
+          record. Patient working text, so gated to name-seers; the server
+          enforces the same gate. Loads from the notes sub-resource (which reads
+          Zoho), not the cached case file. The module is derived from the case
+          record_type so the route reads the right related-list. */}
+      {seesNames ? (
+        <CaseNotes
+          caseId={data.lead_ref.zoho_id}
+          module={moduleForRecordType(data.record_type)}
+          seesNames={seesNames}
+        />
+      ) : null}
 
       {data.partners.length > 0 ? (
         <>
@@ -293,18 +297,10 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
   );
 }
 
-// One note row: body, author, relative time, and a delete affordance shown
-// only when the note is the viewer's own (note.mine). The body is patient
-// working text rendered as plain escaped text; never logged anywhere.
-function NoteRow({
-  note,
-  onDelete,
-  deleting,
-}: {
-  note: CaseNote;
-  onDelete: (id: string) => void;
-  deleting: boolean;
-}) {
+// One note row: optional title, body, author and relative time. The note is
+// read-only (authored in Zoho CRM), so there is no delete affordance. The body
+// is patient working text rendered as plain escaped text; never logged.
+function NoteRow({ note }: { note: CaseNote }) {
   return (
     <div className="flex items-start gap-[11px] border-b border-line-soft px-0.5 py-2.5 last:border-b-0">
       <span
@@ -314,77 +310,44 @@ function NoteRow({
         <StickyNote className="h-[15px] w-[15px]" strokeWidth={1.8} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="whitespace-pre-wrap break-words text-[13px] text-title">{note.body}</p>
+        {note.title ? (
+          <p className="break-words text-[13px] font-semibold text-title">{note.title}</p>
+        ) : null}
+        {note.body ? (
+          <p className="whitespace-pre-wrap break-words text-[13px] text-title">{note.body}</p>
+        ) : null}
         <span className="mt-0.5 block text-[11px] text-ink-3">
-          {note.author_name} · {fmtAgo(note.created_at)}
+          {note.author_name || "Unknown"} · {fmtAgo(note.created_at)}
         </span>
       </div>
-      {note.mine ? (
-        <button
-          type="button"
-          aria-label="Delete this note"
-          disabled={deleting}
-          onClick={() => onDelete(note.id)}
-          className="mt-[1px] grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-[8px] border border-transparent text-ink-3 hover:border-line hover:bg-surface hover:text-title disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:h-[14px] [&_svg]:w-[14px]"
-        >
-          <Trash2 strokeWidth={1.8} aria-hidden="true" />
-        </button>
-      ) : null}
     </div>
   );
 }
 
-// The notes panel: list (newest first), loading and empty states in the
-// cockpit style, and a textarea + Save wired to the add mutation. On a
-// successful add or delete the hook invalidates the notes query, so the list
-// refreshes itself. Rendered only for viewers who may see patient names; the
-// server enforces the same gate.
-function CaseNotes({ caseId, seesNames }: { caseId: string; seesNames: boolean }) {
-  const toast = useToast();
-  const [draft, setDraft] = useState("");
-
-  const notes = useCaseNotes(caseId, seesNames);
-  const add = useAddCaseNote(caseId);
-  const remove = useDeleteCaseNote(caseId);
-
-  const ADD_FAILURE = "Couldn't save the note. Nothing changed. Try again.";
-  const DELETE_FAILURE = "Couldn't remove the note. Nothing changed. Try again.";
-
-  function handleSave() {
-    const body = draft.trim();
-    if (!body || add.isPending) return;
-    add.mutate(body, {
-      onSuccess: () => {
-        setDraft("");
-        toast("Note saved.");
-      },
-      onError: (error) => {
-        toast(
-          error instanceof ApiError && error.messagePlain ? error.messagePlain : ADD_FAILURE,
-          AlertCircle,
-        );
-      },
-    });
-  }
-
-  function handleDelete(noteId: string) {
-    remove.mutate(noteId, {
-      onSuccess: () => toast("Note removed."),
-      onError: (error) => {
-        toast(
-          error instanceof ApiError && error.messagePlain ? error.messagePlain : DELETE_FAILURE,
-          AlertCircle,
-        );
-      },
-    });
-  }
-
+// The notes panel: a read-only list of the Zoho CRM Notes related-list for the
+// case (newest first), with loading and empty states in the cockpit style.
+// There is no add or delete affordance: notes are authored in Zoho and the
+// cockpit only displays them. Rendered only for viewers who may see patient
+// names; the server enforces the same gate.
+function CaseNotes({
+  caseId,
+  module,
+  seesNames,
+}: {
+  caseId: string;
+  module: NoteModule;
+  seesNames: boolean;
+}) {
+  const notes = useCaseNotes(caseId, module, seesNames);
   const list = notes.data?.data ?? [];
 
   return (
     <>
       <GrpLabel>Notes</GrpLabel>
-      <div className="mb-3">
+      <p className="mb-2 text-[11px] text-ink-3">
+        Read-only notes from Zoho CRM. Add or edit them in Zoho.
+      </p>
+      <div className="mb-4">
         {notes.isPending ? (
           <div className="flex flex-col gap-2 py-1">
             <Skeleton height={14} width="80%" />
@@ -396,47 +359,11 @@ function CaseNotes({ caseId, seesNames }: { caseId: string; seesNames: boolean }
           </p>
         ) : list.length === 0 ? (
           <p className="py-2 text-[12px] text-ink-3">
-            No notes yet. Add the first one below.
+            No notes on this record in Zoho CRM yet.
           </p>
         ) : (
-          list.map((note) => (
-            <NoteRow
-              key={note.id}
-              note={note}
-              onDelete={handleDelete}
-              deleting={remove.isPending}
-            />
-          ))
+          list.map((note) => <NoteRow key={note.id} note={note} />)
         )}
-      </div>
-
-      <div className="mb-4 rounded-[12px] border border-line px-[15px] py-[13px]">
-        <label
-          htmlFor="case-note-body"
-          className="mb-2 block text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-3"
-        >
-          Add a note
-        </label>
-        <textarea
-          id="case-note-body"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          maxLength={4000}
-          rows={3}
-          placeholder="Case manager note. Stored in the dashboard, visible to staff who may see patient names."
-          className="w-full resize-y rounded-inner border border-line bg-surface-2 px-[11px] py-[8.5px] text-[13.5px] text-ink focus:border-transparent focus:outline-2 focus:outline-accent focus:outline-offset-0"
-        />
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-[11px] text-ink-3">{draft.length}/4000</span>
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={draft.trim().length === 0 || add.isPending}
-            onClick={handleSave}
-          >
-            {add.isPending ? "Saving…" : "Save note"}
-          </Button>
-        </div>
       </div>
     </>
   );
