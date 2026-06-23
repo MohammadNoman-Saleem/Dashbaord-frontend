@@ -12,7 +12,7 @@ import { getPipelineService } from '@/lib/server/services/pipeline';
 
 export const runtime = 'nodejs';
 
-export const GET = handler(async (req, ctx) => {
+export const GET = handler(async (_req, ctx) => {
   const viewer = ctx.requireViewer();
   const { data, parts } = await getPipelineService().priorities(viewer);
   return withMeta(data, mergeMeta(parts));

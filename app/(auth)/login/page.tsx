@@ -11,15 +11,15 @@ import { Card } from "@/components/ui/Card";
 import { Field, FieldInput } from "@/components/ui/Field";
 import { StatusDot } from "@/components/ui/StatusDot";
 
-/* Sign in. Auth always posts to the live saleem-api; it is never served from
-   fixtures, so this page calls fetch directly instead of fetchEnvelope. A
-   first login with a temporary password returns must_reset, which swaps the
-   card to a change-password step before routing home. While the API is not
-   running (fixtures phase) a failed network fetch offers preview mode rather
-   than a dead end. No red anywhere: problems read as plain ink text beside
-   a warn dot. */
+/* Sign in. Auth posts to the live auth route (same-origin /api/auth/* now that
+   the backend lives in this app); it is never served from fixtures, so this
+   page calls fetch directly instead of fetchEnvelope. A first login with a
+   temporary password returns must_reset, which swaps the card to a
+   change-password step before routing home. While the API is not running a
+   failed network fetch offers preview mode rather than a dead end. No red
+   anywhere: problems read as plain ink text beside a warn dot. */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 const OFFLINE_MESSAGE =
   "Couldn't reach the server. The team dashboard still opens in preview mode.";

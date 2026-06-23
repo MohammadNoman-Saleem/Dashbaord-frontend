@@ -2,16 +2,18 @@ import type { NextConfig } from "next";
 
 /* Security headers for every route. The point of the Content-Security-Policy
    here is the connect-src lock: the browser may only open connections to this
-   app and to the saleem-api origin, nothing else. The other directives are
-   kept permissive enough that Next 16 and the app keep working (inline and
-   eval are allowed for scripts because the Next runtime and the theme
-   bootstrap script need them; tightening those would break rendering). */
+   app (the backend now lives in this app's own /api routes, so 'self' covers
+   it), plus an optional separate API origin if NEXT_PUBLIC_API_BASE is set.
+   The other directives are kept permissive enough that Next 16 and the app
+   keep working (inline and eval are allowed for scripts because the Next
+   runtime and the theme bootstrap script need them). */
 
-/* Derive the API origin from NEXT_PUBLIC_API_BASE, the same env the fetcher
-   reads, and fall back to the local default. We take just the origin so a
-   value that includes a path still produces a clean connect-src source. */
+/* Derive an extra API origin only if NEXT_PUBLIC_API_BASE points at a separate
+   host. Empty/unset means same-origin, so connect-src 'self' is enough. We
+   take just the origin so a value with a path still yields a clean source. */
 function apiOrigin(): string {
-  const raw = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
+  const raw = process.env.NEXT_PUBLIC_API_BASE ?? "";
+  if (!raw) return "";
   try {
     return new URL(raw).origin;
   } catch {
@@ -20,13 +22,14 @@ function apiOrigin(): string {
 }
 
 function contentSecurityPolicy(): string {
+  const extra = apiOrigin();
   const directives = [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    `connect-src 'self' ${apiOrigin()}`,
+    `connect-src 'self'${extra ? ` ${extra}` : ""}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

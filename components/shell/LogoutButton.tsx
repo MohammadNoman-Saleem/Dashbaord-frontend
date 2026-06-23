@@ -10,7 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
    starts clean, and returns to the login page. Styled to match the Collapse
    row. Shown on mobile too, unlike Collapse. */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:4000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 type LogoutButtonProps = {
   /* Icon-rail mode: only the icon shows. */
