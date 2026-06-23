@@ -15,14 +15,14 @@ import { StatusDot } from "@/components/ui/StatusDot";
    the backend lives in this app); it is never served from fixtures, so this
    page calls fetch directly instead of fetchEnvelope. A first login with a
    temporary password returns must_reset, which swaps the card to a
-   change-password step before routing home. While the API is not running a
-   failed network fetch offers preview mode rather than a dead end. No red
-   anywhere: problems read as plain ink text beside a warn dot. */
+   change-password step before routing home. A failed network fetch shows a
+   plain retry message; there is no preview bypass. No red anywhere: problems
+   read as plain ink text beside a warn dot. */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
-const OFFLINE_MESSAGE =
-  "Couldn't reach the server. The team dashboard still opens in preview mode.";
+const SERVER_UNREACHABLE =
+  "Couldn't reach the server. Please try again in a moment.";
 const SIGN_IN_FAILED = "That username and password didn't match. Check them and try again.";
 const RESET_FAILED = "Couldn't update the password. Check the current one and try again.";
 
@@ -68,12 +68,10 @@ export default function LoginPage() {
   const [newPassword, setNewPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const [offline, setOffline] = useState(false);
 
   async function handleSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setProblem(null);
-    setOffline(false);
     setSubmitting(true);
     try {
       const { ok, body } = await postAuth("/api/auth/login", { username, password });
@@ -92,7 +90,7 @@ export default function LoginPage() {
       await queryClient.invalidateQueries({ queryKey: qk.me() });
       router.replace("/");
     } catch {
-      setOffline(true);
+      setProblem(SERVER_UNREACHABLE);
     } finally {
       setSubmitting(false);
     }
@@ -101,7 +99,6 @@ export default function LoginPage() {
   async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setProblem(null);
-    setOffline(false);
     setSubmitting(true);
     try {
       const { ok, body } = await postAuth("/api/auth/change-password", {
@@ -117,7 +114,7 @@ export default function LoginPage() {
       await queryClient.invalidateQueries({ queryKey: qk.me() });
       router.replace("/");
     } catch {
-      setOffline(true);
+      setProblem(SERVER_UNREACHABLE);
     } finally {
       setSubmitting(false);
     }
@@ -218,19 +215,6 @@ export default function LoginPage() {
           </form>
         </>
       )}
-
-      {offline ? (
-        <div className="mt-[16px] border-t border-line-soft pt-[14px]">
-          <ProblemNote>{OFFLINE_MESSAGE}</ProblemNote>
-          <Button
-            variant="ghost"
-            className="w-full justify-center"
-            onClick={() => router.replace("/")}
-          >
-            Continue in preview
-          </Button>
-        </div>
-      ) : null}
     </Card>
   );
 }
