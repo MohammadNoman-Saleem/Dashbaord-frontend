@@ -57,8 +57,7 @@ export type EndpointKey =
   | 'cockpit_case'
   | 'cockpit_parked'
   | 'cockpit_sla_policy'
-  | 'write_gate_prepare'
-  | 'write_gate_commit'
+  | 'cockpit_case_write'
   | 'write_gate_stage_options'
   | 'whatsapp_first_contact_template'
   | 'documents_quotation'
@@ -135,12 +134,14 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   cockpit_case: 'live',
   cockpit_parked: 'live',
   cockpit_sla_policy: 'live',
-  // Cockpit write gate (Phase 1). POST-only seams; mutateEnvelope resolves
-  // null in fixture mode and never reads a fixture. Live so the confirm-commit
-  // flow reaches the real gate; commit still refuses unless WRITE_GATE_ENABLED
-  // is on server-side, so merging this does not enable any write.
-  write_gate_prepare: 'live',
-  write_gate_commit: 'live',
+  // Cockpit write (one-step). A single POST per change to
+  // /api/cockpit/case/[id]/write; the route validates, writes to Zoho, and
+  // audits in one call (the former two-step prepare/commit gate is gone).
+  // POST-only seam; mutateEnvelope resolves null in fixture mode and never
+  // reads a fixture. Live so the controls reach the real route; the route still
+  // refuses unless WRITE_GATE_ENABLED is on server-side, so merging this does
+  // not enable any write.
+  cockpit_case_write: 'live',
   // Phase 1b stage-move policy read: which target stages the current stage may
   // move to, plus the loss reasons. A GET, live with the backend on this
   // branch; the fixture serves dev smoke until the API is up.

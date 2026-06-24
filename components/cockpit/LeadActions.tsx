@@ -1,34 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Field, FieldInput, FieldSelect } from "@/components/ui/Field";
-import { Modal, ModalRow, ModalText, ModalTitle } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import { ApiError, fetchEnvelope, mutateEnvelope } from "@/lib/api/fetcher";
-import { qk } from "@/lib/api/keys";
-import type {
-  CockpitPipeline,
-  WriteGateChange,
-  WriteGateCommitData,
-  WriteGatePrepareData,
-  WriteGateStageOptionsData,
-} from "@/lib/api/contract";
+import { fetchEnvelope } from "@/lib/api/fetcher";
+import {
+  useCockpitWrite,
+  writeErrorMessage,
+  type CockpitPipeline,
+  type CockpitStageOptions,
+} from "./useCockpitWrite";
 
-/* Lead-stage cockpit writes, the lead counterpart to the deal controls. Each of
-   the three controls runs the same prepare -> confirm -> commit flow as
-   StageMove and EditCaseDetails, routed through the write gate with
-   resourceType 'lead'. A single confirm modal is shared across the three,
-   driven by which change is prepared. When the server reports writes are off,
-   the confirm step says so and the apply button is disabled: nothing is written
-   until the gate is turned on after sign-off.
+/* Lead-stage cockpit writes, the lead counterpart to the deal controls.
+   ONE-STEP write: clicking an action POSTs the change in a single call to
+   /api/cockpit/case/[id]/write, which validates and writes to Zoho in one call.
+   If writes are turned off server-side the route refuses and the toast carries
+   that message.
 
    Convert to deal reads the full open-stage list for the chosen pipeline from
    /write-gate/stage-options (pipeline only, no current stage), so the stage
-   dropdown only ever offers CRM config the server stands behind. */
+   dropdown only ever offers CRM config the server stands behind.
+
+   CONFIRMATION: converting a lead creates a deal (a non-idempotent action), so
+   a lightweight client confirm (window.confirm) runs before convert only.
+   Update status and park write immediately on click, no prompt. The convert
+   button is disabled while the request is in flight (save.isPending), so a
+   double-click cannot fire a second convert; the server also re-reads the lead
+   and refuses if it is already converted, so two deals can never be created. */
 
 const WRITE_FAILURE_COPY =
   "Couldn't save the change. Nothing changed. Try again, or tell Al Saeed if it repeats.";
@@ -57,13 +59,11 @@ type Props = {
 
 export function LeadActions({ resourceId, currentStatus }: Props) {
   const toast = useToast();
-  const queryClient = useQueryClient();
 
   const [pipeline, setPipeline] = useState<CockpitPipeline | "">("");
   const [convertStage, setConvertStage] = useState("");
   const [status, setStatus] = useState(currentStatus ?? "");
   const [reason, setReason] = useState("");
-  const [prepared, setPrepared] = useState<WriteGatePrepareData | null>(null);
 
   // The full open-stage list for the chosen pipeline. Fetched only once a
   // pipeline is picked; passing no stage returns every open stage to convert
@@ -72,7 +72,7 @@ export function LeadActions({ resourceId, currentStatus }: Props) {
     queryKey: ["write-gate", "stage-options", pipeline],
     enabled: pipeline !== "",
     queryFn: () =>
-      fetchEnvelope<WriteGateStageOptionsData>(
+      fetchEnvelope<CockpitStageOptions>(
         "write_gate_stage_options",
         "/write-gate/stage-options",
         { pipeline },
@@ -81,58 +81,22 @@ export function LeadActions({ resourceId, currentStatus }: Props) {
 
   const stageTargets = options.data?.data?.targets ?? [];
 
-  const prepare = useMutation({
-    mutationFn: async (change: WriteGateChange) => {
-      const res = await mutateEnvelope<WriteGatePrepareData>(
-        "write_gate_prepare",
-        "POST",
-        "/write-gate/prepare",
-        { resourceType: "lead", resourceId, change },
-      );
-      return res?.data ?? null;
-    },
-    onSuccess: (data) => {
-      if (data) setPrepared(data);
-    },
-    onError: (error) => {
-      toast(
-        error instanceof ApiError && error.messagePlain
-          ? error.messagePlain
-          : WRITE_FAILURE_COPY,
-        AlertCircle,
-      );
-    },
-  });
-
-  const commit = useMutation({
-    mutationFn: async () => {
-      if (!prepared) return null;
-      return mutateEnvelope<WriteGateCommitData>(
-        "write_gate_commit",
-        "POST",
-        "/write-gate/commit",
-        {
-          change_id: prepared.change_id,
-          confirmations: prepared.confirmations_required,
-        },
-      );
-    },
-    onSuccess: () => {
-      toast("Lead change saved.");
-      setPrepared(null);
-      void queryClient.invalidateQueries({ queryKey: qk.cockpitCase(resourceId) });
-    },
-    onError: (error) => {
-      toast(
-        error instanceof ApiError && error.messagePlain
-          ? error.messagePlain
-          : WRITE_FAILURE_COPY,
-        AlertCircle,
-      );
-    },
+  const save = useCockpitWrite(resourceId, {
+    onSuccess: () => toast("Lead change saved."),
+    onError: (error) => toast(writeErrorMessage(error, WRITE_FAILURE_COPY), AlertCircle),
   });
 
   const convertReady = pipeline !== "" && convertStage !== "";
+
+  function convert() {
+    if (pipeline === "") return;
+    // CONFIRMATION: convert creates a deal (non-idempotent), so confirm first.
+    const ok = window.confirm(
+      `Convert this lead to a ${pipeline} deal at ${convertStage}? This creates a deal in Zoho.`,
+    );
+    if (!ok) return;
+    save.mutate({ kind: "convert_lead", pipeline, stage: convertStage });
+  }
 
   return (
     <div className="mt-3 rounded-[12px] border border-line px-[15px] py-[13px]">
@@ -178,13 +142,10 @@ export function LeadActions({ resourceId, currentStatus }: Props) {
         <Button
           variant="primary"
           size="sm"
-          disabled={!convertReady || prepare.isPending}
-          onClick={() => {
-            if (pipeline === "") return;
-            prepare.mutate({ kind: "convert_lead", pipeline, stage: convertStage });
-          }}
+          disabled={!convertReady || save.isPending}
+          onClick={convert}
         >
-          Review change
+          Convert to deal
         </Button>
       </div>
 
@@ -207,10 +168,10 @@ export function LeadActions({ resourceId, currentStatus }: Props) {
         <Button
           variant="primary"
           size="sm"
-          disabled={!status || prepare.isPending}
-          onClick={() => prepare.mutate({ kind: "set_lead_status", status })}
+          disabled={!status || save.isPending}
+          onClick={() => save.mutate({ kind: "set_lead_status", status })}
         >
-          Review change
+          Update status
         </Button>
       </div>
 
@@ -228,55 +189,17 @@ export function LeadActions({ resourceId, currentStatus }: Props) {
         <Button
           variant="primary"
           size="sm"
-          disabled={!reason || prepare.isPending}
-          onClick={() => prepare.mutate({ kind: "park_lead", reason })}
+          disabled={!reason || save.isPending}
+          onClick={() => save.mutate({ kind: "park_lead", reason })}
         >
-          Review change
+          Park lead
         </Button>
       </div>
 
       <p className="mt-2 text-[11px] text-ink-3">
-        Each lead action writes to Zoho through the confirm step. Every other
-        action here is still read-only.
+        Each lead action writes to Zoho on click; converting a lead asks for a
+        quick confirm first. Every other action here is still read-only.
       </p>
-
-      <Modal
-        open={prepared != null}
-        onClose={() => setPrepared(null)}
-        aria-label="Confirm the lead change"
-      >
-        <ModalTitle>Confirm this change</ModalTitle>
-        <ModalText>
-          This is exactly what will change in Zoho. Nothing is written until you
-          confirm.
-        </ModalText>
-        <ul className="mb-[15px] list-disc pl-5 text-[13px] text-title">
-          {prepared?.change_list.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-        {prepared && !prepared.writes_enabled ? (
-          <p className="mb-[15px] rounded-[10px] border border-line-soft bg-surface-2 px-3 py-2.5 text-[12.5px] text-ink-2">
-            Writes are turned off right now, so this cannot be applied yet. It
-            will go live once the gate is switched on after sign-off.
-          </p>
-        ) : null}
-        <ModalRow>
-          <Button variant="ghost" size="sm" onClick={() => setPrepared(null)}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={
-              commit.isPending || (prepared != null && !prepared.writes_enabled)
-            }
-            onClick={() => commit.mutate()}
-          >
-            Confirm and save
-          </Button>
-        </ModalRow>
-      </Modal>
     </div>
   );
 }
