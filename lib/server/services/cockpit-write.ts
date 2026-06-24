@@ -103,6 +103,12 @@ interface LeadSnapshot {
   // The lead phone (patient data). Carried for parity; never logged, returned,
   // or audited.
   phone: string | null;
+  // The lead's name (patient data). Used ONLY to name the deal Zoho creates on
+  // conversion (Deal_Name is system-mandatory on Deals). Like phone, it is never
+  // logged, returned to the client, or written to the audit value; it reaches
+  // only the Zoho convert payload, the same place a manual Zoho conversion puts
+  // it.
+  name: string | null;
   // Whether the lead is already converted (Leads Converted__s). A converted
   // lead cannot be converted again.
   converted: boolean;
@@ -490,7 +496,15 @@ async function convertLead(
     throw new ConflictError('That lead has already been converted to a deal.');
   }
 
+  // Deal_Name is system-mandatory on Deals, so the convert payload MUST carry
+  // one or Zoho 400s (MANDATORY_NOT_FOUND on Deal_Name). Name the deal after the
+  // lead, matching what Zoho's manual Convert produces. Fall back to the pipeline
+  // label if the name is somehow blank, and cap at the field's 120-char limit.
+  // PRIVACY: this VALUE (the patient name) is never logged, returned, or audited;
+  // it lives only in the Zoho payload below.
+  const dealName = (lead.name ?? `${change.pipeline} deal`).slice(0, 120);
   const convert = await getZohoWriteClient().convertLead(resourceId, {
+    Deal_Name: dealName,
     Pipeline: change.pipeline,
     Stage: change.stage,
   });
@@ -517,7 +531,8 @@ async function convertLead(
     entity_type: 'zoho_leads',
     entity_id: resourceId,
     before: null,
-    after: { fields: ['Pipeline', 'Stage'] },
+    // Field KEYS only (never the Deal_Name VALUE, which is the patient name).
+    after: { fields: ['Deal_Name', 'Pipeline', 'Stage'] },
     context: {
       change_kind: change.kind,
       zoho_code: 'SUCCESS',
@@ -561,21 +576,27 @@ async function readDeal(id: string): Promise<DealSnapshot | null> {
 }
 
 /** Fresh, uncached single-lead read for the converted gate. Pulls Lead_Status,
- *  Phone (patient data, carried for parity but never logged or audited), and
+ *  Phone (patient data, carried for parity but never logged or audited),
  *  Converted__s (the live Leads conversion flag, api_name Converted__s, label
- *  "Is Converted"; the bare "Converted" name does not exist on the module). */
+ *  "Is Converted"; the bare "Converted" name does not exist on the module), and
+ *  Full_Name/Last_Name (patient data; used only to name the converted deal). */
 async function readLead(id: string): Promise<LeadSnapshot | null> {
   const res = await getZohoClient().get<{
     data?: Array<Record<string, unknown>>;
   }>(`${CRM}/Leads/${encodeURIComponent(id)}`, {
-    fields: 'Lead_Status,Phone,Converted__s',
+    fields: 'Lead_Status,Phone,Converted__s,Full_Name,Last_Name',
   });
   const record = res.data?.[0];
   if (!record) return null;
+  // Prefer the composite Full_Name; fall back to Last_Name (mandatory on Leads,
+  // so one of these is always present). Patient data, carried for the convert
+  // Deal_Name only.
+  const name = asString(record.Full_Name) ?? asString(record.Last_Name);
   return {
     id,
     leadStatus: asString(record.Lead_Status),
     phone: asString(record.Phone),
+    name,
     converted: record.Converted__s === true,
   };
 }
