@@ -13,7 +13,8 @@
 //      continuation via page_context.has_more_page; the CRM loop would
 //      silently return nothing there.
 // The read client (ZohoClient) exposes GET only. Writes (ZohoWriteClient) speak
-// exactly PUT and the convert POST; there is no delete and none may be added.
+// the record PUT, the convert POST, and the Notes-related-list POST; there is no
+// delete and none may be added.
 //
 // SERVER ONLY. Node runtime. Never import from a client component.
 import { getZohoAuth, type ZohoAuthService } from './auth';
@@ -135,8 +136,9 @@ export interface ZohoWriteResult {
 
 // The write-scoped Zoho CRM client. Used ONLY by the cockpit write gate's commit
 // path. Kept separate from the read-only ZohoClient so the CRM write surface is
-// one file, auditable and easy to revoke. It speaks exactly PUT (record update)
-// and the convert POST. There is NO delete method and none may be added.
+// one file, auditable and easy to revoke. It speaks the record PUT (update), the
+// convert POST, and the Notes-related-list POST (addNote). There is NO delete
+// method and none may be added.
 export class ZohoWriteClient {
   constructor(private readonly auth: ZohoAuthService) {}
 
@@ -178,6 +180,80 @@ export class ZohoWriteClient {
       const fieldKeys = Object.keys(fields).join(',');
       throw new Error(
         `Zoho CRM PUT ${res.status} on ${module}/${id} [fields: ${fieldKeys}]: ${body}`,
+      );
+    }
+
+    const json = (await res.json().catch(() => ({}))) as {
+      data?: Array<{ code?: string; details?: { id?: string } }>;
+    };
+    const record = json.data?.[0];
+    const code = record?.code ?? 'UNKNOWN';
+    return {
+      ok: code === 'SUCCESS',
+      code,
+      id: record?.details?.id ?? null,
+    };
+  }
+
+  /** Add a Note to a CRM record via the v3 Notes related-list. POST
+   *  /crm/v3/{module}/{recordId}/Notes with the v3 envelope
+   *  { data: [{ Note_Title, Note_Content }] }; Zoho echoes back the created
+   *  note's code and details.id. This is a create on the record's related list,
+   *  the preferred shape (over POST /Notes with a $se_module/Parent_Id), so the
+   *  parent link is in the URL and cannot be mistyped.
+   *
+   *  PRIVACY (NHRA): a note body is case-manager working text that can carry
+   *  patient detail. The CONTENT and TITLE are never logged here; only the
+   *  module/id and, on a failure, the Zoho status code and the FIELD KEYS surface
+   *  in the thrown error. The caller audits a content LENGTH only, never the text.
+   *
+   *  SCOPE: this needs the Notes-create scope (ZohoCRM.modules.notes.CREATE, or
+   *  the broader ZohoCRM.modules.ALL) on the write token. The existing read/PUT
+   *  token may not carry it; minting/extending the token is a human step before
+   *  this path can write. */
+  async addNote(
+    module: WritableModule,
+    recordId: string,
+    note: { title?: string; content: string },
+  ): Promise<ZohoWriteResult> {
+    const token = await this.auth.accessToken();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ZOHO_TIMEOUT_MS);
+    // Build the note record from the allowlisted fields only. Note_Title is
+    // optional; Note_Content carries the body.
+    const noteRecord: Record<string, unknown> = { Note_Content: note.content };
+    if (note.title !== undefined) noteRecord.Note_Title = note.title;
+    let res: Response;
+    try {
+      res = await fetch(
+        `${CRM}/${module}/${encodeURIComponent(recordId)}/Notes`,
+        {
+          method: 'POST',
+          headers: {
+            authorization: `Zoho-oauthtoken ${token}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ data: [noteRecord] }),
+          signal: controller.signal,
+        },
+      );
+    } catch (err) {
+      if (controller.signal.aborted) {
+        throw new Error(
+          `Zoho CRM Notes POST timed out after ${ZOHO_TIMEOUT_MS}ms on ${module}/${recordId}`,
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      // FIELD KEYS only, never the note content or title value.
+      const fieldKeys = Object.keys(noteRecord).join(',');
+      throw new Error(
+        `Zoho CRM Notes POST ${res.status} on ${module}/${recordId} [fields: ${fieldKeys}]: ${body}`,
       );
     }
 

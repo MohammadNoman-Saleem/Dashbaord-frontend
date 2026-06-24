@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { Check, Clock, Cpu, FileText, MessageCircle, PenLine, StickyNote } from "lucide-react";
+import { AlertCircle, Check, Clock, Cpu, FileText, MessageCircle, PenLine, StickyNote } from "lucide-react";
 
+import { Button } from "@/components/ui/Button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { ListRow } from "@/components/ui/ListRow";
@@ -11,9 +13,12 @@ import { PatientRef } from "@/components/ui/PatientRef";
 import { QueryPanel } from "@/components/ui/QueryPanel";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { GrpLabel } from "@/components/ui/Stat";
+import { useToast } from "@/components/ui/Toast";
+import { ApiError } from "@/lib/api/fetcher";
 import { fmtAgo } from "@/lib/format/datetime";
 import {
   moduleForRecordType,
+  useAddCaseNote,
   useCaseNotes,
   type CaseNote,
   type NoteModule,
@@ -329,11 +334,86 @@ function NoteRow({ note }: { note: CaseNote }) {
   );
 }
 
-// The notes panel: a read-only list of the Zoho CRM Notes related-list for the
-// case (newest first), with loading and empty states in the cockpit style.
-// There is no add or delete affordance: notes are authored in Zoho and the
-// cockpit only displays them. Rendered only for viewers who may see patient
-// names; the server enforces the same gate.
+const ADD_NOTE_FAILURE_COPY =
+  "Couldn't save the note. Nothing changed. Try again, or tell Al Saeed if it repeats.";
+
+// The add-note box: a title (optional) and a body, with a Save that writes the
+// note to Zoho CRM through the gated POST. Shown only for name-seers (the panel
+// already gates on that). The body and title are never logged here. On success
+// the inputs clear and the list refetches via the hook's invalidation.
+function AddNote({ caseId, module }: { caseId: string; module: NoteModule }) {
+  const toast = useToast();
+  const add = useAddCaseNote(caseId, module);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+
+  const body = content.trim();
+  const canSave = body.length > 0 && !add.isPending;
+
+  const onSave = () => {
+    if (!canSave) return;
+    add.mutate(
+      { content: body, title: title.trim() || undefined },
+      {
+        onSuccess: () => {
+          setTitle("");
+          setContent("");
+          toast("Note saved.");
+        },
+        onError: (error) => {
+          toast(
+            error instanceof ApiError && error.messagePlain
+              ? error.messagePlain
+              : ADD_NOTE_FAILURE_COPY,
+            AlertCircle,
+          );
+        },
+      },
+    );
+  };
+
+  return (
+    <div className="mb-4 rounded-[12px] border border-line px-[15px] py-[13px]">
+      <div className="mb-2 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-3">
+        <PenLine strokeWidth={1.8} aria-hidden="true" className="h-3.5 w-3.5" />
+        Add a note
+      </div>
+      <input
+        type="text"
+        value={title}
+        maxLength={255}
+        onChange={(event) => setTitle(event.target.value)}
+        placeholder="Title (optional)"
+        aria-label="Note title"
+        className="mb-2 w-full rounded-inner border border-line bg-surface-2 px-[11px] py-[8.5px] text-[13.5px] text-ink focus:border-transparent focus:outline-2 focus:outline-accent focus:outline-offset-0"
+      />
+      <textarea
+        value={content}
+        maxLength={8000}
+        rows={3}
+        onChange={(event) => setContent(event.target.value)}
+        placeholder="Write a note for this case"
+        aria-label="Note text"
+        className="w-full resize-y rounded-inner border border-line bg-surface-2 px-[11px] py-[8.5px] text-[13.5px] leading-relaxed text-ink focus:border-transparent focus:outline-2 focus:outline-accent focus:outline-offset-0"
+      />
+      <div className="mt-2 flex justify-end">
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={!canSave}
+          onClick={onSave}
+        >
+          Save note
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// The notes panel: the Zoho CRM Notes related-list for the case (newest first),
+// with loading and empty states in the cockpit style, plus an add-note box that
+// writes back to Zoho through the gated POST. Rendered only for viewers who may
+// see patient names; the server enforces the same gate on both verbs.
 function CaseNotes({
   caseId,
   module,
@@ -350,8 +430,10 @@ function CaseNotes({
     <>
       <GrpLabel>Notes</GrpLabel>
       <p className="mb-2 text-[11px] text-ink-3">
-        Read-only notes from Zoho CRM. Add or edit them in Zoho.
+        Notes from Zoho CRM, newest first. A note you add here is saved back to
+        Zoho.
       </p>
+      {seesNames ? <AddNote caseId={caseId} module={module} /> : null}
       <div className="mb-4">
         {notes.isPending ? (
           <div className="flex flex-col gap-2 py-1">
