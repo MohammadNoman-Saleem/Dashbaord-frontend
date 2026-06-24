@@ -30,7 +30,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, mutateEnvelope } from "@/lib/api/fetcher";
-import { qk } from "@/lib/api/keys";
 
 // The cockpit pipelines a lead converts into / a deal moves within. Kept local
 // (a trivial union) so this feature never imports a write-gate type.
@@ -119,11 +118,12 @@ export function useCockpitWrite(
       return res?.data ?? null;
     },
     onSuccess: (result) => {
-      if (!options?.skipCaseInvalidate) {
-        void queryClient.invalidateQueries({
-          queryKey: qk.cockpitCase(resourceId),
-        });
-      }
+      // Invalidate the whole cockpit query subtree so the case file, the queue,
+      // and the parked list all refetch after a write. The ['cockpit'] literal
+      // matches every qk.cockpit* key (they all start with 'cockpit'), which
+      // covers what skipCaseInvalidate used to gate, so that option no longer
+      // gates this broad invalidate.
+      void queryClient.invalidateQueries({ queryKey: ["cockpit"] });
       options?.onSuccess?.(result);
     },
     onError: (error) => {

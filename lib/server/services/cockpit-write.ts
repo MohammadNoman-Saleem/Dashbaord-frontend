@@ -32,6 +32,7 @@
 // SERVER ONLY. Routes that call this declare export const runtime = 'nodejs'
 // (this pulls in pg/Zoho through the foundation singletons).
 import { getAudit } from '../audit';
+import { getCrmRead } from '../crm-read';
 import { getZohoClient, getZohoWriteClient } from '../integrations/zoho/client';
 import { getWhatsApp } from '../integrations/whatsapp';
 import {
@@ -246,6 +247,10 @@ async function applyDealChange(
     },
   });
 
+  // The write changed live Zoho data; bust the crm-read cache so the next read
+  // serves the new value instead of the pre-write copy until the TTL.
+  await getCrmRead().invalidate();
+
   return { committed: true, change_list: [changeText], resource_id: resourceId };
 }
 
@@ -350,6 +355,10 @@ async function sendFirstContact(
     },
   });
 
+  // The write changed live Zoho data; bust the crm-read cache so the next read
+  // serves the new value instead of the pre-write copy until the TTL.
+  await getCrmRead().invalidate();
+
   return { committed: true, change_list: [changeText], resource_id: deal.id };
 }
 
@@ -452,6 +461,10 @@ async function applyLeadChange(
     },
   });
 
+  // The write changed live Zoho data; bust the crm-read cache so the next read
+  // serves the new value instead of the pre-write copy until the TTL.
+  await getCrmRead().invalidate();
+
   return { committed: true, change_list: [changeText], resource_id: resourceId };
 }
 
@@ -511,6 +524,10 @@ async function convertLead(
       new_deal_id: convert.dealId,
     },
   });
+
+  // The write changed live Zoho data; bust the crm-read cache so the next read
+  // serves the new value instead of the pre-write copy until the TTL.
+  await getCrmRead().invalidate();
 
   return { committed: true, change_list: [changeText], resource_id: resourceId };
 }
