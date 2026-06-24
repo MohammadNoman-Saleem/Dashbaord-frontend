@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, FieldInput, FieldSelect } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
 import { fetchEnvelope } from "@/lib/api/fetcher";
+import { ConfirmDialog } from "./ConfirmDialog";
 import {
   useCockpitWrite,
   writeErrorMessage,
@@ -26,11 +27,13 @@ import {
    dropdown only ever offers CRM config the server stands behind.
 
    CONFIRMATION: converting a lead creates a deal (a non-idempotent action), so
-   a lightweight client confirm (window.confirm) runs before convert only.
-   Update status and park write immediately on click, no prompt. The convert
-   button is disabled while the request is in flight (save.isPending), so a
-   double-click cannot fire a second convert; the server also re-reads the lead
-   and refuses if it is already converted, so two deals can never be created. */
+   an in-app ConfirmDialog (matching the dashboard, not the browser alert) runs
+   before convert only. Clicking Convert opens the dialog; approving it fires
+   the write. Update status and park write immediately on click, no prompt. The
+   convert button and the dialog's Confirm button are disabled while the request
+   is in flight (save.isPending), so a double-click cannot fire a second
+   convert; the server also re-reads the lead and refuses if it is already
+   converted, so two deals can never be created. */
 
 const WRITE_FAILURE_COPY =
   "Couldn't save the change. Nothing changed. Try again, or tell Al Saeed if it repeats.";
@@ -64,6 +67,7 @@ export function LeadActions({ resourceId, currentStatus }: Props) {
   const [convertStage, setConvertStage] = useState("");
   const [status, setStatus] = useState(currentStatus ?? "");
   const [reason, setReason] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   // The full open-stage list for the chosen pipeline. Fetched only once a
   // pipeline is picked; passing no stage returns every open stage to convert
@@ -88,14 +92,19 @@ export function LeadActions({ resourceId, currentStatus }: Props) {
 
   const convertReady = pipeline !== "" && convertStage !== "";
 
-  function convert() {
+  // CONFIRMATION: convert creates a deal (non-idempotent), so clicking Convert
+  // opens the in-app confirm dialog rather than writing straight away.
+  function openConvertConfirm() {
     if (pipeline === "") return;
-    // CONFIRMATION: convert creates a deal (non-idempotent), so confirm first.
-    const ok = window.confirm(
-      `Convert this lead to a ${pipeline} deal at ${convertStage}? This creates a deal in Zoho.`,
+    setConfirmOpen(true);
+  }
+
+  function confirmConvert() {
+    if (pipeline === "") return;
+    save.mutate(
+      { kind: "convert_lead", pipeline, stage: convertStage },
+      { onSettled: () => setConfirmOpen(false) },
     );
-    if (!ok) return;
-    save.mutate({ kind: "convert_lead", pipeline, stage: convertStage });
   }
 
   return (
@@ -143,7 +152,7 @@ export function LeadActions({ resourceId, currentStatus }: Props) {
           variant="primary"
           size="sm"
           disabled={!convertReady || save.isPending}
-          onClick={convert}
+          onClick={openConvertConfirm}
         >
           Convert to deal
         </Button>
@@ -200,6 +209,20 @@ export function LeadActions({ resourceId, currentStatus }: Props) {
         Each lead action writes to Zoho on click; converting a lead asks for a
         quick confirm first. Every other action here is still read-only.
       </p>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Convert this lead to a deal"
+        message={
+          pipeline === ""
+            ? ""
+            : `This creates a ${pipeline} deal in Zoho at ${convertStage} and cannot be undone. The lead becomes a deal once you confirm.`
+        }
+        confirmLabel="Convert to deal"
+        busy={save.isPending}
+        onConfirm={confirmConvert}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

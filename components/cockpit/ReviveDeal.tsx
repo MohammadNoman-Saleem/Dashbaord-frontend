@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, FieldSelect } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
 import { fetchEnvelope } from "@/lib/api/fetcher";
+import { ConfirmDialog } from "./ConfirmDialog";
 import {
   useCockpitWrite,
   writeErrorMessage,
@@ -29,7 +30,8 @@ import {
    CONFIRMATION: a revive moves AWAY from Lost, so the Lost-target confirm never
    fires in practice (Lost is filtered out of the targets below). The same
    target-based guard is kept for consistency with StageMove: only a chosen
-   target of Lost / Inactive would prompt. Apply writes on click otherwise, and
+   target of Lost / Inactive would open the in-app ConfirmDialog (matching the
+   dashboard, not the browser alert). Apply writes on click otherwise, and
    disables while the request is in flight. If writes are off server-side the
    route refuses and the toast carries that message. */
 
@@ -53,6 +55,7 @@ export function ReviveDeal({ resourceId, pipeline, parkedKey }: Props) {
 
   const [open, setOpen] = useState(false);
   const [toStage, setToStage] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const options = useQuery({
     queryKey: ["write-gate", "stage-options", pipeline, LOST_STAGE],
@@ -84,16 +87,26 @@ export function ReviveDeal({ resourceId, pipeline, parkedKey }: Props) {
     onError: (error) => toast(writeErrorMessage(error, WRITE_FAILURE_COPY), AlertCircle),
   });
 
-  function apply() {
-    // CONFIRMATION: only a Lost / Inactive target would prompt (consistent with
-    // StageMove). A revive moves away from Lost, so this never fires here.
-    if (toStage === LOST_STAGE) {
-      const ok = window.confirm(
-        "Mark this deal Lost / Inactive? This writes to Zoho now.",
-      );
-      if (!ok) return;
-    }
+  function commitMove() {
     save.mutate({ kind: "move_stage", to_stage: toStage, reason_for_loss: null });
+  }
+
+  function apply() {
+    // CONFIRMATION: only a Lost / Inactive target opens the confirm dialog
+    // (consistent with StageMove). A revive moves away from Lost, so this never
+    // fires here.
+    if (toStage === LOST_STAGE) {
+      setConfirmOpen(true);
+      return;
+    }
+    commitMove();
+  }
+
+  function confirmLoss() {
+    save.mutate(
+      { kind: "move_stage", to_stage: toStage, reason_for_loss: null },
+      { onSettled: () => setConfirmOpen(false) },
+    );
   }
 
   if (!open) {
@@ -132,6 +145,16 @@ export function ReviveDeal({ resourceId, pipeline, parkedKey }: Props) {
       <Button variant="ghost" size="sm" disabled={save.isPending} onClick={() => setOpen(false)}>
         Cancel
       </Button>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={`Mark this deal ${LOST_STAGE}`}
+        message={`This writes to Zoho now and cannot be undone. The deal is marked ${LOST_STAGE} and drops out of the open pipeline until someone revives it.`}
+        confirmLabel="Mark lost"
+        busy={save.isPending}
+        onConfirm={confirmLoss}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </span>
   );
 }

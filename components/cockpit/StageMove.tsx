@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Field, FieldSelect } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
 import { fetchEnvelope } from "@/lib/api/fetcher";
+import { ConfirmDialog } from "./ConfirmDialog";
 import {
   useCockpitWrite,
   writeErrorMessage,
@@ -21,10 +22,12 @@ import {
    one call.
 
    CONFIRMATION: a normal move writes immediately on click. A move to Lost /
-   Inactive is high-impact, so a lightweight client confirm (window.confirm)
-   runs first; everything else has no prompt. The Apply button disables while
-   the request is in flight. If writes are turned off server-side the route
-   refuses and the toast carries that message. */
+   Inactive is high-impact, so an in-app ConfirmDialog (matching the dashboard,
+   not the browser alert) runs first; everything else has no prompt. Clicking
+   Mark lost opens the dialog; approving it fires the write. The Apply button
+   and the dialog's Confirm button disable while the request is in flight. If
+   writes are turned off server-side the route refuses and the toast carries
+   that message. */
 
 const WRITE_FAILURE_COPY =
   "Couldn't move the stage. Nothing changed. Try again, or tell Al Saeed if it repeats.";
@@ -45,6 +48,7 @@ export function StageMove({ resourceId, pipeline, currentStage }: Props) {
 
   const [toStage, setToStage] = useState("");
   const [reason, setReason] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const options = useQuery({
     queryKey: ["write-gate", "stage-options", pipeline, currentStage ?? ""],
@@ -66,20 +70,29 @@ export function StageMove({ resourceId, pipeline, currentStage }: Props) {
     onError: (error) => toast(writeErrorMessage(error, WRITE_FAILURE_COPY), AlertCircle),
   });
 
-  function apply() {
-    // CONFIRMATION: only a move to Lost / Inactive gets a lightweight client
-    // confirm (it marks the case lost). Every other move writes on click.
-    if (isLossMove) {
-      const ok = window.confirm(
-        `Mark this deal Lost / Inactive (reason: ${reason})? This writes to Zoho now.`,
-      );
-      if (!ok) return;
-    }
+  function commitMove() {
     save.mutate({
       kind: "move_stage",
       to_stage: toStage,
       reason_for_loss: isLossMove ? reason : null,
     });
+  }
+
+  function apply() {
+    // CONFIRMATION: only a move to Lost / Inactive opens the in-app confirm
+    // dialog (it marks the case lost). Every other move writes on click.
+    if (isLossMove) {
+      setConfirmOpen(true);
+      return;
+    }
+    commitMove();
+  }
+
+  function confirmLoss() {
+    save.mutate(
+      { kind: "move_stage", to_stage: toStage, reason_for_loss: reason },
+      { onSettled: () => setConfirmOpen(false) },
+    );
   }
 
   return (
@@ -136,6 +149,16 @@ export function StageMove({ resourceId, pipeline, currentStage }: Props) {
         Moving the stage writes to Zoho on click; a move to {LOST_STAGE} asks for
         a quick confirm first. Every other action here is still read-only.
       </p>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={`Mark this deal ${LOST_STAGE}`}
+        message={`This writes to Zoho now and cannot be undone. The deal is marked ${LOST_STAGE} with the reason ${reason || "you picked"}, and drops out of the open pipeline until someone revives it.`}
+        confirmLabel="Mark lost"
+        busy={save.isPending}
+        onConfirm={confirmLoss}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }
