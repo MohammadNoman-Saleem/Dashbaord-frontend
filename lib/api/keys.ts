@@ -52,4 +52,5 @@ export const qk = {
   cockpitParked: (person: string, bucket: string, page: number, pageSize: number) =>
     ['cockpit', 'parked', person, bucket, page, pageSize] as const,
   cockpitSlaPolicy: () => ['cockpit', 'sla-policy'] as const,
+  providerBoard: () => ['provider-board'] as const,
 }
