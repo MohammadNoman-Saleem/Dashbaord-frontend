@@ -314,10 +314,42 @@ export class ZohoWriteClient {
     }
 
     const json = (await res.json().catch(() => ({}))) as {
-      data?: Array<{ Deals?: string | { id?: string } }>;
+      data?: Array<{
+        code?: string;
+        status?: string;
+        Deals?: string | { id?: string } | null;
+        details?: { Deals?: string | { id?: string } | null };
+      }>;
     };
-    const deals = json.data?.[0]?.Deals;
-    const dealId = typeof deals === 'string' ? deals : (deals?.id ?? null);
+    // The new deal id can arrive in EITHER of two shapes Zoho has used for this
+    // endpoint. The older FLAT envelope puts it at data[0].Deals (a string id);
+    // the newer WRAPPED envelope (what this tenant returns) puts it at
+    // data[0].details.Deals as an { id } object, alongside code:"SUCCESS". Read
+    // details.Deals first, fall back to the flat key, and accept a string id OR
+    // an { id } object in either spot. Success is keyed off "did we extract a
+    // deal id" (shape-agnostic): a genuine refusal carries no id in either spot,
+    // and a non-2xx HTTP status already threw above. This is what stopped a real
+    // conversion being misread as a refusal (it created the deal but returned
+    // ok:false because the id sat under details, not at the top level).
+    const record = json.data?.[0];
+    const dealsField = record?.details?.Deals ?? record?.Deals ?? null;
+    const dealId =
+      typeof dealsField === 'string' ? dealsField : (dealsField?.id ?? null);
+    if (!dealId) {
+      // 2xx with no extractable deal id: log the response STRUCTURE so a future
+      // shape drift (e.g. another Zoho version bump moving the id) is visible at
+      // a glance. KEYS and flags only, never an id value or any patient data.
+      console.warn(
+        `[zoho.convertLead] HTTP ${res.status} but no deal id found on Leads/${leadId}`,
+        {
+          dataLen: Array.isArray(json.data) ? json.data.length : 0,
+          recordKeys: record ? Object.keys(record) : [],
+          detailsKeys: record?.details ? Object.keys(record.details) : [],
+          code: record?.code ?? null,
+          recordStatus: record?.status ?? null,
+        },
+      );
+    }
     return { ok: !!dealId, dealId };
   }
 }

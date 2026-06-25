@@ -508,6 +508,13 @@ async function convertLead(
     Pipeline: change.pipeline,
     Stage: change.stage,
   });
+  // Breadcrumb for tracing the convert outcome in the server log. Flags only,
+  // never the lead/deal id value or any patient data (the client logs the
+  // response structure on the no-id anomaly).
+  console.info('[cockpit.convertLead] result', {
+    ok: convert.ok,
+    hasDealId: !!convert.dealId,
+  });
   if (!convert.ok) {
     await getAudit().log({
       actor: viewer.key,
