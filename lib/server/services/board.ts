@@ -6,11 +6,13 @@
 // The @Injectable services with constructor DI (CacheService,
 // ZohoProjectsReadService, ZohoProjectsWriteService, UsersService) become
 // globalThis-pinned singletons (g.__board, g.__tasks) reading the foundation
-// accessors getCache(), getZohoProjectsRead(), and the users data-access
-// functions. The Zoho WRITE methods (updateTaskStatus/Owner/Priority,
-// addComment, createTask) are DEFERRED and NOT ported here: this slice carries
-// only the reads the board/tasks GET routes use, so the write service is never
-// constructed.
+// accessors getCache(), getZohoProjectsRead(), getZohoProjectsWrite(), and the
+// users data-access functions. The Zoho WRITE methods (updateTaskStatus/Owner/
+// Priority, addComment, createTask) are DIRECT writes: each 404s before any
+// Zoho write when the task is not on the given project, returns the before/
+// after the route layer audits, and invalidates the project board cache. The
+// route layer gates them behind WRITE_GATE_ENABLED and rejects the MCP service
+// viewer.
 //
 // Logic and DTOs are kept VERBATIM from the backend: the board grouping into
 // three tabs (Cross-Dept, IT, Other), the per-project board cache, the column
@@ -23,12 +25,17 @@
 import { getCache, type CacheService } from '../cache';
 import {
   getZohoProjectsRead,
+  getZohoProjectsWrite,
   type ZohoProjectsReadService,
+  type ZohoProjectsWriteService,
   type ZohoProjectTask,
   type ZohoTaskComment,
 } from '../integrations/zoho/projects';
-import { assignableUsers as assignableUsersQuery } from '../users';
-import { NotFoundError } from '../errors';
+import {
+  assignableUsers as assignableUsersQuery,
+  findByZpuid,
+} from '../users';
+import { BadRequestError, NotFoundError } from '../errors';
 import type { SourceMeta } from '../envelope';
 import {
   ACTIVE_STATUSES,
@@ -96,6 +103,12 @@ export interface BoardTabRef {
 
 export interface BoardCatalog {
   tabs: BoardTabRef[];
+}
+
+interface HarvestedStatus {
+  id: string;
+  name: string;
+  type: string | null;
 }
 
 export interface BoardTaskComment {
@@ -238,6 +251,7 @@ export class BoardService {
   constructor(
     private readonly cache: CacheService,
     private readonly reads: ZohoProjectsReadService,
+    private readonly writes: ZohoProjectsWriteService,
   ) {}
 
   private cacheKey(projectId: string): string {
@@ -486,6 +500,196 @@ export class BoardService {
   async assignableUsers(): Promise<AssignableUser[]> {
     return assignableUsersQuery();
   }
+
+  // --- Zoho WRITES (direct, gated, audited at the route) -------------------
+  // Ported verbatim from the backend BoardService write methods. Each method
+  // 404s before any Zoho write when the task is not on the given project, so a
+  // forged project id can never reach an unrelated task. The route layer gates
+  // these behind WRITE_GATE_ENABLED, rejects the MCP service viewer, and writes
+  // the audit row from the before/after these return.
+
+  /** Distinct statuses in use on a project, harvested from its tasks. The
+   *  legacy trick: /projects/{id}/statuses/ 6403s on this token, but every
+   *  task embeds its full status object, so the distinct set falls out of the
+   *  same fetch that draws the board. */
+  private async harvestStatuses(projectId: string): Promise<HarvestedStatus[]> {
+    const { tasks } = await this.projectTasks(projectId);
+    const byId = new Map<string, HarvestedStatus>();
+    for (const t of tasks) {
+      const s = t.status;
+      if (!s) continue;
+      const id = String(s.id_string ?? s.id ?? '');
+      if (!id || byId.has(id)) continue;
+      byId.set(id, { id, name: s.name ?? '', type: s.type ?? null });
+    }
+    return [...byId.values()];
+  }
+
+  /** Moves a task to another status and returns the fresh card straight from
+   *  Zoho, plus the before/after pair for the caller's audit row. The task must
+   *  already be on this project, so a mismatched id 404s before any write. */
+  async updateTaskStatus(
+    projectId: string,
+    taskId: string,
+    statusName: string,
+  ): Promise<{
+    card: BoardCardData;
+    before: { status: string | null };
+    after: { status: string; status_id: string };
+  }> {
+    const statuses = await this.harvestStatuses(projectId);
+    const wanted = statusName.toLowerCase().trim();
+    const target = statuses.find((s) => s.name.toLowerCase().trim() === wanted);
+    if (!target) {
+      throw new BadRequestError(
+        `Status "${statusName}" is not in use on this project. Available: ${statuses
+          .map((s) => s.name)
+          .join(', ')}.`,
+      );
+    }
+
+    const { tasks } = await this.projectTasks(projectId);
+    const beforeTask =
+      tasks.find((t) => String(t.id_string ?? t.id ?? '') === taskId) ?? null;
+    if (!beforeTask) {
+      // Never write to Zoho for a task that does not belong to the requested
+      // project; a mismatched id must 404 cleanly with the audit row only
+      // written for provable pre-write state.
+      throw new NotFoundError(
+        'That task is not on this board. Pick it from its own project board.',
+      );
+    }
+
+    await this.writes.updateTaskStatus(projectId, taskId, target.id);
+    await this.cache.invalidate(this.cacheKey(projectId));
+
+    // Fresh card from Zoho, not from the optimistic guess. Falls back to the
+    // pre-write task with the new status if the detail read hiccups.
+    const freshTask = await this.reads
+      .task(projectId, taskId)
+      .catch(() => null);
+    const card = freshTask
+      ? toCard(freshTask)
+      : { ...toCard(beforeTask), status: target.name };
+
+    return {
+      card,
+      before: { status: beforeTask?.status?.name ?? null },
+      after: { status: target.name, status_id: target.id },
+    };
+  }
+
+  /** Reassigns a task's owner. Validates the zpuid against the known users so
+   *  an arbitrary id can never be written to Zoho, 404s if the task is not on
+   *  the project, then returns before/after for the audit row. */
+  async updateTaskOwner(
+    projectId: string,
+    taskId: string,
+    zpuid: string,
+  ): Promise<{
+    before: { owner_zpuid: string | null; owner: string | null };
+    after: { owner_zpuid: string; owner: string };
+  }> {
+    const user = await findByZpuid(zpuid);
+    if (!user) {
+      throw new BadRequestError('That owner is not a known assignable user.');
+    }
+    const before = await this.requireTask(projectId, taskId);
+
+    await this.writes.updateTaskOwner(projectId, taskId, zpuid);
+    await this.cache.invalidate(this.cacheKey(projectId));
+
+    return {
+      before: {
+        owner_zpuid: ownerZpuidOf(before),
+        owner: ownerOf(before) === 'Unassigned' ? null : ownerOf(before),
+      },
+      after: { owner_zpuid: zpuid, owner: user.name },
+    };
+  }
+
+  /** Sets a task's priority. Validates the value, 404s if the task is not on
+   *  the project, then returns before/after for the audit row. */
+  async updateTaskPriority(
+    projectId: string,
+    taskId: string,
+    priority: string,
+  ): Promise<{
+    before: { priority: string | null };
+    after: { priority: AllowedPriority };
+  }> {
+    const wanted = normalizePriority(priority);
+    if (!wanted) {
+      throw new BadRequestError(
+        `Priority "${priority}" is not one of ${ALLOWED_PRIORITIES.join(', ')}.`,
+      );
+    }
+    const before = await this.requireTask(projectId, taskId);
+
+    await this.writes.updateTaskPriority(projectId, taskId, wanted);
+    await this.cache.invalidate(this.cacheKey(projectId));
+
+    return {
+      before: { priority: normalizePriority(before.priority) },
+      after: { priority: wanted },
+    };
+  }
+
+  /** Adds a comment to a task. 404s if the task is not on the project. */
+  async addComment(
+    projectId: string,
+    taskId: string,
+    content: string,
+  ): Promise<void> {
+    await this.requireTask(projectId, taskId);
+    await this.writes.addComment(projectId, taskId, content);
+  }
+
+  /** Creates a board task with the optional owner/priority/due the "Add task"
+   *  form carries. The owner zpuid, when present, is validated against the
+   *  known users before the write. Invalidates the project board so the new
+   *  card shows on the next read. Returns the new Zoho task id. */
+  async createTask(input: {
+    projectId: string;
+    tasklistId?: string | null;
+    name: string;
+    description?: string;
+    ownerZpuid?: string | null;
+    priority?: string | null;
+    dueDate?: string | null;
+  }): Promise<{ taskId: string | null; ownerName: string | null }> {
+    let ownerName: string | null = null;
+    if (input.ownerZpuid) {
+      const user = await findByZpuid(input.ownerZpuid);
+      if (!user) {
+        throw new BadRequestError(
+          'That owner is not a known assignable user.',
+        );
+      }
+      ownerName = user.name;
+    }
+
+    const priority = input.priority
+      ? (normalizePriority(input.priority) ??
+        (() => {
+          throw new BadRequestError(
+            `Priority "${input.priority}" is not one of ${ALLOWED_PRIORITIES.join(', ')}.`,
+          );
+        })())
+      : null;
+
+    const result = await this.writes.createBoardTask({
+      projectId: input.projectId,
+      tasklistId: input.tasklistId ?? null,
+      name: input.name,
+      description: input.description,
+      ownerZpuid: input.ownerZpuid ?? null,
+      priority,
+      dueDate: input.dueDate ?? null,
+    });
+    await this.cache.invalidate(this.cacheKey(input.projectId));
+    return { taskId: result.taskId, ownerName };
+  }
 }
 
 // globalThis-pinned singleton: shares the one cache and the Zoho Projects read
@@ -500,7 +704,11 @@ type GlobalWithBoard = typeof globalThis & {
 export function getBoard(): BoardService {
   const g = globalThis as GlobalWithBoard;
   if (!g[BOARD_KEY]) {
-    g[BOARD_KEY] = new BoardService(getCache(), getZohoProjectsRead());
+    g[BOARD_KEY] = new BoardService(
+      getCache(),
+      getZohoProjectsRead(),
+      getZohoProjectsWrite(),
+    );
   }
   return g[BOARD_KEY];
 }

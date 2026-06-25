@@ -26,23 +26,72 @@
 //
 // SERVER ONLY (pulls the cached CRM reads).
 import { getCrmRead } from '../crm-read';
+import { initialsOf } from '../privacy';
 import type { RequestViewer } from '../auth/viewer';
 
 // Local response type (kept in this feature file on purpose: the search match
 // shape is single-consumer and we do not touch the shared contract module).
+//
+// PRIVACY (NHRA): the match carries a patient_ref (record id + initials + the
+// human Zoho reference) that everyone may see, and the patient_name as a
+// SEPARATE, optional top-level field set only for a name-seeing viewer. The
+// field is named patient_name on purpose so the handler's global PII sweep
+// (PATIENT_PII_KEYS) deep-deletes it as a backstop if the per-field gate is ever
+// bypassed, and so the client renders it through PatientRef (the only component
+// allowed to spell a patient name) via {...match, ...match.patient_ref}, exactly
+// like the queue and case file.
 export interface PatientSearchMatch {
   kind: 'lead' | 'deal';
-  zoho_id: string;
-  /** The patient name, present only for a viewer who sees patient names. */
-  name: string | null;
+  /** Record reference everyone may see: internal id, initials, and the human
+   *  Zoho reference (with a fallback marker when no Zoho_ID is on the record). */
+  patient_ref: {
+    zoho_id: string;
+    initials: string;
+    ref: string;
+    ref_is_fallback: boolean;
+  };
+  /** The patient name, present ONLY for a viewer who sees patient names. Swept
+   *  by the global backstop for anyone else. */
+  patient_name?: string;
   /** Deal Stage or Lead Status, whichever applies to the record. */
   stage_or_status: string | null;
   /** Deal pipeline; null on leads. */
   pipeline: string | null;
   /** Case-manager owner name (staff data, not patient PII). */
   owner: string | null;
-  /** Human-readable Zoho reference, falling back to the internal id. */
-  ref: string;
+}
+
+/** Build a match row from a record. Everyone gets the patient_ref (id, initials,
+ *  human ref); patient_name is attached only for a name-seeing viewer (the
+ *  per-field gate), and the handler's global sweep strips any that slips past.
+ *  Centralized so every match path (phone, name, id) gates the name identically. */
+function buildMatch(
+  kind: 'lead' | 'deal',
+  id: string,
+  zohoRef: string | null | undefined,
+  name: string | null,
+  stageOrStatus: string | null,
+  pipeline: string | null,
+  owner: string | null,
+  viewer: RequestViewer,
+): PatientSearchMatch {
+  const trimmed = (zohoRef ?? '').trim();
+  const match: PatientSearchMatch = {
+    kind,
+    patient_ref: {
+      zoho_id: id,
+      initials: initialsOf(name),
+      ref: trimmed || id,
+      ref_is_fallback: trimmed.length === 0,
+    },
+    stage_or_status: stageOrStatus,
+    pipeline,
+    owner,
+  };
+  if (viewer.sees_patient_names && name) {
+    match.patient_name = name;
+  }
+  return match;
 }
 
 const MIN_DIGITS = 7;
@@ -112,15 +161,16 @@ export async function searchByPhone(
     const name = d.Contact_Name?.name ?? d.Deal_Name ?? null;
     scored.push({
       rank,
-      match: {
-        kind: 'deal',
-        zoho_id: d.id,
-        name: viewer.sees_patient_names ? name : null,
-        stage_or_status: d.Stage ?? null,
-        pipeline: d.Pipeline ?? null,
-        owner: d.Owner?.name ?? null,
-        ref: (d.Zoho_ID ?? '').trim() || d.id,
-      },
+      match: buildMatch(
+        'deal',
+        d.id,
+        d.Zoho_ID,
+        name,
+        d.Stage ?? null,
+        d.Pipeline ?? null,
+        d.Owner?.name ?? null,
+        viewer,
+      ),
     });
   }
 
@@ -130,19 +180,182 @@ export async function searchByPhone(
     const fullName = [l.First_Name, l.Last_Name].filter(Boolean).join(' ');
     scored.push({
       rank,
-      match: {
-        kind: 'lead',
-        zoho_id: l.id,
-        name: viewer.sees_patient_names ? fullName || null : null,
-        stage_or_status: l.Lead_Status ?? null,
-        pipeline: null,
-        owner: l.Owner?.name ?? null,
-        ref: (l.Zoho_ID ?? '').trim() || l.id,
-      },
+      match: buildMatch(
+        'lead',
+        l.id,
+        l.Zoho_ID,
+        fullName || null,
+        l.Lead_Status ?? null,
+        null,
+        l.Owner?.name ?? null,
+        viewer,
+      ),
     });
   }
 
   // Preferred (trailing-9) matches first; stable within rank.
+  scored.sort((a, b) => b.rank - a.rank);
+  return scored.map((s) => s.match);
+}
+
+// ---------------------------------------------------------------------------
+// Smart search (name OR phone OR Zoho record id), auto-detected from the query.
+//
+// One box, three intents. The mode is inferred from the raw query, never asked
+// for: a query that carries any A-Z letter is a NAME search (case-insensitive
+// substring); a letter-free query is NUMERIC and matched as both a record id /
+// Zoho_ID (exact) and, when long enough, a phone suffix (the existing helper,
+// unchanged). Phone behaviour is byte-identical to searchByPhone: same
+// normalization, same rankPhone, same suffixes.
+//
+// Ranking: an id match is the strongest signal (100, an exact reference hit);
+// then phone-suffix ranks (2 preferred, 1 weaker); then name (2 prefix, 1
+// substring). A record can match more than one way (e.g. an id that also reads
+// as a phone suffix), so matches dedupe by `${kind}:${id}` keeping the MAX rank.
+//
+// PRIVACY (NHRA): identical gates to searchByPhone. The query and any patient
+// name are NEVER logged here; the name field is set only for a name-seeing
+// viewer (per-field gate), and the route's global sweep is the backstop.
+// ---------------------------------------------------------------------------
+
+const NAME_RANK_PREFIX = 2;
+const NAME_RANK_SUBSTRING = 1;
+const ID_RANK = 100;
+
+/** Name substring rank: 2 when the lowercased name starts with the lowercased
+ *  query, 1 when it merely contains it, 0 when it does not. */
+function rankName(name: string, queryLower: string): number {
+  const haystack = name.toLowerCase();
+  if (!haystack.includes(queryLower)) return 0;
+  return haystack.startsWith(queryLower) ? NAME_RANK_PREFIX : NAME_RANK_SUBSTRING;
+}
+
+/** True when a record's internal id or its Zoho_ID reference equals the query
+ *  exactly (trimmed). The internal id is compared raw; the Zoho_ID is trimmed
+ *  because the team's references can carry stray whitespace. */
+function matchesId(
+  recordId: string,
+  zohoId: string | null | undefined,
+  query: string,
+): boolean {
+  if (recordId === query) return true;
+  const ref = (zohoId ?? '').trim();
+  return ref.length > 0 && ref === query;
+}
+
+export async function search(
+  rawQuery: string,
+  viewer: RequestViewer,
+): Promise<PatientSearchMatch[]> {
+  const q = rawQuery.trim();
+  if (q.length < 2) return [];
+
+  const hasLetters = /[A-Za-z]/.test(q);
+
+  const crm = getCrmRead();
+  const [dealsRead, leadsRead] = await Promise.all([crm.deals(), crm.leads()]);
+
+  // Dedupe by record, keeping the strongest rank a record earned across the
+  // matching paths (id beats phone beats name).
+  const byKey = new Map<string, ScoredMatch>();
+  const consider = (key: string, rank: number, build: () => PatientSearchMatch) => {
+    if (rank <= 0) return;
+    const existing = byKey.get(key);
+    if (existing && existing.rank >= rank) return;
+    byKey.set(key, { rank, match: build() });
+  };
+
+  if (hasLetters) {
+    // NAME mode: case-insensitive substring over the record's display name.
+    const queryLower = q.toLowerCase();
+
+    for (const d of dealsRead.data) {
+      const name = d.Contact_Name?.name ?? d.Deal_Name ?? '';
+      const rank = name ? rankName(name, queryLower) : 0;
+      consider(`deal:${d.id}`, rank, () =>
+        buildMatch(
+          'deal',
+          d.id,
+          d.Zoho_ID,
+          d.Contact_Name?.name ?? d.Deal_Name ?? null,
+          d.Stage ?? null,
+          d.Pipeline ?? null,
+          d.Owner?.name ?? null,
+          viewer,
+        ),
+      );
+    }
+
+    for (const l of leadsRead.data) {
+      const fullName = [l.First_Name, l.Last_Name].filter(Boolean).join(' ');
+      const rank = fullName ? rankName(fullName, queryLower) : 0;
+      consider(`lead:${l.id}`, rank, () =>
+        buildMatch(
+          'lead',
+          l.id,
+          l.Zoho_ID,
+          fullName || null,
+          l.Lead_Status ?? null,
+          null,
+          l.Owner?.name ?? null,
+          viewer,
+        ),
+      );
+    }
+  } else {
+    // NUMERIC mode: exact id / Zoho_ID, plus a phone-suffix match reusing the
+    // existing rankPhone helper (byte-identical to searchByPhone). The phone
+    // path only runs once the query carries enough digits to be a phone.
+    const digits = q.replace(/\D/g, '');
+    const usePhone = digits.length >= MIN_DIGITS;
+    const query8 = suffix(digits, 8);
+    const query9 = suffix(digits, 9);
+
+    for (const d of dealsRead.data) {
+      const idMatch = matchesId(d.id, d.Zoho_ID, q);
+      const phoneRank = usePhone
+        ? rankPhone(normalizePhone(d.Patient_Mobile), query8, query9)
+        : 0;
+      const rank = idMatch ? ID_RANK : phoneRank;
+      consider(`deal:${d.id}`, rank, () =>
+        buildMatch(
+          'deal',
+          d.id,
+          d.Zoho_ID,
+          d.Contact_Name?.name ?? d.Deal_Name ?? null,
+          d.Stage ?? null,
+          d.Pipeline ?? null,
+          d.Owner?.name ?? null,
+          viewer,
+        ),
+      );
+    }
+
+    for (const l of leadsRead.data) {
+      const idMatch = matchesId(l.id, l.Zoho_ID, q);
+      const phoneRank = usePhone
+        ? rankPhone(normalizePhone(l.Phone), query8, query9)
+        : 0;
+      const rank = idMatch ? ID_RANK : phoneRank;
+      const fullName = [l.First_Name, l.Last_Name].filter(Boolean).join(' ');
+      consider(`lead:${l.id}`, rank, () =>
+        buildMatch(
+          'lead',
+          l.id,
+          l.Zoho_ID,
+          fullName || null,
+          l.Lead_Status ?? null,
+          null,
+          l.Owner?.name ?? null,
+          viewer,
+        ),
+      );
+    }
+  }
+
+  // Strongest signal first; stable within an equal rank (Map preserves insertion
+  // order, and a stable sort keeps that order for ties).
+  const scored = [...byKey.values()];
   scored.sort((a, b) => b.rank - a.rank);
   return scored.map((s) => s.match);
 }

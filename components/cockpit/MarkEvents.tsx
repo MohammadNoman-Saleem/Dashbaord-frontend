@@ -1,33 +1,27 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Stamp } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
-import { Modal, ModalRow, ModalText, ModalTitle } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import { ApiError, mutateEnvelope } from "@/lib/api/fetcher";
-import { qk } from "@/lib/api/keys";
-import type {
-  WriteGateChangeStamp,
-  WriteGateCommitData,
-  WriteGatePrepareData,
-} from "@/lib/api/contract";
+import {
+  useCockpitWrite,
+  writeErrorMessage,
+  type CockpitStampEvent,
+} from "./useCockpitWrite";
 
-/* Phase 1b mark-event stamps: record that first contact went out, a quotation
-   was sent, a partner quote was requested, or a partner asked for more time.
-   Each stamp is a single gated write that runs the same prepare -> confirm ->
-   commit flow as SetFollowUp, with a single confirm (no double confirm here).
-   When the server reports writes are off, the confirm step says so and the
-   apply button is disabled. */
+/* Mark-event stamps: record that first contact went out, a quotation was sent,
+   a partner quote was requested, or a partner asked for more time. ONE-STEP
+   write: clicking a button sends the stamp in a single POST to
+   /api/cockpit/case/[id]/write, which validates, writes to Zoho, and audits in
+   one call. No confirm prompt: a stamp is a low-impact change and writes
+   immediately on click. If writes are turned off server-side the route refuses
+   and the toast carries that message. */
 
 const WRITE_FAILURE_COPY =
   "Couldn't mark the event. Nothing changed. Try again, or tell Al Saeed if it repeats.";
 
-type StampEvent = WriteGateChangeStamp["event"];
-
-const EVENTS: Array<{ event: StampEvent; label: string }> = [
+const EVENTS: Array<{ event: CockpitStampEvent; label: string }> = [
   { event: "first_contact", label: "Mark first contact sent" },
   { event: "quotation_sent", label: "Mark quotation sent" },
   { event: "partner_quote_requested", label: "Mark partner quote requested" },
@@ -41,71 +35,11 @@ type Props = {
 
 export function MarkEvents({ resourceId }: Props) {
   const toast = useToast();
-  const queryClient = useQueryClient();
 
-  const [pendingEvent, setPendingEvent] = useState<StampEvent | null>(null);
-  const [prepared, setPrepared] = useState<WriteGatePrepareData | null>(null);
-
-  const prepare = useMutation({
-    mutationFn: async (event: StampEvent) => {
-      const res = await mutateEnvelope<WriteGatePrepareData>(
-        "write_gate_prepare",
-        "POST",
-        "/write-gate/prepare",
-        {
-          resourceType: "deal",
-          resourceId,
-          change: { kind: "stamp", event },
-        },
-      );
-      return res?.data ?? null;
-    },
-    onSuccess: (data) => {
-      if (data) setPrepared(data);
-    },
-    onError: (error) => {
-      toast(
-        error instanceof ApiError && error.messagePlain
-          ? error.messagePlain
-          : WRITE_FAILURE_COPY,
-        AlertCircle,
-      );
-    },
+  const save = useCockpitWrite(resourceId, {
+    onSuccess: () => toast("Event marked."),
+    onError: (error) => toast(writeErrorMessage(error, WRITE_FAILURE_COPY), AlertCircle),
   });
-
-  const commit = useMutation({
-    mutationFn: async () => {
-      if (!prepared) return null;
-      return mutateEnvelope<WriteGateCommitData>(
-        "write_gate_commit",
-        "POST",
-        "/write-gate/commit",
-        {
-          change_id: prepared.change_id,
-          confirmations: prepared.confirmations_required,
-        },
-      );
-    },
-    onSuccess: () => {
-      toast("Event marked.");
-      setPrepared(null);
-      setPendingEvent(null);
-      void queryClient.invalidateQueries({ queryKey: qk.cockpitCase(resourceId) });
-    },
-    onError: (error) => {
-      toast(
-        error instanceof ApiError && error.messagePlain
-          ? error.messagePlain
-          : WRITE_FAILURE_COPY,
-        AlertCircle,
-      );
-    },
-  });
-
-  function start(event: StampEvent) {
-    setPendingEvent(event);
-    prepare.mutate(event);
-  }
 
   return (
     <div className="mt-3 rounded-[12px] border border-line px-[15px] py-[13px]">
@@ -119,55 +53,17 @@ export function MarkEvents({ resourceId }: Props) {
             key={item.event}
             variant="ghost"
             size="sm"
-            disabled={prepare.isPending && pendingEvent === item.event}
-            onClick={() => start(item.event)}
+            disabled={save.isPending}
+            onClick={() => save.mutate({ kind: "stamp", event: item.event })}
           >
             {item.label}
           </Button>
         ))}
       </div>
       <p className="mt-2 text-[11px] text-ink-3">
-        Marking an event writes to Zoho through the confirm step. Every other
-        action here is still read-only.
+        Marking an event writes to Zoho on click. Every other action here is
+        still read-only.
       </p>
-
-      <Modal
-        open={prepared != null}
-        onClose={() => setPrepared(null)}
-        aria-label="Confirm the event"
-      >
-        <ModalTitle>Confirm this change</ModalTitle>
-        <ModalText>
-          This is exactly what will change in Zoho. Nothing is written until you
-          confirm.
-        </ModalText>
-        <ul className="mb-[15px] list-disc pl-5 text-[13px] text-title">
-          {prepared?.change_list.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-        {prepared && !prepared.writes_enabled ? (
-          <p className="mb-[15px] rounded-[10px] border border-line-soft bg-surface-2 px-3 py-2.5 text-[12.5px] text-ink-2">
-            Writes are turned off right now, so this cannot be applied yet. It
-            will go live once the gate is switched on after sign-off.
-          </p>
-        ) : null}
-        <ModalRow>
-          <Button variant="ghost" size="sm" onClick={() => setPrepared(null)}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={
-              commit.isPending || (prepared != null && !prepared.writes_enabled)
-            }
-            onClick={() => commit.mutate()}
-          >
-            Confirm and save
-          </Button>
-        </ModalRow>
-      </Modal>
     </div>
   );
 }

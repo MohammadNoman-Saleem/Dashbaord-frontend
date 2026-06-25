@@ -29,6 +29,25 @@ const PAGE_SIZE = 8;
 
 type CrmRow = CrmSliceData["rows"][number];
 
+/* Stable, unique React key for a CRM slice row.
+
+   The row payload is server-driven and privacy-shaped: lead and treatment
+   rows reference the person by initials only (e.g. "Lead . K.A."), so the
+   first column is NOT unique and two people with the same initials collide.
+   That collision was the source of the duplicate-key warning.
+
+   If the server ever emits a unique Zoho record id on the row we use it;
+   today the slice payload carries no identifier by design, so we fall back
+   to the page plus the in-page index, which is unique within a render. The
+   page is part of the key so paging does not reuse a key for a new row. */
+function crmRowKey(resource: ResourceKey, page: number, row: CrmRow, index: number): string {
+  for (const idField of ["zoho_id", "id", "record_id"] as const) {
+    const id = row[idField];
+    if (id != null && id !== "") return `${resource}-${String(id)}`;
+  }
+  return `${resource}-p${page}-i${index}`;
+}
+
 function toColumns(data: CrmSliceData): DataTableColumn<CrmRow>[] {
   return data.columns.map((col) => ({
     key: col.key,
@@ -103,7 +122,7 @@ export function CrmSlice() {
               <DataTable
                 columns={toColumns(d)}
                 rows={d.rows}
-                rowKey={(row, i) => `${resource}-${String(row[d.columns[0]?.key ?? "record"] ?? i)}`}
+                rowKey={(row, i) => crmRowKey(resource, page, row, i)}
               />
             </div>
           )}

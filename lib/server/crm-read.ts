@@ -289,6 +289,16 @@ export class CrmReadService {
     });
   }
 
+  /** Bust the cached deals and leads reads. Called after a cockpit write to
+   *  Zoho so the next read serves live Zoho data, not the pre-write cache that
+   *  would otherwise be served until the TTL expires. */
+  async invalidate(): Promise<void> {
+    await Promise.all([
+      this.cache.invalidate('zoho_crm:deals_v9'),
+      this.cache.invalidate('zoho_crm:leads_v5'),
+    ]);
+  }
+
   bookings(): Promise<CachedRead<BookingRecord[]>> {
     return this.cache.read('zoho_crm:bookings_v2', 'zoho_crm', async () => {
       const records = await this.zoho.getAll(`${CRM}/Appointment_Bookings`, {

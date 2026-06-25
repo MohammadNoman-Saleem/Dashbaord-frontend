@@ -1,32 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, PenLine } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Field, FieldInput } from "@/components/ui/Field";
-import { Modal, ModalRow, ModalText, ModalTitle } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import { ApiError, mutateEnvelope } from "@/lib/api/fetcher";
-import { qk } from "@/lib/api/keys";
-import type {
-  WriteGateChangeEditField,
-  WriteGateCommitData,
-  WriteGatePrepareData,
-} from "@/lib/api/contract";
+import {
+  useCockpitWrite,
+  writeErrorMessage,
+  type CockpitEditField,
+} from "./useCockpitWrite";
 
-/* Phase 4 progressive case-field edits: change the patient budget (BHD) or the
-   treatment start and end dates on a deal. Each field is its own gated write
-   running the same prepare -> confirm -> commit flow as SetFollowUp, with a
-   single confirm. A single confirm modal is shared across the three fields,
-   driven by which field is pending. When the server reports writes are off,
-   the confirm step says so and the apply button is disabled. */
+/* Progressive case-field edits: change the patient budget (BHD) or the
+   treatment start and end dates on a deal. ONE-STEP write: clicking Save on a
+   field sends that field's change in a single POST to
+   /api/cockpit/case/[id]/write, which validates, writes to Zoho, and audits in
+   one call. No confirm prompt: these are low-impact field edits and write
+   immediately on click. The in-flight field's button disables while its request
+   runs. If writes are turned off server-side the route refuses and the toast
+   carries that message. */
 
 const WRITE_FAILURE_COPY =
   "Couldn't save the change. Nothing changed. Try again, or tell Al Saeed if it repeats.";
-
-type EditField = WriteGateChangeEditField["field"];
 
 type Props = {
   /** The deal's internal Zoho record id (lead_ref.zoho_id on the case). */
@@ -46,7 +42,6 @@ export function EditCaseDetails({
   currentTreatmentEnd,
 }: Props) {
   const toast = useToast();
-  const queryClient = useQueryClient();
 
   const [budget, setBudget] = useState(
     currentBudget != null ? String(currentBudget) : "",
@@ -57,68 +52,21 @@ export function EditCaseDetails({
   const [treatmentEnd, setTreatmentEnd] = useState(
     currentTreatmentEnd?.slice(0, 10) ?? "",
   );
-  const [prepared, setPrepared] = useState<WriteGatePrepareData | null>(null);
 
-  const valueFor: Record<EditField, string> = {
+  const valueFor: Record<CockpitEditField, string> = {
     patient_budget: budget,
     treatment_start: treatmentStart,
     treatment_end: treatmentEnd,
   };
 
-  const prepare = useMutation({
-    mutationFn: async (field: EditField) => {
-      const res = await mutateEnvelope<WriteGatePrepareData>(
-        "write_gate_prepare",
-        "POST",
-        "/write-gate/prepare",
-        {
-          resourceType: "deal",
-          resourceId,
-          change: { kind: "edit_field", field, value: valueFor[field] },
-        },
-      );
-      return res?.data ?? null;
-    },
-    onSuccess: (data) => {
-      if (data) setPrepared(data);
-    },
-    onError: (error) => {
-      toast(
-        error instanceof ApiError && error.messagePlain
-          ? error.messagePlain
-          : WRITE_FAILURE_COPY,
-        AlertCircle,
-      );
-    },
+  const save = useCockpitWrite(resourceId, {
+    onSuccess: () => toast("Case detail saved."),
+    onError: (error) => toast(writeErrorMessage(error, WRITE_FAILURE_COPY), AlertCircle),
   });
 
-  const commit = useMutation({
-    mutationFn: async () => {
-      if (!prepared) return null;
-      return mutateEnvelope<WriteGateCommitData>(
-        "write_gate_commit",
-        "POST",
-        "/write-gate/commit",
-        {
-          change_id: prepared.change_id,
-          confirmations: prepared.confirmations_required,
-        },
-      );
-    },
-    onSuccess: () => {
-      toast("Case detail saved.");
-      setPrepared(null);
-      void queryClient.invalidateQueries({ queryKey: qk.cockpitCase(resourceId) });
-    },
-    onError: (error) => {
-      toast(
-        error instanceof ApiError && error.messagePlain
-          ? error.messagePlain
-          : WRITE_FAILURE_COPY,
-        AlertCircle,
-      );
-    },
-  });
+  function saveField(field: CockpitEditField) {
+    save.mutate({ kind: "edit_field", field, value: valueFor[field] });
+  }
 
   return (
     <div className="mt-3 rounded-[12px] border border-line px-[15px] py-[13px]">
@@ -140,10 +88,10 @@ export function EditCaseDetails({
         <Button
           variant="primary"
           size="sm"
-          disabled={!budget || prepare.isPending}
-          onClick={() => prepare.mutate("patient_budget")}
+          disabled={!budget || save.isPending}
+          onClick={() => saveField("patient_budget")}
         >
-          Review change
+          Save budget
         </Button>
       </div>
       <div className="mt-2 flex flex-wrap items-end gap-2">
@@ -158,10 +106,10 @@ export function EditCaseDetails({
         <Button
           variant="primary"
           size="sm"
-          disabled={!treatmentStart || prepare.isPending}
-          onClick={() => prepare.mutate("treatment_start")}
+          disabled={!treatmentStart || save.isPending}
+          onClick={() => saveField("treatment_start")}
         >
-          Review change
+          Save start date
         </Button>
       </div>
       <div className="mt-2 flex flex-wrap items-end gap-2">
@@ -176,54 +124,16 @@ export function EditCaseDetails({
         <Button
           variant="primary"
           size="sm"
-          disabled={!treatmentEnd || prepare.isPending}
-          onClick={() => prepare.mutate("treatment_end")}
+          disabled={!treatmentEnd || save.isPending}
+          onClick={() => saveField("treatment_end")}
         >
-          Review change
+          Save end date
         </Button>
       </div>
       <p className="mt-2 text-[11px] text-ink-3">
-        Editing a case detail writes to Zoho through the confirm step. Every
-        other action here is still read-only.
+        Editing a case detail writes to Zoho on click. Every other action here is
+        still read-only.
       </p>
-
-      <Modal
-        open={prepared != null}
-        onClose={() => setPrepared(null)}
-        aria-label="Confirm the case detail change"
-      >
-        <ModalTitle>Confirm this change</ModalTitle>
-        <ModalText>
-          This is exactly what will change in Zoho. Nothing is written until you
-          confirm.
-        </ModalText>
-        <ul className="mb-[15px] list-disc pl-5 text-[13px] text-title">
-          {prepared?.change_list.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-        {prepared && !prepared.writes_enabled ? (
-          <p className="mb-[15px] rounded-[10px] border border-line-soft bg-surface-2 px-3 py-2.5 text-[12.5px] text-ink-2">
-            Writes are turned off right now, so this cannot be applied yet. It
-            will go live once the gate is switched on after sign-off.
-          </p>
-        ) : null}
-        <ModalRow>
-          <Button variant="ghost" size="sm" onClick={() => setPrepared(null)}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={
-              commit.isPending || (prepared != null && !prepared.writes_enabled)
-            }
-            onClick={() => commit.mutate()}
-          >
-            Confirm and save
-          </Button>
-        </ModalRow>
-      </Modal>
     </div>
   );
 }

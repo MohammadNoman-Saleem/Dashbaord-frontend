@@ -1,31 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, GitBranch } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Field, FieldSelect } from "@/components/ui/Field";
-import { Modal, ModalRow, ModalText, ModalTitle } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import { ApiError, fetchEnvelope, mutateEnvelope } from "@/lib/api/fetcher";
-import { qk } from "@/lib/api/keys";
-import type {
-  WriteGateCommitData,
-  WriteGatePrepareData,
-  WriteGateStageOptionsData,
-} from "@/lib/api/contract";
+import { fetchEnvelope } from "@/lib/api/fetcher";
+import { ConfirmDialog } from "./ConfirmDialog";
+import {
+  useCockpitWrite,
+  writeErrorMessage,
+  type CockpitStageOptions,
+} from "./useCockpitWrite";
 
-/* The second cockpit write wired through the gate (Phase 1b): move a deal to a
-   different stage. The flow mirrors SetFollowUp: prepare -> confirm -> commit.
-   On open the control reads the allowed target stages and the loss reasons from
-   /write-gate/stage-options, so the dropdowns only ever offer CRM config the
-   server stands behind.
+/* Move a deal to a different stage. ONE-STEP write: on open the control reads
+   the allowed target stages and the loss reasons from /write-gate/stage-options
+   (so the dropdowns only ever offer CRM config the server stands behind), then
+   a single POST to /api/cockpit/case/[id]/write validates and writes to Zoho in
+   one call.
 
-   A move to Lost / Inactive needs a loss reason and is a high-impact change:
-   prepare returns confirmations_required 2, so the confirm step adds a tick box
-   before the apply button enables (the double confirm). When the server reports
-   writes are off, the confirm step says so and the apply button is disabled. */
+   CONFIRMATION: a normal move writes immediately on click. A move to Lost /
+   Inactive is high-impact, so an in-app ConfirmDialog (matching the dashboard,
+   not the browser alert) runs first; everything else has no prompt. Clicking
+   Mark lost opens the dialog; approving it fires the write. The Apply button
+   and the dialog's Confirm button disable while the request is in flight. If
+   writes are turned off server-side the route refuses and the toast carries
+   that message. */
 
 const WRITE_FAILURE_COPY =
   "Couldn't move the stage. Nothing changed. Try again, or tell Al Saeed if it repeats.";
@@ -43,17 +45,15 @@ type Props = {
 
 export function StageMove({ resourceId, pipeline, currentStage }: Props) {
   const toast = useToast();
-  const queryClient = useQueryClient();
 
   const [toStage, setToStage] = useState("");
   const [reason, setReason] = useState("");
-  const [prepared, setPrepared] = useState<WriteGatePrepareData | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const options = useQuery({
     queryKey: ["write-gate", "stage-options", pipeline, currentStage ?? ""],
     queryFn: () =>
-      fetchEnvelope<WriteGateStageOptionsData>(
+      fetchEnvelope<CockpitStageOptions>(
         "write_gate_stage_options",
         "/write-gate/stage-options",
         { pipeline, stage: currentStage ?? undefined },
@@ -65,69 +65,35 @@ export function StageMove({ resourceId, pipeline, currentStage }: Props) {
   const isLossMove = toStage === LOST_STAGE;
   const reasonMissing = isLossMove && !reason;
 
-  const prepare = useMutation({
-    mutationFn: async () => {
-      const res = await mutateEnvelope<WriteGatePrepareData>(
-        "write_gate_prepare",
-        "POST",
-        "/write-gate/prepare",
-        {
-          resourceType: "deal",
-          resourceId,
-          change: {
-            kind: "move_stage",
-            to_stage: toStage,
-            reason_for_loss: isLossMove ? reason : null,
-          },
-        },
-      );
-      return res?.data ?? null;
-    },
-    onSuccess: (data) => {
-      if (data) {
-        setConfirmed(false);
-        setPrepared(data);
-      }
-    },
-    onError: (error) => {
-      toast(
-        error instanceof ApiError && error.messagePlain
-          ? error.messagePlain
-          : WRITE_FAILURE_COPY,
-        AlertCircle,
-      );
-    },
+  const save = useCockpitWrite(resourceId, {
+    onSuccess: () => toast("Stage moved."),
+    onError: (error) => toast(writeErrorMessage(error, WRITE_FAILURE_COPY), AlertCircle),
   });
 
-  const commit = useMutation({
-    mutationFn: async () => {
-      if (!prepared) return null;
-      return mutateEnvelope<WriteGateCommitData>(
-        "write_gate_commit",
-        "POST",
-        "/write-gate/commit",
-        {
-          change_id: prepared.change_id,
-          confirmations: prepared.confirmations_required,
-        },
-      );
-    },
-    onSuccess: () => {
-      toast("Stage moved.");
-      setPrepared(null);
-      void queryClient.invalidateQueries({ queryKey: qk.cockpitCase(resourceId) });
-    },
-    onError: (error) => {
-      toast(
-        error instanceof ApiError && error.messagePlain
-          ? error.messagePlain
-          : WRITE_FAILURE_COPY,
-        AlertCircle,
-      );
-    },
-  });
+  function commitMove() {
+    save.mutate({
+      kind: "move_stage",
+      to_stage: toStage,
+      reason_for_loss: isLossMove ? reason : null,
+    });
+  }
 
-  const needsSecondConfirm = prepared != null && prepared.confirmations_required >= 2;
+  function apply() {
+    // CONFIRMATION: only a move to Lost / Inactive opens the in-app confirm
+    // dialog (it marks the case lost). Every other move writes on click.
+    if (isLossMove) {
+      setConfirmOpen(true);
+      return;
+    }
+    commitMove();
+  }
+
+  function confirmLoss() {
+    save.mutate(
+      { kind: "move_stage", to_stage: toStage, reason_for_loss: reason },
+      { onSettled: () => setConfirmOpen(false) },
+    );
+  }
 
   return (
     <div className="mt-3 rounded-[12px] border border-line px-[15px] py-[13px]">
@@ -173,70 +139,26 @@ export function StageMove({ resourceId, pipeline, currentStage }: Props) {
         <Button
           variant="primary"
           size="sm"
-          disabled={!toStage || reasonMissing || prepare.isPending}
-          onClick={() => prepare.mutate()}
+          disabled={!toStage || reasonMissing || save.isPending}
+          onClick={apply}
         >
-          Review change
+          {isLossMove ? "Mark lost" : "Move stage"}
         </Button>
       </div>
       <p className="mt-2 text-[11px] text-ink-3">
-        Moving the stage writes to Zoho through the confirm step. Every other
-        action here is still read-only.
+        Moving the stage writes to Zoho on click; a move to {LOST_STAGE} asks for
+        a quick confirm first. Every other action here is still read-only.
       </p>
 
-      <Modal
-        open={prepared != null}
-        onClose={() => setPrepared(null)}
-        aria-label="Confirm the stage move"
-      >
-        <ModalTitle>Confirm this change</ModalTitle>
-        <ModalText>
-          This is exactly what will change in Zoho. Nothing is written until you
-          confirm.
-        </ModalText>
-        <ul className="mb-[15px] list-disc pl-5 text-[13px] text-title">
-          {prepared?.change_list.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-        {prepared && !prepared.writes_enabled ? (
-          <p className="mb-[15px] rounded-[10px] border border-line-soft bg-surface-2 px-3 py-2.5 text-[12.5px] text-ink-2">
-            Writes are turned off right now, so this cannot be applied yet. It
-            will go live once the gate is switched on after sign-off.
-          </p>
-        ) : null}
-        {needsSecondConfirm ? (
-          <label className="mb-[15px] flex items-start gap-2 text-[12.5px] text-ink-2">
-            <input
-              type="checkbox"
-              className="mt-[2px]"
-              checked={confirmed}
-              onChange={(event) => setConfirmed(event.target.checked)}
-            />
-            <span>
-              I understand this marks the case as lost. This is the second
-              confirm for a high-impact change.
-            </span>
-          </label>
-        ) : null}
-        <ModalRow>
-          <Button variant="ghost" size="sm" onClick={() => setPrepared(null)}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={
-              commit.isPending ||
-              (prepared != null && !prepared.writes_enabled) ||
-              (needsSecondConfirm && !confirmed)
-            }
-            onClick={() => commit.mutate()}
-          >
-            Confirm and save
-          </Button>
-        </ModalRow>
-      </Modal>
+      <ConfirmDialog
+        open={confirmOpen}
+        title={`Mark this deal ${LOST_STAGE}`}
+        message={`This writes to Zoho now and cannot be undone. The deal is marked ${LOST_STAGE} with the reason ${reason || "you picked"}, and drops out of the open pipeline until someone revives it.`}
+        confirmLabel="Mark lost"
+        busy={save.isPending}
+        onConfirm={confirmLoss}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }
