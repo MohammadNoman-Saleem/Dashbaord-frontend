@@ -140,6 +140,12 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
     data: null,
     meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
   }),
+  // Smart patient search POST seam: mutateEnvelope resolves null in fixture mode
+  // and never calls getFixture, so this stub only satisfies the record type.
+  cockpit_search: () => ({
+    data: { matches: [] },
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
   // Phase 1b stage-move policy read (GET). Target stages plus loss reasons,
   // both CRM config; the live API replaces this once it is up.
   write_gate_stage_options: () => ({

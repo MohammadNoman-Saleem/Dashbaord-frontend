@@ -58,6 +58,7 @@ export type EndpointKey =
   | 'cockpit_parked'
   | 'cockpit_sla_policy'
   | 'cockpit_case_write'
+  | 'cockpit_search'
   | 'write_gate_stage_options'
   | 'whatsapp_first_contact_template'
   | 'documents_quotation'
@@ -142,6 +143,13 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   // refuses unless WRITE_GATE_ENABLED is on server-side, so merging this does
   // not enable any write.
   cockpit_case_write: 'live',
+  // Smart patient search (POST). One box matching patient name, phone, or Zoho
+  // record id over the cached CRM reads. POST-only seam (the term rides in the
+  // body, never the URL, so names/phones stay out of access logs and history);
+  // mutateEnvelope resolves null in fixture mode and never reads a fixture. Live
+  // so the cockpit reaches the real route; the route still refuses anyone who is
+  // not a name-seer server-side, so merging this exposes nothing new.
+  cockpit_search: 'live',
   // Phase 1b stage-move policy read: which target stages the current stage may
   // move to, plus the loss reasons. A GET, live with the backend on this
   // branch; the fixture serves dev smoke until the API is up.
