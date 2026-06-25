@@ -140,7 +140,15 @@ function NextAction({ data, seesNames }: { data: CockpitCaseData; seesNames: boo
   );
 }
 
-function CaseBody({ data }: { data: CockpitCaseData }) {
+function CaseBody({
+  data,
+  onOpenCase,
+}: {
+  data: CockpitCaseData;
+  // Open another case by Zoho id (the page's selection setter). Passed to
+  // LeadActions so a successful convert opens the new deal.
+  onOpenCase?: (zohoId: string) => void;
+}) {
   // The document controls (build quotation, draft referral) are for deals only
   // and only for staff who may see patient identities; the backend gates the
   // same way. Reuse the viewer's server-resolved capability rather than
@@ -188,6 +196,7 @@ function CaseBody({ data }: { data: CockpitCaseData }) {
         <LeadActions
           resourceId={data.lead_ref.zoho_id}
           currentStatus={data.lead_status ?? null}
+          onConvertSuccess={onOpenCase}
         />
       ) : null}
 
@@ -467,7 +476,15 @@ function CaseFileSkeleton() {
   );
 }
 
-export function CockpitCaseFile({ leadId }: { leadId: string | null }) {
+export function CockpitCaseFile({
+  leadId,
+  onOpenCase,
+}: {
+  leadId: string | null;
+  // Open another case by Zoho id (the page's selection setter). Threaded to
+  // LeadActions so a successful lead convert opens the new deal.
+  onOpenCase?: (zohoId: string) => void;
+}) {
   const searchParams = useSearchParams();
   const viewAs = searchParams.get("as") ?? undefined;
 
@@ -508,7 +525,7 @@ export function CockpitCaseFile({ leadId }: { leadId: string | null }) {
         right={currentLabel ? <Chip variant="info">{currentLabel}</Chip> : undefined}
       />
       <QueryPanel query={query} skeleton={<CaseFileSkeleton />}>
-        {(d) => <CaseBody data={d} />}
+        {(d) => <CaseBody data={d} onOpenCase={onOpenCase} />}
       </QueryPanel>
       <CardFooter
         note="Read-only for now. Every change here will write to Zoho once the cockpit is promoted to the system of record."

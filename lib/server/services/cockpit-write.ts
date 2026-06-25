@@ -81,6 +81,7 @@ export interface ApplyChangeResult {
   committed: boolean;
   change_list: string[];
   resource_id: string;
+  new_deal_id?: string | null;
 }
 
 interface DealSnapshot {
@@ -551,7 +552,15 @@ async function convertLead(
   // serves the new value instead of the pre-write copy until the TTL.
   await getCrmRead().invalidate();
 
-  return { committed: true, change_list: [changeText], resource_id: resourceId };
+  // resource_id stays the original lead id (what the control posted). The new
+  // deal id rides alongside so the control can open the freshly created deal;
+  // it is already recorded in the audit context above, not re-logged here.
+  return {
+    committed: true,
+    change_list: [changeText],
+    resource_id: resourceId,
+    new_deal_id: convert.dealId,
+  };
 }
 
 // ---------------------------------------------------------------------------

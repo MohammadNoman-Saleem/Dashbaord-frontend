@@ -58,9 +58,13 @@ type Props = {
   resourceId: string;
   /** The current Lead_Status, to prefill the update-status control, or null. */
   currentStatus: string | null;
+  /** Called after a successful convert with the new deal's Zoho id, so the
+   *  parent can open the freshly created deal. Convert only; the other lead
+   *  actions never call it. */
+  onConvertSuccess?: (newDealId: string) => void;
 };
 
-export function LeadActions({ resourceId, currentStatus }: Props) {
+export function LeadActions({ resourceId, currentStatus, onConvertSuccess }: Props) {
   const toast = useToast();
 
   const [pipeline, setPipeline] = useState<CockpitPipeline | "">("");
@@ -86,7 +90,18 @@ export function LeadActions({ resourceId, currentStatus }: Props) {
   const stageTargets = options.data?.data?.targets ?? [];
 
   const save = useCockpitWrite(resourceId, {
-    onSuccess: () => toast("Lead change saved."),
+    onSuccess: (result) => {
+      // A convert returns the new deal id: show the convert copy and hand the
+      // id to the parent so it can open the new deal. set_lead_status and
+      // park_lead carry no new_deal_id, so they keep the generic copy and never
+      // navigate.
+      if (result?.new_deal_id) {
+        toast("Lead converted. Opening the new deal.");
+        onConvertSuccess?.(result.new_deal_id);
+        return;
+      }
+      toast("Lead change saved.");
+    },
     onError: (error) => toast(writeErrorMessage(error, WRITE_FAILURE_COPY), AlertCircle),
   });
 

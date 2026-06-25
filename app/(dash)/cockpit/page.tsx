@@ -89,7 +89,7 @@ function CockpitInner() {
       </div>
 
       <div className={spans.c7} data-focus-id="cockpit-case">
-        <CockpitCaseFile leadId={activeId} />
+        <CockpitCaseFile leadId={activeId} onOpenCase={setSelectedId} />
       </div>
 
       <div className={spans.c7} data-focus-id="cockpit-parked">

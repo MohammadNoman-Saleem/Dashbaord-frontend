@@ -77,6 +77,7 @@ export interface CockpitWriteResult {
   committed: boolean;
   change_list: string[];
   resource_id: string;
+  new_deal_id?: string | null;
 }
 
 // The CRM target stages list the move/convert/revive controls read from
