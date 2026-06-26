@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { AlertCircle, Check, Clock, Cpu, FileText, MessageCircle, PenLine, StickyNote } from "lucide-react";
+import { AlertCircle, Check, Clock, Cpu, FileText, PenLine, StickyNote } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
@@ -99,23 +99,11 @@ function partnerVariant(state: CockpitPartner["state"]): "good" | "info" {
   return state === "good" ? "good" : "info";
 }
 
-// The WhatsApp link is a plain click-to-chat: it opens WhatsApp to the
-// patient's chat with the step-aware message pre-filled, and the case manager
-// reviews and sends. There is no backend call. The number is stripped to digits
-// so the wa.me path carries no plus or spaces, as wa.me expects.
-function waLink(phone: string, message: string): string {
-  const digits = phone.replace(/\D/g, "");
-  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
-}
-
-function NextAction({ data, seesNames }: { data: CockpitCaseData; seesNames: boolean }) {
+function NextAction({ data }: { data: CockpitCaseData }) {
   const { next_action } = data;
-  // The phone and the drafted message are patient PII. A viewer who may not see
-  // patient names must never render them even if the payload carries them, so
-  // treat both as absent unless the viewer sees names.
-  const phone = seesNames ? data.patient_phone ?? null : null;
-  const message = seesNames ? data.whatsapp_message ?? null : null;
-  const canMessage = phone != null && phone !== "" && message != null && message !== "";
+  // SLA header only: the next step, its due label, and the governing rule. The
+  // WhatsApp send lives entirely in the WhatsAppMessage template control below,
+  // so the old drafted-message preview and its send button were removed here.
   return (
     <div className="mb-4 rounded-[12px] border border-line border-l-[3px] border-l-optimism px-[15px] py-[13px]">
       <GrpLabel className="mb-1.5">
@@ -127,22 +115,6 @@ function NextAction({ data, seesNames }: { data: CockpitCaseData; seesNames: boo
         ) : null}
       </GrpLabel>
       <b className="block text-[14px] text-title">{next_action.label}</b>
-      <div className="my-[9px] rounded-[10px] border border-line-soft bg-surface-2 px-3 py-2.5 text-[12.5px] text-ink-2">
-        {message ?? next_action.draft_message ?? "The drafted message will appear here once the composer is wired."}
-      </div>
-      {canMessage ? (
-        <a
-          href={waLink(phone, message)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex cursor-pointer items-center gap-[7px] rounded-[9px] border border-transparent bg-accent px-[11px] py-[5.5px] text-xs font-semibold text-on-accent hover:brightness-[1.06] [&_svg]:h-[15px] [&_svg]:w-[15px]"
-        >
-          <MessageCircle strokeWidth={1.8} aria-hidden="true" />
-          Message on WhatsApp
-        </a>
-      ) : (
-        <p className="text-[11px] text-ink-3">No number on file, so there is nothing to message yet.</p>
-      )}
     </div>
   );
 }
@@ -159,8 +131,8 @@ function CaseBody({
   // The document controls (build quotation, draft referral) are for deals only
   // and only for staff who may see patient identities; the backend gates the
   // same way. Reuse the viewer's server-resolved capability rather than
-  // inferring it per case. The same capability gates the patient phone and the
-  // drafted WhatsApp message in the next-action block.
+  // inferring it per case. The same capability gates the WhatsApp template
+  // control (which needs the patient number) below.
   const { me } = useViewer();
   const seesNames = me ? Boolean(me.capabilities.sees_patient_names) : false;
   // Temporarily disabled per request: BuildQuotation + DraftReferral (document
@@ -171,7 +143,7 @@ function CaseBody({
   return (
     <div className="px-[18px] pb-3 pt-2">
       <Stepper steps={data.steps} />
-      <NextAction data={data} seesNames={seesNames} />
+      <NextAction data={data} />
 
       {data.record_type === "deal" ? (
         <>
