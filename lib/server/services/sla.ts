@@ -7,21 +7,18 @@
 // @nestjs/* imports (it was already pure), so the only change in re-homing is
 // the file location; every type, constant and function is unchanged.
 //
-// Honesty rule (cockpit-sla-spec.md): every clock is driven by the best
-// available Zoho timestamp. The precise event field wins when populated; when
-// it is empty the listed proxy is used and the clock is marked approx with a
-// short authored reason. When there is no backing field at all (the provider
-// clocks, and the reports-requested signal) the clock is null with the reason
-// "Not tracked in Zoho yet". A fabricated due time is never shown as exact.
-//
-// Field discovery (live, Jun 14 2026): on Leads only Intro_Call_Date_Time,
-// Reason_Not_Qualified, Last_Activity_Time and Created_Time exist of the SLA
-// set, and Intro_Call_Date_Time is ~0% populated, so the first_contact stop
-// always falls to the proxy. On Deals the event fields exist
-// (Stage_Entry_Date, Last_Patient_Comm_Date, Welcome_Message_Sent_Date) but
-// live population of the precise comm fields is sparse, so most deal clocks
-// resolve to their proxy and mark approx. This is the spec's honesty rule in
-// action, not a gap in the engine.
+// SLA model (status-based, 2026-06-25): every active clock is driven by ONE
+// anchor, the time the record entered its CURRENT status/stage, so a case
+// manager never marks an event by hand. For a deal that anchor is Zoho's
+// Stage_Entry_Date; for a lead it is Last_Status_Change, stamped by a Zoho
+// workflow on every Lead_Status change (and at creation). The per-step
+// thresholds below are counted from that anchor. The only fallback is the
+// record's created time, used when the status-change time is missing (older
+// leads from before the field existed) and marked approx with a short reason.
+// The earlier model read manual event stamps (welcome-message-sent,
+// quotation-sent, last-patient-comm) that were rarely populated, so it leaned
+// on proxies and marked nearly everything approx; those stamps are no longer
+// read.
 //
 // SERVER ONLY by convention (it is consumed only by the cockpit service and its
 // Node-runtime routes), though it imports nothing Node-specific.
@@ -66,6 +63,7 @@ export type SlaKey =
   | 'post_quote_followup'
   | 'final_response'
   | 'not_qualified'
+  | 'in_treatment'
   | 'provider_quote_followup'
   | 'provider_more_time_followup';
 
@@ -128,8 +126,8 @@ export const SLA_POLICY: SlaPolicy = {
       rule: 'First contact',
       threshold_label: '24 hours',
       counting: 'business',
-      anchor: 'Intro call date and time, when set',
-      proxy: 'Lead created time, for a lead not yet contacted',
+      anchor: 'Time the lead status last changed (a new lead: its creation time)',
+      proxy: 'Lead created time, when no status-change time is recorded yet',
       applies_in: 'First contact',
     },
     {
@@ -138,8 +136,8 @@ export const SLA_POLICY: SlaPolicy = {
       rule: 'Follow up after the intro message',
       threshold_label: '48 hours',
       counting: 'elapsed',
-      anchor: 'Welcome message sent date, when set',
-      proxy: 'Last activity time',
+      anchor: 'Time the lead entered the info-collected status',
+      proxy: 'Created time, when no status-change time is recorded yet',
       applies_in: 'Info collected',
     },
     {
@@ -148,10 +146,10 @@ export const SLA_POLICY: SlaPolicy = {
       rule: 'Waiting for medical reports',
       threshold_label: '7 to 10 days',
       counting: 'elapsed',
-      anchor: 'Stage entry date, when set',
-      proxy: 'Last activity time',
+      anchor: 'Time the record entered its current stage or status',
+      proxy: 'Created time, when no status-change time is recorded yet',
       applies_in:
-        'Info collected and Partner quotes. Nothing is due before day 7, overdue past day 10.',
+        'Info collected. Nothing is due before day 7, overdue past day 10.',
     },
     {
       key: 'post_quote_followup',
@@ -159,8 +157,8 @@ export const SLA_POLICY: SlaPolicy = {
       rule: 'Follow up after the quotation',
       threshold_label: '24 hours',
       counting: 'elapsed',
-      anchor: 'No quotation-sent field exists in Zoho yet',
-      proxy: 'Stage entry date into the quote stage, else last activity time',
+      anchor: 'Time the deal entered the quote stage (stage entry date)',
+      proxy: 'Created time, when no stage entry date is recorded',
       applies_in: 'Quotation',
     },
     {
@@ -169,8 +167,8 @@ export const SLA_POLICY: SlaPolicy = {
       rule: 'Final response after the last follow-up',
       threshold_label: '48 hours',
       counting: 'elapsed',
-      anchor: 'Last patient comm date, when set',
-      proxy: 'Last activity time',
+      anchor: 'Time the deal entered the decision stage (stage entry date)',
+      proxy: 'Created time, when no stage entry date is recorded',
       applies_in: 'Decision',
     },
     {
@@ -191,9 +189,8 @@ export const SLA_POLICY: SlaPolicy = {
       rule: 'Follow up after requesting the partner quote',
       threshold_label: '3 days',
       counting: 'elapsed',
-      anchor: 'Not tracked in Zoho yet',
-      proxy:
-        'When a deal is in the Partner quotes step, an approximate clock off stage entry date, clearly marked approx',
+      anchor: 'Time the lead reached Deal Ready or Quote Shared (status change)',
+      proxy: 'Created time, when no status-change time is recorded yet',
       applies_in: 'Partner quotes',
     },
     {
@@ -257,18 +254,26 @@ export function businessHoursElapsed(start: Date, now: Date): number {
 }
 
 // ---------------------------------------------------------------------------
-// Stage machine. Derives the cockpit step from the Lead_Status (pre
-// conversion) and the Deal Stage (post conversion, Treatment pipeline).
+// Stage machine. Derives the cockpit step from the Lead_Status (pre conversion)
+// and the Deal Stage + Pipeline (post conversion). The mapping is PIPELINE-AWARE
+// because the same stage string lands in different steps per pipeline (e.g.
+// "Consultation Scheduled" and "TeleConsult Completed" are Decision on Treatment
+// but Treatment on Telemedicine).
 //
-// Mapping is PROPOSED in the spec; flagged for the lead to confirm in the PR.
-// It is written against both the spec vocabulary and the live Treatment stage
-// strings verified Jun 14 2026 (New Deal, Quote Proposed, Consultation
-// Scheduled, Consult Payment, TeleConsult Completed, Treatment Quote,
-// Treatment Payment, Treatment Scheduled, Treatment in Progress, Treatment
-// Completed, Lost / Inactive), so it resolves whichever wording the record
-// carries. The Partner quotes step is the weakest link: there is no clean
-// partner-request field, so a Treatment deal sitting between Info collected
-// and Quotation is treated as Partner quotes.
+// Mapping CONFIRMED with Mohammad (2026-06-25):
+//   Leads  -> first_contact:  New, Intro Call Scheduled, Waiting Response
+//             info_collected: Intro Call Done, Doctor Consultation Scheduled/Done
+//             partner_quotes: Deal Ready, Quote Shared
+//             parked:         Not Qualified, Junk Lead, Lost Lead
+//   Treatment deal -> quotation: New Deal
+//             decision:  Quote Proposed, Consultation Scheduled, Consult Payment,
+//                        TeleConsult Completed, Treatment Quote
+//             treatment: Treatment Payment, Treatment Scheduled, Treatment in
+//                        Progress, Treatment Completed  (treatment begins at payment)
+//   Telemedicine deal -> quotation: New Deal; decision: Quote Proposed;
+//             treatment: Payment Done, Consultation Scheduled, TeleConsult Completed
+//   Either pipeline -> parked: Lost / Inactive
+// Live stage strings are the verified ones in PIPELINE_STAGES (crm-read.ts).
 // ---------------------------------------------------------------------------
 
 function norm(value: string | null | undefined): string {
@@ -287,77 +292,87 @@ const PARKED_DEAL_STAGES = new Set([
   'closed lost',
 ]);
 
-const FIRST_CONTACT_LEAD = new Set(['new', 'intro call scheduled']);
+// Lead statuses (pre-conversion) grouped to cockpit steps.
+const FIRST_CONTACT_LEAD = new Set([
+  'new',
+  'intro call scheduled',
+  'waiting response',
+]);
 const INFO_COLLECTED_LEAD = new Set([
   'intro call done',
   'doctor consultation scheduled',
   'doctor consultation done',
-  'contacted',
-  'pre-qualified',
 ]);
-const QUOTATION_LEAD = new Set(['quote shared']);
-const DECISION_LEAD = new Set(['waiting response']);
+const PARTNER_QUOTES_LEAD = new Set(['deal ready', 'quote shared']);
 
-// Deal stages grouped to cockpit steps. Spec names plus the live strings.
-const INFO_COLLECTED_DEAL = new Set([
-  'new deal',
+// Treatment-pipeline deal stages grouped to cockpit steps.
+const TREATMENT_DECISION = new Set([
+  'quote proposed',
   'consultation scheduled',
-  'consultation completed',
   'consult payment',
   'teleconsult completed',
+  'treatment quote',
 ]);
-const QUOTATION_DEAL = new Set(['quote proposed', 'treatment quote']);
-const DECISION_DEAL = new Set([
-  'deposit payment',
+const TREATMENT_TREATMENT = new Set([
   'treatment payment',
-  'payment done',
-]);
-const TREATMENT_DEAL = new Set([
   'treatment scheduled',
   'treatment in progress',
   'treatment completed',
 ]);
 
+// Telemedicine-pipeline deal stages grouped to cockpit steps. Treatment begins
+// at Payment Done; the tele-consult is the telemedicine "treatment".
+const TELEMED_DECISION = new Set(['quote proposed']);
+const TELEMED_TREATMENT = new Set([
+  'payment done',
+  'consultation scheduled',
+  'teleconsult completed',
+]);
+
 export interface StageInputs {
   /** Lead_Status on the originating lead, or null when starting from a deal. */
   leadStatus: string | null;
-  /** Deal Stage on the linked Treatment deal, or null when lead only. */
+  /** Deal Stage on the linked deal, or null when lead only. */
   dealStage: string | null;
-  /** Whether a Deal exists at all (drives the Partner quotes inference). */
+  /** Deal Pipeline (Treatment | Telemedicine), or null when lead only. The
+   *  stage->step map differs per pipeline, so this is required for a deal. */
+  pipeline: string | null;
+  /** Whether a Deal exists at all. */
   hasDeal: boolean;
 }
 
-/** Resolve the current cockpit step. The deal stage wins when present, because
- *  a converted lead lives in the deal; the lead status drives pre-conversion
- *  rows. Parked is detected first from either side. */
+/** Resolve the current cockpit step. The deal stage wins when present (a
+ *  converted lead lives in the deal); the lead status drives pre-conversion
+ *  rows. Parked is detected first from either side. Deal stages are read against
+ *  the pipeline-specific map. An unrecognized deal stage reads as Quotation (a
+ *  converted deal is at least at the first deal step), never guessed forward. */
 export function stepOf(inputs: StageInputs): CockpitStep {
   const lead = norm(inputs.leadStatus);
   const stage = norm(inputs.dealStage);
+  const pipeline = norm(inputs.pipeline);
 
   if (PARKED_LEAD_STATUSES.has(lead) || PARKED_DEAL_STAGES.has(stage)) {
     return 'parked';
   }
 
   if (inputs.hasDeal && stage) {
-    if (TREATMENT_DEAL.has(stage)) return 'treatment';
-    if (DECISION_DEAL.has(stage)) return 'decision';
-    if (QUOTATION_DEAL.has(stage)) return 'quotation';
-    // A live Treatment deal that is past Info collected but not yet at the
-    // Quotation stage is the Partner quotes window. This is the weakest
-    // mapping (no partner-request field exists), flagged in the PR.
-    if (INFO_COLLECTED_DEAL.has(stage)) return 'partner_quotes';
-    // An unknown deal stage falls back to Info collected rather than guessing
-    // a later step; surfaced honestly, never silently advanced.
-    return 'info_collected';
+    if (pipeline === 'telemedicine') {
+      if (TELEMED_TREATMENT.has(stage)) return 'treatment';
+      if (TELEMED_DECISION.has(stage)) return 'decision';
+      return 'quotation';
+    }
+    // Treatment (and any other patient pipeline) uses the Treatment map.
+    if (TREATMENT_TREATMENT.has(stage)) return 'treatment';
+    if (TREATMENT_DECISION.has(stage)) return 'decision';
+    return 'quotation';
   }
 
   // Pre-conversion: drive off the lead status.
-  if (QUOTATION_LEAD.has(lead)) return 'quotation';
-  if (DECISION_LEAD.has(lead)) return 'decision';
+  if (PARTNER_QUOTES_LEAD.has(lead)) return 'partner_quotes';
   if (INFO_COLLECTED_LEAD.has(lead)) return 'info_collected';
   if (FIRST_CONTACT_LEAD.has(lead)) return 'first_contact';
-  // Blank or unrecognized status on an unconverted lead reads as first
-  // contact: a new, untouched lead still owes the first call.
+  // Blank or unrecognized status on an unconverted lead reads as first contact:
+  // a new, untouched lead still owes the first call.
   return 'first_contact';
 }
 
@@ -400,14 +415,13 @@ export interface ClockResult {
 // The record shape the engine reads. The service maps a Lead or Deal onto it.
 export interface ClockInputs {
   step: CockpitStep;
-  /** Lead created time, the universal fallback anchor. */
+  /** When the record entered its CURRENT status/stage: the deal's
+   *  Stage_Entry_Date or the lead's Last_Status_Change. The single anchor every
+   *  active clock now runs from (no manual event stamps). */
+  statusChange: string | null;
+  /** Created time, the only fallback when statusChange is absent (older records
+   *  from before the status-change field was populated). */
   createdTime: string | null;
-  lastActivityTime: string | null;
-  introCallDateTime: string | null;
-  welcomeMessageSentDate: string | null;
-  stageEntryDate: string | null;
-  lastPatientCommDate: string | null;
-  reasonNotQualified: string | null;
 }
 
 function parse(value: string | null): Date | null {
@@ -456,63 +470,50 @@ function classify(
   return { kind: 'on_track', tone: 'good', due_label: aheadLabel(remaining) };
 }
 
-/** Compute the governing clock for a row, given its step and timestamps. */
+/** Compute the governing clock for a row from its step and the time it entered
+ *  its current status/stage. Every active step runs from one anchor: the
+ *  statusChange time, with the created time as the only fallback (marked approx
+ *  when used). No manual event stamps are read. */
 export function governingClock(inputs: ClockInputs, now: Date): ClockResult {
   const t = SLA_POLICY.thresholds;
+  const precise = parse(inputs.statusChange);
   const created = parse(inputs.createdTime);
-  const lastActivity = parse(inputs.lastActivityTime);
+  const anchor = precise ?? created;
+  const approx = !precise && !!created;
+  const fallbackReason =
+    'No status-change time recorded yet, so the clock counts from when the record was created.';
 
   switch (inputs.step) {
     case 'first_contact': {
-      // Anchor: Intro_Call_Date_Time when set (the stop). Live population is
-      // ~0%, so in practice this is a not-yet-contacted lead counting 24
-      // business hours from creation, marked approx.
-      const stop = parse(inputs.introCallDateTime);
-      if (stop) {
-        return {
-          sla_key: 'first_contact',
-          due_label: 'Contacted',
-          tone: 'good',
-          kind: 'on_track',
-          approx: false,
-          reason: null,
-        };
-      }
-      if (!created) {
+      // 24 business hours from when the lead entered its current status (a brand
+      // new lead: from creation, since On-Create stamps Last_Status_Change).
+      if (!anchor) {
         return nullClock(
           'first_contact',
-          'No created time on this lead to start the first-contact clock.',
+          'No status-change or created time on this lead to start the first-contact clock.',
         );
       }
-      const deadline = addBusinessHours(created, t.first_contact_hours);
+      const deadline = addBusinessHours(anchor, t.first_contact_hours);
       const c = classify(deadline, now);
       return {
         sla_key: 'first_contact',
         ...c,
-        approx: true,
-        reason:
-          'Intro call date is not recorded, so the 24 business hour clock counts from when the lead arrived.',
+        approx,
+        reason: approx ? fallbackReason : null,
       };
     }
 
     case 'info_collected': {
-      // Reports window governs once info collection is under way: nothing due
-      // before day 7, overdue past day 10. Anchor Stage_Entry_Date, else the
-      // proxy Last_Activity_Time. The post-intro 48h follow-up is the earlier
-      // sub-step; the reports band is the governing clock for the step.
-      const anchorPrecise = parse(inputs.stageEntryDate);
-      const anchor = anchorPrecise ?? lastActivity ?? created;
+      // Reports window: nothing due before day 7, overdue past day 10, counted
+      // from when the record entered its current status/stage.
       if (!anchor) {
         return nullClock(
           'reports_window',
-          'No stage entry or activity time to anchor the reports window.',
+          'No status-change or created time to anchor the reports window.',
         );
       }
       const days = (now.getTime() - anchor.getTime()) / DAY_MS;
-      const approx = !anchorPrecise;
-      const reason = approx
-        ? 'No stage entry date, so the reports window counts from the last activity instead.'
-        : null;
+      const reason = approx ? fallbackReason : null;
       if (days < t.reports_window_min_days) {
         return {
           sla_key: 'reports_window',
@@ -544,16 +545,12 @@ export function governingClock(inputs: ClockInputs, now: Date): ClockResult {
     }
 
     case 'partner_quotes': {
-      // The governing clock is a provider clock: follow up 3 days after the
-      // partner quote request. There is NO Zoho field for the request, so the
-      // spec allows an approximate clock off Stage_Entry_Date when the deal
-      // sits in this step, clearly marked approx. With no stage entry date the
-      // clock is null with the authored reason.
-      const anchor = parse(inputs.stageEntryDate);
+      // 3-day partner follow-up, counted from when the lead reached Deal Ready /
+      // Quote Shared (its Last_Status_Change).
       if (!anchor) {
         return nullClock(
           'provider_quote_followup',
-          'Not tracked in Zoho yet. There is no partner quote request field to start the 3 day clock.',
+          'No status-change or created time to start the partner follow-up clock.',
         );
       }
       const deadline = new Date(
@@ -573,22 +570,18 @@ export function governingClock(inputs: ClockInputs, now: Date): ClockResult {
             : 'Partner chase due',
         tone: c.tone,
         kind: c.kind,
-        approx: true,
-        reason:
-          'No partner quote request field exists, so the 3 day clock is approximated from when the deal entered this stage.',
+        approx,
+        reason: approx ? fallbackReason : null,
       };
     }
 
     case 'quotation': {
-      // 24h follow-up after the quotation. No quotation-sent field exists, so
-      // the anchor is the stage entry into the quote stage, else last
-      // activity. Always approx.
-      const anchorPrecise = parse(inputs.stageEntryDate);
-      const anchor = anchorPrecise ?? lastActivity ?? created;
+      // 24h follow-up, counted from when the deal entered the quote stage
+      // (New Deal -> Stage_Entry_Date).
       if (!anchor) {
         return nullClock(
           'post_quote_followup',
-          'No stage entry or activity time to start the quotation follow-up clock.',
+          'No status-change or created time to start the quotation follow-up clock.',
         );
       }
       const deadline = new Date(
@@ -598,21 +591,18 @@ export function governingClock(inputs: ClockInputs, now: Date): ClockResult {
       return {
         sla_key: 'post_quote_followup',
         ...c,
-        approx: true,
-        reason:
-          'No quotation-sent field exists in Zoho, so the 24 hour clock counts from when the deal entered the quote stage.',
+        approx,
+        reason: approx ? fallbackReason : null,
       };
     }
 
     case 'decision': {
-      // 48h final response after the last follow-up. Anchor Last_Patient_Comm
-      // _Date when set, else the proxy Last_Activity_Time.
-      const precise = parse(inputs.lastPatientCommDate);
-      const anchor = precise ?? lastActivity ?? created;
+      // 48h final response, counted from when the deal entered the decision stage
+      // (Quote Proposed -> Stage_Entry_Date).
       if (!anchor) {
         return nullClock(
           'final_response',
-          'No last patient comm or activity time to start the final response clock.',
+          'No status-change or created time to start the final-response clock.',
         );
       }
       const deadline = new Date(
@@ -622,18 +612,17 @@ export function governingClock(inputs: ClockInputs, now: Date): ClockResult {
       return {
         sla_key: 'final_response',
         ...c,
-        approx: !precise,
-        reason: precise
-          ? null
-          : 'No last patient comm date, so the 48 hour clock counts from the last activity instead.',
+        approx,
+        reason: approx ? fallbackReason : null,
       };
     }
 
     case 'treatment': {
       // The active SLA clocks stop at the decision; treatment is in delivery.
-      // Honest on-track with no fabricated due time.
+      // Honest on-track with no fabricated due time, and an in_treatment key so
+      // the case file does not show a final-response rule that no longer applies.
       return {
-        sla_key: 'final_response',
+        sla_key: 'in_treatment',
         due_label: 'In treatment',
         tone: 'good',
         kind: 'on_track',

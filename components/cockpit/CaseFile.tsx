@@ -34,7 +34,10 @@ import { qk } from "@/lib/api/keys";
 import { useViewer } from "@/lib/viewer";
 import { SetFollowUp } from "@/components/cockpit/SetFollowUp";
 import { StageMove } from "@/components/cockpit/StageMove";
-import { MarkEvents } from "@/components/cockpit/MarkEvents";
+// MarkEvents (manual stamp control) is temporarily removed with the status-based
+// SLA rebase: the clock now runs off status changes, so the case manager no
+// longer marks events by hand. Kept importable for an easy revert.
+// import { MarkEvents } from "@/components/cockpit/MarkEvents";
 import { SendFirstContact } from "@/components/cockpit/SendFirstContact";
 import { EditCaseDetails } from "@/components/cockpit/EditCaseDetails";
 import { BuildQuotation } from "@/components/cockpit/BuildQuotation";
@@ -182,7 +185,8 @@ function CaseBody({
               currentStage={data.stage}
             />
           ) : null}
-          <MarkEvents resourceId={data.lead_ref.zoho_id} />
+          {/* Manual stamp control temporarily removed (status-based SLA). Reversible. */}
+          {/* <MarkEvents resourceId={data.lead_ref.zoho_id} /> */}
           <EditCaseDetails
             resourceId={data.lead_ref.zoho_id}
             currentBudget={data.patient_budget}
