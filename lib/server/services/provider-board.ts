@@ -94,6 +94,11 @@ export interface AddReferralInput {
   zoho_id: string;
 }
 
+export interface AddCustomHospitalInput {
+  name: string;
+  country: string;
+}
+
 interface ReferralRow {
   id: string;
   hospital_id: string;
@@ -111,6 +116,9 @@ const WAIT_INFO_DAYS = 3;
 // Counted business hours that make up one non-weekend day (the helper skips Fri
 // and Sat entirely, so every counted hour belongs to a working day).
 const BUSINESS_HOURS_PER_DAY = 24;
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isUniqueViolation(err: unknown): boolean {
   return (
@@ -136,11 +144,13 @@ export class ProviderBoardService {
     );
 
     const crm = getCrmRead();
-    const [dealsRead, leadsRead, hospitalsRead] = await Promise.all([
-      crm.deals(),
-      crm.leads(),
-      crm.hospitals(),
-    ]);
+    const [dealsRead, leadsRead, hospitalsRead, customHospitals] =
+      await Promise.all([
+        crm.deals(),
+        crm.leads(),
+        crm.hospitals(),
+        this.activeCustomHospitals(),
+      ]);
 
     // Build hospital columns from the Hospitals directory, DEDUPED by name so a
     // duplicate Zoho record (e.g. two "Ibn Al-Nafees Hospital" rows) shows as a
@@ -169,6 +179,19 @@ export class ProviderBoardService {
       for (const r of recs) repByRecordId.set(r.id, rep.id);
     }
     const columnIds = new Set(hospitals.map((h) => h.id));
+
+    // Board-only custom hospitals appear as their own columns under their chosen
+    // country (they have no Zoho record). Added before the card loop so cards on
+    // them group into their column rather than the synthetic Other bucket.
+    for (const ch of customHospitals) {
+      if (columnIds.has(ch.id)) continue;
+      hospitals.push({
+        id: ch.id,
+        name: ch.name,
+        country: ch.country.trim() || OTHER_COUNTRY,
+      });
+      columnIds.add(ch.id);
+    }
 
     const dealById = new Map(dealsRead.data.map((d) => [d.id, d]));
     const leadById = new Map(leadsRead.data.map((l) => [l.id, l]));
@@ -210,9 +233,19 @@ export class ProviderBoardService {
   ): Promise<{ id: string }> {
     const crm = getCrmRead();
     const hospitalsRead = await crm.hospitals();
-    const hospital = hospitalsRead.data.find((h) => h.id === input.hospital_id);
-    if (!hospital) {
-      throw new BadRequestError('That hospital is not in Zoho.');
+    const zohoHospital = hospitalsRead.data.find(
+      (h) => h.id === input.hospital_id,
+    );
+    // The hospital is either a Zoho directory record or a board-only custom one.
+    let hospitalName: string;
+    if (zohoHospital) {
+      hospitalName = (zohoHospital.Name ?? '').trim() || input.hospital_id;
+    } else {
+      const custom = await this.getActiveCustomHospital(input.hospital_id);
+      if (!custom) {
+        throw new BadRequestError('That hospital is not in the system.');
+      }
+      hospitalName = custom.name;
     }
 
     if (input.record_kind === 'deal') {
@@ -226,8 +259,6 @@ export class ProviderBoardService {
         throw new BadRequestError('That lead was not found in Zoho.');
       }
     }
-
-    const hospitalName = (hospital.Name ?? '').trim() || input.hospital_id;
 
     const existing = await this.pool.query<{ id: string }>(
       `select id from provider_referrals
@@ -278,6 +309,82 @@ export class ProviderBoardService {
       throw new NotFoundError('That board card no longer exists.');
     }
     return { id: rows[0].id };
+  }
+
+  /** Add a board-only custom hospital (no Zoho record). Rejects a name that
+   *  already exists as a Zoho directory hospital (use that one) or as an active
+   *  custom hospital. Returns the new id. */
+  async addCustomHospital(
+    viewer: RequestViewer,
+    input: AddCustomHospitalInput,
+  ): Promise<{ id: string }> {
+    const name = input.name.trim();
+    const country = input.country.trim();
+    if (!name) throw new BadRequestError('Enter a hospital name.');
+    if (!country) {
+      throw new BadRequestError('Enter a country for the hospital.');
+    }
+
+    const crm = getCrmRead();
+    const hospitalsRead = await crm.hospitals();
+    const key = name.toLowerCase();
+    if (
+      hospitalsRead.data.some(
+        (h) => (h.Name ?? '').trim().toLowerCase() === key,
+      )
+    ) {
+      throw new ConflictError(
+        'A hospital with that name is already in the directory; use it instead.',
+      );
+    }
+
+    try {
+      const { rows } = await this.pool.query<{ id: string }>(
+        `insert into provider_board_custom_hospitals (name, country, created_by)
+         values ($1, $2, $3)
+         returning id`,
+        [name, country, viewer.key],
+      );
+      return { id: rows[0].id };
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        throw new ConflictError('That hospital is already on the board.');
+      }
+      throw err;
+    }
+  }
+
+  /** Active board-only custom hospitals, used as extra columns. */
+  private async activeCustomHospitals(): Promise<
+    Array<{ id: string; name: string; country: string }>
+  > {
+    const { rows } = await this.pool.query<{
+      id: string;
+      name: string;
+      country: string;
+    }>(
+      `select id, name, country from provider_board_custom_hospitals
+       where removed_at is null`,
+    );
+    return rows;
+  }
+
+  /** One active custom hospital by id, or null. Guards the uuid shape so a Zoho
+   *  (numeric) id never reaches the uuid-typed column and errors. */
+  private async getActiveCustomHospital(
+    id: string,
+  ): Promise<{ id: string; name: string; country: string } | null> {
+    if (!UUID_RE.test(id)) return null;
+    const { rows } = await this.pool.query<{
+      id: string;
+      name: string;
+      country: string;
+    }>(
+      `select id, name, country from provider_board_custom_hospitals
+       where id = $1 and removed_at is null`,
+      [id],
+    );
+    return rows[0] ?? null;
   }
 
   private toCard(
