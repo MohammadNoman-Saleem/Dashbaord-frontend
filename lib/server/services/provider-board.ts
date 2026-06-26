@@ -15,7 +15,7 @@
 // SERVER ONLY (pg + cached Zoho reads).
 import type { Pool } from 'pg';
 import { getPool } from '../db';
-import { getCrmRead } from '../crm-read';
+import { getCrmRead, type HospitalRecord } from '../crm-read';
 import { patientSerializer } from '../privacy';
 import { businessHoursElapsed } from './sla';
 import { BadRequestError, ConflictError, NotFoundError } from '../errors';
@@ -142,15 +142,33 @@ export class ProviderBoardService {
       crm.hospitals(),
     ]);
 
-    // Every named hospital, tagged with its country bucket ("Other" when unset).
-    const hospitals: ProviderBoardHospital[] = hospitalsRead.data
-      .map((h) => ({
-        id: h.id,
-        name: (h.Name ?? '').trim(),
-        country: (h.Country ?? '').trim() || OTHER_COUNTRY,
-      }))
-      .filter((h) => h.name.length > 0);
-    const hospitalIds = new Set(hospitals.map((h) => h.id));
+    // Build hospital columns from the Hospitals directory, DEDUPED by name so a
+    // duplicate Zoho record (e.g. two "Ibn Al-Nafees Hospital" rows) shows as a
+    // single column. Each name group keeps one representative record (preferring
+    // one that carries a country), and every record id in the group maps to that
+    // representative so a card added against any duplicate lands in the one column.
+    const groups = new Map<string, HospitalRecord[]>();
+    for (const h of hospitalsRead.data) {
+      const name = (h.Name ?? '').trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      const arr = groups.get(key);
+      if (arr) arr.push(h);
+      else groups.set(key, [h]);
+    }
+    const hospitals: ProviderBoardHospital[] = [];
+    const repByRecordId = new Map<string, string>();
+    for (const recs of groups.values()) {
+      const rep =
+        recs.find((r) => (r.Country ?? '').trim().length > 0) ?? recs[0];
+      hospitals.push({
+        id: rep.id,
+        name: (rep.Name ?? '').trim(),
+        country: (rep.Country ?? '').trim() || OTHER_COUNTRY,
+      });
+      for (const r of recs) repByRecordId.set(r.id, rep.id);
+    }
+    const columnIds = new Set(hospitals.map((h) => h.id));
 
     const dealById = new Map(dealsRead.data.map((d) => [d.id, d]));
     const leadById = new Map(leadsRead.data.map((l) => [l.id, l]));
@@ -160,15 +178,18 @@ export class ProviderBoardService {
     const cardsByHospital: Record<string, ProviderBoardCard[]> = {};
     for (const row of rows) {
       const card = this.toCard(row, dealById, leadById, names, viewer, now);
-      (cardsByHospital[row.hospital_id] ??= []).push(card);
-      // A card whose hospital is no longer in the catalog (renamed or removed in
-      // Zoho) still needs a column, so surface a synthetic hospital from the
+      // Map the referral's hospital id to its representative column, so a card
+      // added against a duplicate record still lands in the single merged column.
+      const columnId = repByRecordId.get(row.hospital_id) ?? row.hospital_id;
+      (cardsByHospital[columnId] ??= []).push(card);
+      // A card whose hospital is no longer in the directory (renamed or removed
+      // in Zoho) still needs a column, so surface a synthetic hospital from the
       // stored snapshot name under the Other bucket rather than dropping it.
-      if (!hospitalIds.has(row.hospital_id)) {
-        hospitalIds.add(row.hospital_id);
+      if (!columnIds.has(columnId)) {
+        columnIds.add(columnId);
         hospitals.push({
-          id: row.hospital_id,
-          name: row.hospital_name || row.hospital_id,
+          id: columnId,
+          name: row.hospital_name || columnId,
           country: OTHER_COUNTRY,
         });
       }
