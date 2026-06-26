@@ -215,7 +215,7 @@ function BoardBody({
         })}
       </div>
 
-      <div className="mt-3 flex items-start gap-[14px] overflow-x-auto pb-2">
+      <div className="scroll-thin mt-3 flex items-start gap-[14px] overflow-x-auto pb-2">
         {columns.map((h) => {
           const cards = data.cardsByHospital[h.id] ?? [];
           return (
