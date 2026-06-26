@@ -417,10 +417,17 @@ function fromLead(l: LeadRecord): NormalizedCase {
 // person filters by the case-manager owner. An empty or "all" person keeps
 // every case; the cockpit's two managers (Fatima, Razan) and the ops lead
 // (Khalid, who owns none directly) read the whole pool.
+//
+// SAFETY (no lead is ever orphaned): a manager sees their own cases PLUS any
+// case not owned by a recognized case manager (ownerKey null: unassigned, or
+// owned by someone outside the {fatima, razan} set, e.g. an admin). Without
+// this, such a lead belongs to no manager's scope and silently disappears from
+// every cockpit list while still being searchable. Surfacing it to both
+// managers means one of them picks it up rather than it being missed.
 function matchesPerson(c: NormalizedCase, person: string): boolean {
   if (!person || person === 'all') return true;
   if (person === 'fatima' || person === 'razan') {
-    return c.ownerKey === person;
+    return c.ownerKey === person || c.ownerKey === null;
   }
   return true;
 }
