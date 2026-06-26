@@ -77,6 +77,28 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+/* Thin grey scrollbar: a slim grey thumb (var(--ink-3), flips with the theme),
+   no native track and no arrow buttons. Opt in with .scroll-thin on a scroll
+   container. Height is about half the native Windows scrollbar. */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-3) transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--ink-3);
+  border-radius: 9999px;
+}
+.scroll-thin::-webkit-scrollbar-button {
+  display: none;
+}
+
 /* Flash highlight for ?focus= deep links (2px accent ring fading over 1.6s) */
 @keyframes flashr {
   0% { box-shadow: 0 0 0 2px var(--accent); }

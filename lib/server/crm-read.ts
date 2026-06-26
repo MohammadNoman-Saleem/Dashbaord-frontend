@@ -156,11 +156,15 @@ export interface DoctorRecord {
   Parent_Account: ZohoLookup | null;
 }
 
-/** Hospital records: commission percentage used when the doctor has none. */
+/** Hospital records: commission percentage used when the doctor has none, plus
+ *  Country, which the provider board groups its hospital columns by. */
 export interface HospitalRecord {
   id: string;
   Name: string | null;
   Commission_Percentage: number | null;
+  /** Hospital country (text). Sparsely populated on the live module today, so a
+   *  hospital with no country is bucketed under "Other" by the provider board. */
+  Country: string | null;
 }
 
 export const WON_STAGE: Record<string, string> = {
@@ -342,9 +346,11 @@ export class CrmReadService {
   /** Hospitals with their commission percentage, the fallback when a doctor has
    *  none set. */
   hospitals(): Promise<CachedRead<HospitalRecord[]>> {
-    return this.cache.read('zoho_crm:hospitals_v1', 'zoho_crm', async () => {
+    // Key bumped to v2 when Country was added so a warm v1 entry is not served
+    // against the new shape.
+    return this.cache.read('zoho_crm:hospitals_v2', 'zoho_crm', async () => {
       const records = await this.zoho.getAll(`${CRM}/Hospitals`, {
-        fields: 'Name,Commission_Percentage',
+        fields: 'Name,Commission_Percentage,Country',
       });
       return records as HospitalRecord[];
     });
