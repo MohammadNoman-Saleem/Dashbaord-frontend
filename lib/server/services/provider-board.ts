@@ -51,17 +51,41 @@ export interface ProviderBoardCard {
   missing: boolean;
 }
 
-export interface ProviderBoardColumn {
-  hospital_id: string;
-  hospital_name: string;
-  cards: ProviderBoardCard[];
+export interface ProviderBoardHospital {
+  id: string;
+  name: string;
+  /** Country bucket the board groups this hospital under; "Other" when the
+   *  hospital has no Country set in Zoho. */
+  country: string;
 }
 
 export interface ProviderBoardData {
-  columns: ProviderBoardColumn[];
-  /** The full hospital catalog from Zoho, for the add-patient column picker.
-   *  Returned even when the board is empty so the first patient can be added. */
-  hospitals: Array<{ id: string; name: string }>;
+  /** Country categories in tab order: Bahrain first, then alphabetical, with
+   *  "Other" (no country set) last. */
+  countries: string[];
+  /** Every named hospital, tagged with its country bucket. The board renders one
+   *  column per hospital under its country tab, even when the hospital has no
+   *  cards. */
+  hospitals: ProviderBoardHospital[];
+  /** Active patient cards keyed by hospital id; a hospital with no cards is
+   *  simply absent here and renders an empty column. */
+  cardsByHospital: Record<string, ProviderBoardCard[]>;
+}
+
+const OTHER_COUNTRY = 'Other';
+
+/** Order the country tabs: Bahrain first (home), then alphabetical, with the
+ *  no-country "Other" bucket last. */
+function orderCountries(values: Iterable<string>): string[] {
+  const set = new Set(values);
+  const rest = [...set]
+    .filter((c) => c !== 'Bahrain' && c !== OTHER_COUNTRY)
+    .sort((a, b) => a.localeCompare(b));
+  const ordered: string[] = [];
+  if (set.has('Bahrain')) ordered.push('Bahrain');
+  ordered.push(...rest);
+  if (set.has(OTHER_COUNTRY)) ordered.push(OTHER_COUNTRY);
+  return ordered;
 }
 
 export interface AddReferralInput {
@@ -99,8 +123,10 @@ function isUniqueViolation(err: unknown): boolean {
 export class ProviderBoardService {
   constructor(private readonly pool: Pool) {}
 
-  /** The board: active referrals grouped into hospital columns, each card carrying
-   *  the live patient identity (gated), current status, and waiting clock. */
+  /** The board grouped for the UI: every named hospital tagged with a country
+   *  bucket (so columns can be shown under country tabs, even when empty), plus
+   *  the active patient cards keyed by hospital id. Each card carries the live
+   *  patient identity (gated), current status, and waiting clock. */
   async getBoard(viewer: RequestViewer): Promise<ProviderBoardData> {
     const { rows } = await this.pool.query<ReferralRow>(
       `select id, hospital_id, hospital_name, record_kind, zoho_id, added_by, added_at
@@ -115,42 +141,42 @@ export class ProviderBoardService {
       crm.leads(),
       crm.hospitals(),
     ]);
-    // The hospital catalog (named records only), sorted, for the column picker.
-    const hospitals = hospitalsRead.data
-      .map((h) => ({ id: h.id, name: (h.Name ?? '').trim() }))
-      .filter((h) => h.name.length > 0)
-      .sort((a, b) => a.name.localeCompare(b.name));
 
-    if (rows.length === 0) return { columns: [], hospitals };
+    // Every named hospital, tagged with its country bucket ("Other" when unset).
+    const hospitals: ProviderBoardHospital[] = hospitalsRead.data
+      .map((h) => ({
+        id: h.id,
+        name: (h.Name ?? '').trim(),
+        country: (h.Country ?? '').trim() || OTHER_COUNTRY,
+      }))
+      .filter((h) => h.name.length > 0);
+    const hospitalIds = new Set(hospitals.map((h) => h.id));
 
     const dealById = new Map(dealsRead.data.map((d) => [d.id, d]));
     const leadById = new Map(leadsRead.data.map((l) => [l.id, l]));
-    const hospitalNameById = new Map(hospitals.map((h) => [h.id, h.name]));
     const names = await this.nameMap(rows.map((r) => r.added_by));
     const now = new Date();
 
-    const columns = new Map<string, ProviderBoardColumn>();
+    const cardsByHospital: Record<string, ProviderBoardCard[]> = {};
     for (const row of rows) {
       const card = this.toCard(row, dealById, leadById, names, viewer, now);
-      let col = columns.get(row.hospital_id);
-      if (!col) {
-        // Prefer the live hospital name; fall back to the snapshot stored at add
-        // time so a column always has a label even if the hospital read misses.
-        const liveName = hospitalNameById.get(row.hospital_id);
-        col = {
-          hospital_id: row.hospital_id,
-          hospital_name: liveName || row.hospital_name,
-          cards: [],
-        };
-        columns.set(row.hospital_id, col);
+      (cardsByHospital[row.hospital_id] ??= []).push(card);
+      // A card whose hospital is no longer in the catalog (renamed or removed in
+      // Zoho) still needs a column, so surface a synthetic hospital from the
+      // stored snapshot name under the Other bucket rather than dropping it.
+      if (!hospitalIds.has(row.hospital_id)) {
+        hospitalIds.add(row.hospital_id);
+        hospitals.push({
+          id: row.hospital_id,
+          name: row.hospital_name || row.hospital_id,
+          country: OTHER_COUNTRY,
+        });
       }
-      col.cards.push(card);
     }
 
-    const ordered = [...columns.values()].sort((a, b) =>
-      a.hospital_name.localeCompare(b.hospital_name),
-    );
-    return { columns: ordered, hospitals };
+    hospitals.sort((a, b) => a.name.localeCompare(b.name));
+    const countries = orderCountries(hospitals.map((h) => h.country));
+    return { countries, hospitals, cardsByHospital };
   }
 
   /** Add a patient to a hospital column. Validates both the hospital and the

@@ -149,7 +149,7 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   // Provider board GET stub for dev smoke (the live route gates to name-seers).
   // The add/remove writes go through mutateEnvelope and never read a fixture.
   provider_board: () => ({
-    data: { columns: [], hospitals: [] },
+    data: { countries: [], hospitals: [], cardsByHospital: {} },
     meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
   }),
   // Phase 1b stage-move policy read (GET). Target stages plus loss reasons,

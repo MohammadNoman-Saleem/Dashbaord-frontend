@@ -17,19 +17,20 @@ import {
 } from "@/components/provider-board/ProviderCard";
 import { AddReferralModal } from "@/components/provider-board/AddReferralModal";
 
-/* The provider board: one column per hospital that currently holds a patient,
-   cards waiting for that hospital's response. Add/remove only (a patient can sit
-   under several hospitals); no dragging, since a card is not "moved" between
-   hospitals. The waiting clock and the membership come from Supabase; the patient
-   identity and status are live from Zoho, gated to name-seers server-side. */
+/* The provider board. Country tabs (Bahrain first, then alphabetical, with
+   "Other" for hospitals that have no country set in Zoho); under the selected
+   country, one column per hospital in that country, every hospital shown even
+   when it holds no patients, each with an Add button. Add/remove only; a patient
+   can sit under several hospitals. Membership and the waiting clock come from
+   Supabase; the hospital list, country, and patient identity/status are live
+   from Zoho, gated to name-seers server-side. */
 
-type Column = {
-  hospital_id: string;
-  hospital_name: string;
-  cards: ProviderCardData[];
+type Hospital = { id: string; name: string; country: string };
+type BoardData = {
+  countries: string[];
+  hospitals: Hospital[];
+  cardsByHospital: Record<string, ProviderCardData[]>;
 };
-type HospitalOption = { id: string; name: string };
-type BoardData = { columns: Column[]; hospitals: HospitalOption[] };
 
 const REMOVE_FAILURE =
   "Couldn't remove the card. Try again, or tell Al Saeed if it repeats.";
@@ -39,6 +40,7 @@ export function ProviderBoard() {
   const queryClient = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
   const [presetHospitalId, setPresetHospitalId] = useState<string | null>(null);
+  const [activeCountry, setActiveCountry] = useState<string | null>(null);
 
   const query = useQuery({
     queryKey: qk.providerBoard(),
@@ -72,12 +74,15 @@ export function ProviderBoard() {
   }
 
   const hospitals = query.data?.data?.hospitals ?? [];
+  const removingId = removeMutation.isPending
+    ? (removeMutation.variables ?? null)
+    : null;
 
   return (
     <Card className="flex flex-col">
       <CardHeader
         title="Provider board"
-        subtitle="Which hospital has which patient, and how long they have been waiting for a response."
+        subtitle="Each hospital is a column under its country. Add a patient to track how long that hospital has had the case."
       />
       <div className="flex items-center px-[18px] pb-2 pt-1">
         <Button
@@ -94,54 +99,16 @@ export function ProviderBoard() {
 
       <div className="px-[18px] pb-[16px]">
         <QueryPanel query={query} skeleton={<BoardSkeleton />}>
-          {(data) =>
-            data.columns.length === 0 ? (
-              <p className="py-3 text-[13px] text-ink-2">
-                No patients on the board yet. Use Add patient to put a lead or
-                deal under a hospital.
-              </p>
-            ) : (
-              <div className="flex items-start gap-[14px] overflow-x-auto pb-2">
-                {data.columns.map((col) => (
-                  <section
-                    key={col.hospital_id}
-                    aria-label={`${col.hospital_name}, ${col.cards.length} patient${col.cards.length === 1 ? "" : "s"}`}
-                    className="flex w-[272px] shrink-0 flex-col rounded-card border border-line-soft bg-surface-2"
-                  >
-                    <header className="flex items-center justify-between gap-2 px-[14px] pb-[6px] pt-[11px]">
-                      <span className="min-w-0 truncate text-[12px] font-bold uppercase tracking-[0.08em] text-ink-3">
-                        {col.hospital_name}
-                      </span>
-                      <span className="num shrink-0 rounded-full border border-line bg-surface px-[8px] py-px text-[11px] font-bold text-ink-2">
-                        {col.cards.length}
-                      </span>
-                    </header>
-                    <div className="flex flex-col gap-[9px] px-[10px] pb-[10px]">
-                      {col.cards.map((card) => (
-                        <ProviderCard
-                          key={card.id}
-                          card={card}
-                          removing={
-                            removeMutation.isPending &&
-                            removeMutation.variables === card.id
-                          }
-                          onRemove={() => removeMutation.mutate(card.id)}
-                        />
-                      ))}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openAdd(col.hospital_id)}
-                      >
-                        <Plus strokeWidth={1.8} aria-hidden="true" />
-                        Add patient
-                      </Button>
-                    </div>
-                  </section>
-                ))}
-              </div>
-            )
-          }
+          {(data) => (
+            <BoardBody
+              data={data}
+              activeCountry={activeCountry}
+              onSelectCountry={setActiveCountry}
+              onAdd={openAdd}
+              onRemove={(id) => removeMutation.mutate(id)}
+              removingId={removingId}
+            />
+          )}
         </QueryPanel>
       </div>
 
@@ -158,16 +125,127 @@ export function ProviderBoard() {
   );
 }
 
+type BoardBodyProps = {
+  data: BoardData;
+  activeCountry: string | null;
+  onSelectCountry: (country: string) => void;
+  onAdd: (hospitalId: string | null) => void;
+  onRemove: (id: string) => void;
+  removingId: string | null;
+};
+
+function BoardBody({
+  data,
+  activeCountry,
+  onSelectCountry,
+  onAdd,
+  onRemove,
+  removingId,
+}: BoardBodyProps) {
+  if (data.hospitals.length === 0) {
+    return (
+      <p className="py-3 text-[13px] text-ink-2">
+        No hospitals found in Zoho yet.
+      </p>
+    );
+  }
+
+  // The active tab falls back to the first country when none is chosen or the
+  // chosen one is no longer present.
+  const current =
+    activeCountry && data.countries.includes(activeCountry)
+      ? activeCountry
+      : data.countries[0];
+
+  const cardCountFor = (country: string) =>
+    data.hospitals
+      .filter((h) => h.country === country)
+      .reduce((n, h) => n + (data.cardsByHospital[h.id]?.length ?? 0), 0);
+
+  const columns = data.hospitals.filter((h) => h.country === current);
+
+  return (
+    <>
+      <div
+        role="tablist"
+        aria-label="Country"
+        className="flex flex-wrap gap-1 border-b border-line-soft pb-2"
+      >
+        {data.countries.map((country) => {
+          const active = country === current;
+          const count = cardCountFor(country);
+          return (
+            <button
+              key={country}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => onSelectCountry(country)}
+              className={`cursor-pointer rounded-[8px] px-[11px] py-[6px] text-[12.5px] font-medium ${
+                active
+                  ? "bg-accent text-on-accent"
+                  : "text-ink-2 hover:bg-accessible-soft hover:text-title"
+              }`}
+            >
+              {country}
+              {count > 0 ? ` (${count})` : ""}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 flex items-start gap-[14px] overflow-x-auto pb-2">
+        {columns.map((h) => {
+          const cards = data.cardsByHospital[h.id] ?? [];
+          return (
+            <section
+              key={h.id}
+              aria-label={`${h.name}, ${cards.length} patient${cards.length === 1 ? "" : "s"}`}
+              className="flex w-[272px] shrink-0 flex-col rounded-card border border-line-soft bg-surface-2"
+            >
+              <header className="flex items-center justify-between gap-2 px-[14px] pb-[6px] pt-[11px]">
+                <span className="min-w-0 truncate text-[12px] font-bold uppercase tracking-[0.08em] text-ink-3">
+                  {h.name}
+                </span>
+                <span className="num shrink-0 rounded-full border border-line bg-surface px-[8px] py-px text-[11px] font-bold text-ink-2">
+                  {cards.length}
+                </span>
+              </header>
+              <div className="flex flex-col gap-[9px] px-[10px] pb-[10px]">
+                {cards.map((card) => (
+                  <ProviderCard
+                    key={card.id}
+                    card={card}
+                    removing={removingId === card.id}
+                    onRemove={() => onRemove(card.id)}
+                  />
+                ))}
+                <Button variant="ghost" size="sm" onClick={() => onAdd(h.id)}>
+                  <Plus strokeWidth={1.8} aria-hidden="true" />
+                  Add patient
+                </Button>
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 function BoardSkeleton() {
   return (
-    <div className="flex gap-[14px] overflow-hidden pb-2">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="flex w-[272px] shrink-0 flex-col gap-[9px]">
-          <Skeleton width={140} height={12} />
-          <Skeleton height={72} />
-          <Skeleton height={72} />
-        </div>
-      ))}
+    <div className="flex flex-col gap-3">
+      <Skeleton width={220} height={28} />
+      <div className="flex gap-[14px] overflow-hidden pb-2">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex w-[272px] shrink-0 flex-col gap-[9px]">
+            <Skeleton width={140} height={12} />
+            <Skeleton height={72} />
+            <Skeleton height={72} />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
