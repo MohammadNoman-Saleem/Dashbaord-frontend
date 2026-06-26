@@ -29,9 +29,11 @@ export const GET = handler(async (req, ctx) => {
   const viewer = ctx.requireViewer();
   const url = new URL(req.url);
 
+  // Default to 'all' (the whole pool), not the viewer's own person, so a case
+  // manager sees every parked lead and deal no matter who owns it; an explicit
+  // ?person= still narrows the view.
   const person =
-    url.searchParams.get('person')?.trim().toLowerCase() ||
-    viewer.viewed_person;
+    url.searchParams.get('person')?.trim().toLowerCase() || 'all';
 
   const pageParam = url.searchParams.get('page');
   const sizeParam = url.searchParams.get('page_size');

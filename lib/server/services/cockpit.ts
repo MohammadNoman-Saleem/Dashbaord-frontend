@@ -325,6 +325,7 @@ function fromDeal(d: DealRecord): NormalizedCase {
   const step = stepOf({
     leadStatus: null,
     dealStage: d.Stage,
+    pipeline: d.Pipeline,
     hasDeal: true,
   });
   const concernRaw = d.Main_Concern_Reason_for_Consultation;
@@ -361,13 +362,9 @@ function fromDeal(d: DealRecord): NormalizedCase {
     pipeline: pipelineOf(d.Pipeline),
     clockInputs: {
       step,
+      // A deal's status-change time is Zoho's Stage_Entry_Date.
+      statusChange: d.Stage_Entry_Date,
       createdTime: d.Created_Time,
-      lastActivityTime: d.Last_Activity_Time,
-      introCallDateTime: d.Intro_Call_Date_Time,
-      welcomeMessageSentDate: d.Welcome_Message_Sent_Date,
-      stageEntryDate: d.Stage_Entry_Date,
-      lastPatientCommDate: d.Last_Patient_Comm_Date,
-      reasonNotQualified: d.Reason_Not_Qualified,
     },
   };
 }
@@ -376,6 +373,7 @@ function fromLead(l: LeadRecord): NormalizedCase {
   const step = stepOf({
     leadStatus: l.Lead_Status,
     dealStage: null,
+    pipeline: null,
     hasDeal: false,
   });
   const concernRaw = l.Main_Concern_Reason_for_Consultation;
@@ -408,20 +406,19 @@ function fromLead(l: LeadRecord): NormalizedCase {
     pipeline: null,
     clockInputs: {
       step,
+      // A lead's status-change time is the Last_Status_Change field (stamped by
+      // the Zoho workflow); null on older leads, where the clock uses created.
+      statusChange: l.Last_Status_Change,
       createdTime: l.Created_Time,
-      lastActivityTime: l.Last_Activity_Time,
-      introCallDateTime: l.Intro_Call_Date_Time,
-      welcomeMessageSentDate: null,
-      stageEntryDate: null,
-      lastPatientCommDate: null,
-      reasonNotQualified: l.Reason_Not_Qualified,
     },
   };
 }
 
-// person filters by the case-manager owner. An empty or "all" person keeps
-// every case; the cockpit's two managers (Fatima, Razan) and the ops lead
-// (Khalid, who owns none directly) read the whole pool.
+// person scopes the cockpit to one case manager. The cockpit now DEFAULTS to
+// 'all' (the queue and parked routes pass 'all' unless an explicit ?person= is
+// given), so a case manager sees every active lead and deal regardless of owner
+// and nothing is ever missed. This filter only narrows when a specific person is
+// requested, e.g. an admin viewing a single manager via ?as=.
 function matchesPerson(c: NormalizedCase, person: string): boolean {
   if (!person || person === 'all') return true;
   if (person === 'fatima' || person === 'razan') {
@@ -744,6 +741,8 @@ function nextActionLine(step: CockpitStep): string {
 }
 
 function slaRuleText(slaKey: string): string {
+  // Treatment has no active SLA clock; say so plainly rather than show a rule.
+  if (slaKey === 'in_treatment') return 'In treatment, no active SLA clock';
   const all = [...SLA_POLICY.patient, ...SLA_POLICY.provider];
   const row = all.find((r) => r.key === slaKey);
   return row ? `${row.rule}, ${row.threshold_label}` : 'No SLA rule';

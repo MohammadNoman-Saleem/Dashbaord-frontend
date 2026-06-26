@@ -104,6 +104,11 @@ export interface LeadRecord {
   /** Last touch of any kind; the proxy anchor for several cockpit clocks when
    *  the precise event field is empty. */
   Last_Activity_Time: string | null;
+  /** When Lead_Status last changed, stamped by a Zoho workflow (the leads
+   *  analogue of Deals' Stage_Entry_Date). Drives the status-based cockpit SLA
+   *  clock; empty on leads that predate the field, where the clock falls back to
+   *  Created_Time. */
+  Last_Status_Change: string | null;
   /** Cockpit fields. Intro_Call_Date_Time is the first_contact stop field but
    *  is ~0% populated on live leads, so the cockpit clock falls back to a proxy
    *  and marks itself approx. Phone backs origin inference; Country is the
@@ -279,10 +284,12 @@ export class CrmReadService {
   }
 
   leads(): Promise<CachedRead<LeadRecord[]>> {
-    return this.cache.read('zoho_crm:leads_v5', 'zoho_crm', async () => {
+    // Key bumped to v6 when Last_Status_Change was added, so a warm v5 entry
+    // (without the field) can never be served against the new shape.
+    return this.cache.read('zoho_crm:leads_v6', 'zoho_crm', async () => {
       const records = await this.zoho.getAll(`${CRM}/Leads`, {
         fields:
-          'Zoho_ID,First_Name,Last_Name,Email,Lead_Source,Lead_Status,Created_Time,Converted__s,Layout,Owner,Last_Activity_Time,Intro_Call_Date_Time,Reason_Not_Qualified,Main_Concern_Reason_for_Consultation,Prefered_Country_of_Treatment_Consultation,Country,Phone,Communication_Language',
+          'Zoho_ID,First_Name,Last_Name,Email,Lead_Source,Lead_Status,Created_Time,Converted__s,Layout,Owner,Last_Activity_Time,Last_Status_Change,Intro_Call_Date_Time,Reason_Not_Qualified,Main_Concern_Reason_for_Consultation,Prefered_Country_of_Treatment_Consultation,Country,Phone,Communication_Language',
       });
       // Zoho returns the flag under its real key Converted__s; normalize it onto
       // Converted so every consumer keeps reading record.Converted.
@@ -299,7 +306,7 @@ export class CrmReadService {
   async invalidate(): Promise<void> {
     await Promise.all([
       this.cache.invalidate('zoho_crm:deals_v9'),
-      this.cache.invalidate('zoho_crm:leads_v5'),
+      this.cache.invalidate('zoho_crm:leads_v6'),
     ]);
   }
 
