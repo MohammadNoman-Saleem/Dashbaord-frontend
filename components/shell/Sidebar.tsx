@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Building2,
   ChevronLeft,
   Cpu,
   Filter,
@@ -69,6 +70,9 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobil
      should not appear for anyone else). */
   const { me } = useViewer();
   const isAdmin = me?.role === "admin";
+  /* The provider board shows patient cases, so its nav item only appears for a
+     viewer who may see patient names (the route 403s everyone else regardless). */
+  const seesNames = Boolean(me?.capabilities?.sees_patient_names);
 
   function navLabel(text: string) {
     if (rail) return null;
@@ -108,6 +112,15 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobil
         {WORKSPACE_NAV.map((entry) => (
           <NavItem key={entry.href} {...entry} collapsed={rail} onNavigate={onCloseMobile} />
         ))}
+        {seesNames ? (
+          <NavItem
+            href="/provider-board"
+            label="Provider board"
+            icon={Building2}
+            collapsed={rail}
+            onNavigate={onCloseMobile}
+          />
+        ) : null}
         {navLabel("Manage")}
         {MANAGE_NAV.map((entry) => (
           <NavItem key={entry.href} {...entry} collapsed={rail} onNavigate={onCloseMobile} />

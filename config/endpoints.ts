@@ -59,6 +59,7 @@ export type EndpointKey =
   | 'cockpit_sla_policy'
   | 'cockpit_case_write'
   | 'cockpit_search'
+  | 'provider_board'
   | 'write_gate_stage_options'
   | 'whatsapp_first_contact_template'
   | 'documents_quotation'
@@ -150,6 +151,12 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   // so the cockpit reaches the real route; the route still refuses anyone who is
   // not a name-seer server-side, so merging this exposes nothing new.
   cockpit_search: 'live',
+  // Provider board (Supabase-backed). GET the hospital-by-hospital board, POST a
+  // patient onto a column, DELETE a card. The GET fixture serves dev smoke; the
+  // route gates the whole board to name-seers server-side, so going live exposes
+  // nothing new. Writes carry no fixture (mutateEnvelope resolves null in fixture
+  // mode).
+  provider_board: 'live',
   // Phase 1b stage-move policy read: which target stages the current stage may
   // move to, plus the loss reasons. A GET, live with the backend on this
   // branch; the fixture serves dev smoke until the API is up.
