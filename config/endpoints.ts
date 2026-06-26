@@ -62,6 +62,7 @@ export type EndpointKey =
   | 'provider_board'
   | 'write_gate_stage_options'
   | 'whatsapp_first_contact_template'
+  | 'whatsapp_templates'
   | 'documents_quotation'
   | 'documents_referral_draft'
   | 'documents_referral_build'
@@ -117,9 +118,9 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   board_assignable_users: 'live',
   social_ga4: 'live',
   social_platforms: 'live',
-  // POST-only seam for raising IT tickets; carries no fixture (mutateEnvelope
-  // resolves null in fixture mode without ever reading one).
-  it_support: 'live',
+  // POST-only seam for raising IT tickets. There is no backing route, so this is
+  // fixture: mutateEnvelope no-ops in fixture mode rather than 404ing a live call.
+  it_support: 'fixture',
   brief: 'live',
   payouts_summary: 'live',
   payouts_bookings: 'live',
@@ -165,15 +166,18 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   // the send-and-log control previews; live with the backend on this branch,
   // the fixture serves dev smoke until the API is up.
   whatsapp_first_contact_template: 'live',
-  // Phase 3 quotation build (POST). The build-quotation control posts the
-  // inputs and receives the generated DOCX as base64. A POST-only seam;
-  // mutateEnvelope resolves null in fixture mode and never reads a fixture.
-  documents_quotation: 'live',
-  // Phase 3 referral drafting (POST seams). Draft assembles the clinical
-  // content from pasted report text; build renders the DOCX as base64. Both
-  // POST-only; mutateEnvelope resolves null in fixture mode and never reads a
-  // fixture. Live so the draft-review-build flow reaches the real backend; the
-  // backend still gates the draft endpoint and may return it turned off.
-  documents_referral_draft: 'live',
-  documents_referral_build: 'live',
+  // Editable WhatsApp template library (Supabase-backed). GET lists active
+  // templates (any signed-in viewer); POST/PATCH/DELETE are person-only writes
+  // that go through mutateEnvelope (no fixture read). Live with the backend on
+  // this branch; the GET fixture stub serves dev smoke until the API is up.
+  whatsapp_templates: 'live',
+  // Phase 3 quotation build (POST). There is no backing route, so this is
+  // fixture: mutateEnvelope no-ops in fixture mode rather than 404ing a live call.
+  documents_quotation: 'fixture',
+  // Phase 3 referral drafting (POST seams). Draft assembles the clinical content
+  // from pasted report text; build renders the DOCX as base64. Neither has a
+  // backing route yet, so both are fixture: mutateEnvelope no-ops in fixture mode
+  // rather than 404ing a live call.
+  documents_referral_draft: 'fixture',
+  documents_referral_build: 'fixture',
 }

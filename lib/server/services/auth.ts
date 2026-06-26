@@ -15,7 +15,6 @@
 // SERVER ONLY (pg/argon2 via the foundation). Routes declare runtime 'nodejs'.
 import { hashPassword, verifyPassword } from '@/lib/server/auth/auth';
 import { findByKey, type UserRow } from '@/lib/server/users';
-import { getEnv } from '@/lib/server/env';
 import { UnauthorizedError } from '@/lib/server/errors';
 
 // Generic, non-enumerating credential error. Identical wording for a missing
@@ -56,11 +55,13 @@ export const SEVEN_DAYS_SECONDS = 7 * 24 * 60 * 60;
  *  Some browsers only clear a cookie when the clear matches the original
  *  attributes, so logout reuses these (httpOnly, secure, sameSite, path) for
  *  the session cookie to be reliably removed. Mirrors the backend
- *  AuthController.sessionCookieAttrs. `secure` is on only in production. */
+ *  AuthController.sessionCookieAttrs. `secure` is hardcoded true: the dashboard
+ *  is always served over HTTPS on Vercel, so a misprovisioned env can never
+ *  drop Secure on the auth session cookie. */
 export function sessionCookieAttrs() {
   return {
     httpOnly: true,
-    secure: getEnv().NODE_ENV === 'production',
+    secure: true,
     sameSite: 'lax' as const,
     path: '/',
   };

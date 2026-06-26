@@ -171,6 +171,13 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
     },
     meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
   }),
+  // Editable WhatsApp template library GET stub for dev smoke (the live route
+  // lists the real rows). The add/edit/remove writes go through mutateEnvelope
+  // and never read a fixture.
+  whatsapp_templates: () => ({
+    data: { templates: [] },
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
   // Phase 3 quotation build (POST). mutateEnvelope resolves null in fixture
   // mode and never calls getFixture, so this stub only satisfies the record
   // type; no document is generated until the endpoint flips to live.

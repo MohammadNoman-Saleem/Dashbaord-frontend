@@ -38,7 +38,11 @@ import { StageMove } from "@/components/cockpit/StageMove";
 // SLA rebase: the clock now runs off status changes, so the case manager no
 // longer marks events by hand. Kept importable for an easy revert.
 // import { MarkEvents } from "@/components/cockpit/MarkEvents";
-import { SendFirstContact } from "@/components/cockpit/SendFirstContact";
+// SendFirstContact (the legacy no-op first-contact control) is replaced by the
+// click-to-chat WhatsApp template control below. The file is kept for an easy
+// revert; it is simply no longer rendered.
+// import { SendFirstContact } from "@/components/cockpit/SendFirstContact";
+import { WhatsAppMessage } from "@/components/cockpit/WhatsAppMessage";
 import { EditCaseDetails } from "@/components/cockpit/EditCaseDetails";
 import { BuildQuotation } from "@/components/cockpit/BuildQuotation";
 import { DraftReferral } from "@/components/cockpit/DraftReferral";
@@ -171,8 +175,19 @@ function CaseBody({
 
       {data.record_type === "deal" ? (
         <>
-          {data.steps.find((s) => s.state === "cur")?.key === "first_contact" ? (
-            <SendFirstContact resourceId={data.lead_ref.zoho_id} />
+          {/* Click-to-chat WhatsApp template control. Replaces the legacy
+              SendFirstContact. The patient identity rides in the same spread
+              PatientRef takes ({ ...data, ...data.lead_ref }), so the name is
+              never spelled by field here; WhatsAppMessage reads it only through
+              PatientRef's patientName helper. The number IS allowlisted in this
+              file, so it is passed explicitly. Both are served only to name-seers,
+              so the control is shown only then. */}
+          {seesNames ? (
+            <WhatsAppMessage
+              resourceId={data.lead_ref.zoho_id}
+              patient={{ ...data, ...data.lead_ref }}
+              phone={data.patient_phone ?? null}
+            />
           ) : null}
           <SetFollowUp
             resourceId={data.lead_ref.zoho_id}
