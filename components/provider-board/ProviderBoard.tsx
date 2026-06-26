@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Plus } from "lucide-react";
+import { AlertCircle, Building2, Plus } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ApiError, fetchEnvelope, mutateEnvelope } from "@/lib/api/fetcher";
@@ -16,6 +16,7 @@ import {
   type ProviderCardData,
 } from "@/components/provider-board/ProviderCard";
 import { AddReferralModal } from "@/components/provider-board/AddReferralModal";
+import { AddHospitalModal } from "@/components/provider-board/AddHospitalModal";
 
 /* The provider board. Country tabs (Bahrain first, then alphabetical, with
    "Other" for hospitals that have no country set in Zoho); under the selected
@@ -41,6 +42,7 @@ export function ProviderBoard() {
   const [addOpen, setAddOpen] = useState(false);
   const [presetHospitalId, setPresetHospitalId] = useState<string | null>(null);
   const [activeCountry, setActiveCountry] = useState<string | null>(null);
+  const [addHospitalOpen, setAddHospitalOpen] = useState(false);
 
   const query = useQuery({
     queryKey: qk.providerBoard(),
@@ -84,11 +86,20 @@ export function ProviderBoard() {
         title="Provider board"
         subtitle="Each hospital is a column under its country. Add a patient to track how long that hospital has had the case."
       />
-      <div className="flex items-center px-[18px] pb-2 pt-1">
+      <div className="flex items-center gap-2 px-[18px] pb-2 pt-1">
         <Button
           variant="ghost"
           size="sm"
           className="ml-auto"
+          onClick={() => setAddHospitalOpen(true)}
+          disabled={query.isError}
+        >
+          <Building2 strokeWidth={1.8} aria-hidden="true" />
+          Add hospital
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => openAdd(null)}
           disabled={query.isError}
         >
@@ -121,6 +132,16 @@ export function ProviderBoard() {
           onClose={() => setAddOpen(false)}
         />
       ) : null}
+
+      {addHospitalOpen ? (
+        <AddHospitalModal
+          open
+          defaultCountry={
+            activeCountry && activeCountry !== "Other" ? activeCountry : ""
+          }
+          onClose={() => setAddHospitalOpen(false)}
+        />
+      ) : null}
     </Card>
   );
 }
@@ -145,7 +166,7 @@ function BoardBody({
   if (data.hospitals.length === 0) {
     return (
       <p className="py-3 text-[13px] text-ink-2">
-        No hospitals found in Zoho yet.
+        No hospitals on the board yet. Add one with the button above.
       </p>
     );
   }
@@ -194,7 +215,7 @@ function BoardBody({
         })}
       </div>
 
-      <div className="mt-3 flex items-start gap-[14px] overflow-x-auto pb-2">
+      <div className="scroll-thin mt-3 flex items-start gap-[14px] overflow-x-auto pb-2">
         {columns.map((h) => {
           const cards = data.cardsByHospital[h.id] ?? [];
           return (
