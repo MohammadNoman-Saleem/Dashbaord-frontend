@@ -222,6 +222,13 @@ const CRM = 'https://www.zohoapis.com/crm/v3';
 const FIRST_WEEK_DAYS = 7;
 const GAP_STATE_KEY = 'meta:lead-recon-gap-since';
 
+// Cache key for the composed medical-travel payload (read and the pulse peek
+// share it, so they must match). Versioned: bump the suffix whenever
+// MedicalTravelData's shape changes, so a stale entry built from the old shape
+// is never served. v2 added action_rows[].zoho_ref.
+const mtlCacheKey = (from: string, to: string): string =>
+  `mtl:medical-travel:v2:${from}:${to}`;
+
 interface CampaignLeadRecord {
   id: string;
   Zoho_ID: string | null;
@@ -330,7 +337,7 @@ export class LeadsReadService {
     const f = from ?? window.from;
     const t = to ?? window.to;
     const read = await this.cache.read<MedicalTravelData>(
-      `mtl:medical-travel:${f}:${t}`,
+      mtlCacheKey(f, t),
       'mtl',
       () => this.compose(f, t),
     );
@@ -352,7 +359,7 @@ export class LeadsReadService {
   async reconciliationSnapshot(): Promise<ReconciliationResult | null> {
     const { from, to } = this.defaultWindow();
     const cached = await this.cache.peek<MedicalTravelData>(
-      `mtl:medical-travel:${from}:${to}`,
+      mtlCacheKey(from, to),
     );
     return cached?.data?.reconciliation ?? null;
   }
