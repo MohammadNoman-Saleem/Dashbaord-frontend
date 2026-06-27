@@ -41,7 +41,7 @@ const ACTION_COLUMNS: DataTableColumn<MtlActionRow>[] = [
   {
     key: "ref",
     label: "Lead",
-    render: (row) => <b className="num font-semibold text-title">{row.ref}</b>,
+    render: (row) => <b className="num font-semibold text-title">{row.zoho_ref}</b>,
   },
   { key: "from", label: "From" },
   { key: "destination", label: "Wants to go" },

@@ -224,6 +224,7 @@ const GAP_STATE_KEY = 'meta:lead-recon-gap-since';
 
 interface CampaignLeadRecord {
   id: string;
+  Zoho_ID: string | null;
   Lead_Source: string | null;
   Lead_Status: string | null;
   Country: string | null;
@@ -237,6 +238,7 @@ interface CampaignLeadRecord {
 
 interface EnrichedLead {
   zoho_lead_id: string;
+  zoho_ref: string;
   created_date: string;
   origin_country: string;
   origin_inferred: boolean;
@@ -297,6 +299,7 @@ export interface MedicalTravelData {
     status: string;
     deal_stage: string | null;
     zoho_lead_id: string;
+    zoho_ref: string;
   }>;
   reads: ReadItem[];
   reconciliation: ReconciliationResult | null;
@@ -357,6 +360,7 @@ export class LeadsReadService {
   private async compose(from: string, to: string): Promise<MedicalTravelData> {
     const records = (await this.zoho.getAll(`${CRM}/Leads`, {
       fields: [
+        'Zoho_ID',
         'Lead_Source',
         'Lead_Status',
         'Country',
@@ -538,6 +542,7 @@ export class LeadsReadService {
         status: l.status_normalized,
         deal_stage: l.deal_stage,
         zoho_lead_id: l.zoho_lead_id,
+        zoho_ref: l.zoho_ref,
       }));
 
     return {
@@ -599,6 +604,7 @@ export class LeadsReadService {
         : (r.Prefered_Country_of_Treatment_Consultation ?? null);
       out.push({
         zoho_lead_id: r.id,
+        zoho_ref: r.Zoho_ID ?? r.id,
         created_date: (r.Created_Time ?? '').slice(0, 10),
         origin_country: origin.country,
         origin_inferred: origin.inferred,
