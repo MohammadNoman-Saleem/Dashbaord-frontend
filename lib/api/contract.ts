@@ -211,6 +211,9 @@ export interface MtlActionRow {
   /** Zoho deal stage, set when status is converted. */
   deal_stage: string | null
   zoho_lead_id: string
+  /** Human-readable Zoho Lead ID (autonumber); falls back to the internal
+   *  record id when the autonumber is blank. This is what the LEAD column shows. */
+  zoho_ref: string
 }
 export interface MtlRead {
   key: string

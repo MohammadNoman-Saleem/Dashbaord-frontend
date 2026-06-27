@@ -196,7 +196,10 @@ export function PrioritiesPanel({
                 <DataTable
                   columns={COLUMNS[variant]}
                   rows={rows}
-                  rowKey={(row) => row.case_id}
+                  /* Key by record plus reason: the same deal can surface in
+                     two buckets (quiet and a follow-up due today), so case_id
+                     alone is not unique across rows. */
+                  rowKey={(row) => `${row.case_id}:${row.why_now.label}`}
                   onRowClick={(row) => router.push(cockpitCaseHref(row.case_id, viewAs))}
                 />
               </div>
