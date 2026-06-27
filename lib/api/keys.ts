@@ -53,4 +53,5 @@ export const qk = {
     ['cockpit', 'parked', person, bucket, page, pageSize] as const,
   cockpitSlaPolicy: () => ['cockpit', 'sla-policy'] as const,
   providerBoard: () => ['provider-board'] as const,
+  whatsappTemplates: () => ['whatsapp', 'templates'] as const,
 }

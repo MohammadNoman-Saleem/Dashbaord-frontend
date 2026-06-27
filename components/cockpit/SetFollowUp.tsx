@@ -8,27 +8,33 @@ import { Field, FieldInput } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
 import { useCockpitWrite, writeErrorMessage } from "./useCockpitWrite";
 
-/* Set a deal's next follow-up date. ONE-STEP write: clicking Save sends the
+/* Set a case's next follow-up date. ONE-STEP write: clicking Save sends the
    change in a single POST to /api/cockpit/case/[id]/write, which validates,
    writes to Zoho, and audits in one call (the former prepare -> confirm ->
    commit split is gone). No confirm prompt: this is a low-impact change and
    writes immediately on click. If writes are turned off server-side the route
    refuses and the toast carries that message.
 
-   The control shows only for deals (leads have no Next_Follow_up field). Every
-   other case-file action stays read-only. */
+   The control shows for both deals and leads. recordKind picks which change
+   kind it posts (set_follow_up for a deal, set_lead_follow_up for a lead); both
+   write the same Next_Follow_up field on their respective module. Every other
+   case-file action stays read-only. */
 
 const WRITE_FAILURE_COPY =
   "Couldn't save the follow-up date. Nothing changed. Try again, or tell Al Saeed if it repeats.";
 
 type Props = {
-  /** The deal's internal Zoho record id (lead_ref.zoho_id on the case). */
+  /** The case's internal Zoho record id (lead_ref.zoho_id on the case). */
   resourceId: string;
   /** The current next-follow-up date (YYYY-MM-DD) or null. */
   currentFollowUp: string | null;
+  /** Which module the case lives on. Drives the change kind posted: "deal"
+   *  sends set_follow_up, "lead" sends set_lead_follow_up. Defaults to "deal"
+   *  so existing deal-branch callers are unchanged. */
+  recordKind?: "lead" | "deal";
 };
 
-export function SetFollowUp({ resourceId, currentFollowUp }: Props) {
+export function SetFollowUp({ resourceId, currentFollowUp, recordKind = "deal" }: Props) {
   const toast = useToast();
   const [date, setDate] = useState(currentFollowUp?.slice(0, 10) ?? "");
 
@@ -56,7 +62,13 @@ export function SetFollowUp({ resourceId, currentFollowUp }: Props) {
           variant="primary"
           size="sm"
           disabled={!date || save.isPending}
-          onClick={() => save.mutate({ kind: "set_follow_up", date })}
+          onClick={() =>
+            save.mutate(
+              recordKind === "lead"
+                ? { kind: "set_lead_follow_up", date }
+                : { kind: "set_follow_up", date },
+            )
+          }
         >
           Save follow-up
         </Button>

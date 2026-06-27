@@ -41,6 +41,9 @@ import {
 export interface PriorityRowData {
   patient_ref: PatientRef;
   patient_name?: string;
+  // The cockpit case lookup key (the record's own id), distinct from
+  // patient_ref.zoho_id which is the contact id for deals.
+  case_id: string;
   why_now: { label: string; tone: 'info' | 'warn' | 'good' };
   pipeline: string;
   /** tele or travel for patient deal rows; null on new-lead rows, which
@@ -153,6 +156,7 @@ export class PipelineService {
     for (const lead of newLeads) {
       const row: PriorityRowData = {
         patient_ref: this.patients.ref(lead.id, leadName(lead)),
+        case_id: lead.id,
         why_now: { label: 'New lead', tone: 'info' },
         pipeline: 'New lead',
         service: null,
@@ -177,6 +181,7 @@ export class PipelineService {
           deal.Contact_Name?.id ?? deal.id,
           deal.Contact_Name?.name,
         ),
+        case_id: deal.id,
         why_now: { label: `Quiet ${days} days`, tone: 'warn' },
         pipeline: `${deal.Pipeline}, ${deal.Stage ?? 'open'}`,
         service: serviceOfPipeline(deal.Pipeline),
@@ -198,6 +203,7 @@ export class PipelineService {
           deal.Contact_Name?.id ?? deal.id,
           deal.Contact_Name?.name,
         ),
+        case_id: deal.id,
         why_now: { label: 'Follow-up', tone: 'good' },
         pipeline: `${deal.Pipeline}, ${deal.Stage ?? 'open'}`,
         service: serviceOfPipeline(deal.Pipeline),

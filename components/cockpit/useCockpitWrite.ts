@@ -57,6 +57,7 @@ export type CockpitWriteChange =
     }
   | { kind: "convert_lead"; pipeline: CockpitPipeline; stage: string }
   | { kind: "set_lead_status"; status: string }
+  | { kind: "set_lead_follow_up"; date: string }
   | { kind: "park_lead"; reason: string };
 
 // The stamp event union, exported for the MarkEvents control's button list.

@@ -20,6 +20,17 @@ export type PatientRefData = {
   patient_name?: string | null;
 };
 
+/* The plain patient name string for callers that must fill it into a value
+   rather than render it (e.g. WhatsApp template placeholders for a click-to-chat
+   link). Returns null when the API did not include the name for this viewer.
+   This is the ONLY sanctioned way to read the name outside this file: callers
+   pass the same PatientRefData they hand to PatientRef, so they never spell the
+   guarded field themselves (CI keeps the literal confined here). The value is
+   the patient name; callers must treat it as identity and never log it. */
+export function patientName(patient: PatientRefData): string | null {
+  return patient.patient_name ?? null;
+}
+
 type PatientRefProps = {
   patient: PatientRefData;
   className?: string;

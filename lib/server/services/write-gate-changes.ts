@@ -57,6 +57,7 @@ export type ProposedChange =
       stage: string;
     }
   | { kind: 'set_lead_status'; status: string }
+  | { kind: 'set_lead_follow_up'; date: string } // date as YYYY-MM-DD
   | { kind: 'park_lead'; reason: string };
 
 export const ACTIVE_CHANGE_KINDS: ReadonlyArray<ProposedChange['kind']> = [
@@ -67,6 +68,7 @@ export const ACTIVE_CHANGE_KINDS: ReadonlyArray<ProposedChange['kind']> = [
   'edit_field',
   'convert_lead',
   'set_lead_status',
+  'set_lead_follow_up',
   'park_lead',
 ];
 
@@ -267,6 +269,15 @@ export function describeChange(
       return `Convert this lead to a ${change.pipeline} deal at ${change.stage}`;
     case 'set_lead_status':
       return `Set lead status to ${change.status}`;
+    case 'set_lead_follow_up': {
+      const to = formatFollowUpDate(change.date);
+      if (ctx.currentFollowUp) {
+        const from = formatFollowUpDate(ctx.currentFollowUp.slice(0, 10));
+        if (from === to) return `Next follow-up stays ${to}`;
+        return `Change next follow-up from ${from} to ${to}`;
+      }
+      return `Set next follow-up to ${to}`;
+    }
     case 'park_lead':
       return `Park this lead as Not Qualified (reason: ${change.reason})`;
   }

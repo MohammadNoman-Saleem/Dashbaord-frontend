@@ -18,6 +18,7 @@ function meta(): Meta {
 const ROWS = [
   {
     patient_ref: { zoho_id: 'T-031', initials: 'A' },
+    case_id: 'T-031',
     why_now: { label: 'New lead', tone: 'info' },
     service: 'travel',
     pipeline: 'spine',
@@ -27,6 +28,7 @@ const ROWS = [
   },
   {
     patient_ref: { zoho_id: '0427', initials: 'G' },
+    case_id: '0427',
     why_now: { label: 'New lead', tone: 'info' },
     service: 'tele',
     pipeline: 'Novo track',
@@ -36,6 +38,7 @@ const ROWS = [
   },
   {
     patient_ref: { zoho_id: '0430', initials: 'B' },
+    case_id: '0430',
     why_now: { label: 'New lead', tone: 'info' },
     service: 'tele',
     pipeline: '',
@@ -45,6 +48,7 @@ const ROWS = [
   },
   {
     patient_ref: { zoho_id: '0421', initials: '0421' },
+    case_id: '0421',
     why_now: { label: 'New lead', tone: 'info' },
     service: 'tele',
     pipeline: '',
@@ -54,6 +58,7 @@ const ROWS = [
   },
   {
     patient_ref: { zoho_id: '0418', initials: '0418' },
+    case_id: '0418',
     why_now: { label: 'New lead', tone: 'info' },
     service: 'travel',
     pipeline: 'cardiac',
@@ -63,6 +68,7 @@ const ROWS = [
   },
   {
     patient_ref: { zoho_id: 'T-030', initials: 'C' },
+    case_id: 'T-030',
     why_now: { label: 'Quiet 4 days', tone: 'warn' },
     service: 'travel',
     pipeline: 'quote stage',
@@ -72,6 +78,7 @@ const ROWS = [
   },
   {
     patient_ref: { zoho_id: 'C-204', initials: 'D' },
+    case_id: 'C-204',
     why_now: { label: 'Quiet 3 days', tone: 'warn' },
     service: 'tele',
     pipeline: 'consult payment',
@@ -81,6 +88,7 @@ const ROWS = [
   },
   {
     patient_ref: { zoho_id: 'T-029', initials: 'H' },
+    case_id: 'T-029',
     why_now: { label: 'Quiet 3 days', tone: 'warn' },
     service: 'travel',
     pipeline: 'payment stage',
@@ -90,6 +98,7 @@ const ROWS = [
   },
   {
     patient_ref: { zoho_id: '0395', initials: '0395' },
+    case_id: '0395',
     why_now: { label: 'Quiet 6 days', tone: 'warn' },
     service: 'tele',
     pipeline: 'new deal',
@@ -99,6 +108,7 @@ const ROWS = [
   },
   {
     patient_ref: { zoho_id: 'T-028', initials: 'E' },
+    case_id: 'T-028',
     why_now: { label: 'Check-in due', tone: 'good' },
     service: 'travel',
     pipeline: 'done Jun 7',
@@ -108,6 +118,7 @@ const ROWS = [
   },
   {
     patient_ref: { zoho_id: 'C-201', initials: 'F' },
+    case_id: 'C-201',
     why_now: { label: 'Follow-up', tone: 'good' },
     service: 'tele',
     pipeline: 'consult Jun 9',
@@ -117,6 +128,7 @@ const ROWS = [
   },
   {
     patient_ref: { zoho_id: 'T-027', initials: 'J' },
+    case_id: 'T-027',
     why_now: { label: '30-day review', tone: 'good' },
     service: 'travel',
     pipeline: 'done May 11',

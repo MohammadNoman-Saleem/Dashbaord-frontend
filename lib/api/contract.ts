@@ -273,6 +273,9 @@ export interface UrgentData {
 export interface PriorityRow {
   patient_ref: PatientRefData
   patient_name?: string
+  /** The cockpit case lookup key: the lead's or deal's own record id. Distinct
+   *  from patient_ref.zoho_id, which is the contact id on deal rows. */
+  case_id: string
   /** tone: info = new lead, warn = going quiet, good = today's follow-up */
   why_now: { label: string; tone: 'info' | 'warn' | 'good' }
   /** Classified server-side (07 section 2): Telemedicine pipeline deals are
@@ -1121,10 +1124,11 @@ export interface CockpitCaseData {
   route: string
   condition: string
   source: string
-  /** Deal or unconverted lead. The set-follow-up control shows only for deals
-   *  (leads have no Next_Follow_up field). */
+  /** Deal or unconverted lead. The set-follow-up control shows for both: deals
+   *  write set_follow_up, leads write set_lead_follow_up. The Leads module
+   *  carries Next_Follow_up (same api_name as Deals) as of 2026-06-27. */
   record_type: CockpitRecordType
-  /** Current next-follow-up date (Deals Next_Follow_up), or null. */
+  /** Current next-follow-up date (Deals or Leads Next_Follow_up), or null. */
   next_follow_up: string | null
   /** Current patient budget in BHD (Deals field), or null when unset. The
    *  edit-case-details control prefills and writes this. */
