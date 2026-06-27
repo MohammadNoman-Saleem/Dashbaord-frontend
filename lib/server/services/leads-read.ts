@@ -584,8 +584,13 @@ export class LeadsReadService {
     // handful convert), then read the stage from the cached deals list.
     const dealsRead = await this.crm.deals().catch(() => null);
     const stageById = new Map<string, string | null>();
+    // Deal "Zoho ID" (text field) per deal, so a converted row shows the
+    // deal's reference rather than the lead's. Often blank on a deal, so the
+    // row falls back to the lead "Zoho Lead ID" below.
+    const dealZohoIdById = new Map<string, string | null>();
     for (const deal of dealsRead?.data ?? []) {
       stageById.set(deal.id, deal.Stage);
+      dealZohoIdById.set(deal.id, deal.Zoho_ID);
     }
 
     const out: EnrichedLead[] = [];
@@ -604,7 +609,15 @@ export class LeadsReadService {
         : (r.Prefered_Country_of_Treatment_Consultation ?? null);
       out.push({
         zoho_lead_id: r.id,
-        zoho_ref: r.Zoho_ID ?? r.id,
+        // The reference the LEAD column shows. A converted row is a deal, so
+        // it uses the Deals "Zoho ID"; an unconverted row is a lead, so it uses
+        // the Leads "Zoho Lead ID". Either falls back to the lead autonumber and
+        // then the internal id. The chain uses || (not ??) so an empty string
+        // also falls through, since a blank Deals "Zoho ID" comes back as "".
+        zoho_ref:
+          (convertedDealId ? dealZohoIdById.get(convertedDealId) : null) ||
+          r.Zoho_ID ||
+          r.id,
         created_date: (r.Created_Time ?? '').slice(0, 10),
         origin_country: origin.country,
         origin_inferred: origin.inferred,
