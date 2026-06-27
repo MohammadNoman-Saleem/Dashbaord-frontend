@@ -184,11 +184,21 @@ function CaseBody({
       ) : null}
 
       {data.record_type === "lead" ? (
-        <LeadActions
-          resourceId={data.lead_ref.zoho_id}
-          currentStatus={data.lead_status ?? null}
-          onConvertSuccess={onOpenCase}
-        />
+        <>
+          <LeadActions
+            resourceId={data.lead_ref.zoho_id}
+            currentStatus={data.lead_status ?? null}
+            onConvertSuccess={onOpenCase}
+          />
+          {/* Leads now carry Next_Follow_up too (same api_name as Deals), so a
+              case manager can set a lead's follow-up date the same way as on a
+              deal. recordKind="lead" routes it to set_lead_follow_up. */}
+          <SetFollowUp
+            resourceId={data.lead_ref.zoho_id}
+            currentFollowUp={data.next_follow_up}
+            recordKind="lead"
+          />
+        </>
       ) : null}
 
       {canUseDocuments ? (

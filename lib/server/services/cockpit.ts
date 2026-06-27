@@ -177,10 +177,10 @@ export interface CaseFile {
   route: string;
   condition: string;
   source: string;
-  // Whether this case is a deal or an unconverted lead, and the deal's current
+  // Whether this case is a deal or an unconverted lead, and the case's current
   // next-follow-up date. The write gate's set-follow-up control reads both: it
-  // shows only for deals (leads have no Next_Follow_up field) and prefills the
-  // current date.
+  // shows for deals and for leads (the Leads module now carries Next_Follow_up,
+  // same api_name as on Deals) and prefills the current date.
   record_type: CockpitRecordType;
   next_follow_up: string | null;
   // The deal's raw Zoho stage and pipeline, surfaced so the frontend's
@@ -232,9 +232,9 @@ interface NormalizedCase {
   ownerKey: string | null;
   clockInputs: ClockInputs;
   reasonNotQualified: string | null;
-  // Current next-follow-up date (Deals Next_Follow_up), or null. Surfaced so
-  // the case file can show it and the write gate's set-follow-up control can
-  // edit it. Leads carry no such field, so it is null for lead cases.
+  // Current next-follow-up date (Next_Follow_up on Deals and, since 2026-06-27,
+  // on Leads too), or null. Surfaced so the case file can show it and the write
+  // gate's set-follow-up control can edit it on both deals and leads.
   nextFollowUp: string | null;
   // The deal's raw Zoho stage (Deals Stage), or null for leads. Surfaced on the
   // case file so the stage-move control knows the current stage. Separate from
@@ -395,7 +395,7 @@ function fromLead(l: LeadRecord): NormalizedCase {
     createdTime: l.Created_Time,
     ownerKey: ownerKeyOf(l.Owner?.name),
     reasonNotQualified: l.Reason_Not_Qualified,
-    nextFollowUp: null,
+    nextFollowUp: l.Next_Follow_up,
     stage: null,
     patientBudget: null,
     treatmentStart: null,

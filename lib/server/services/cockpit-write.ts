@@ -71,6 +71,7 @@ const CRM = 'https://www.zohoapis.com/crm/v3';
 const LEAD_CHANGE_KINDS: ReadonlyArray<ProposedChange['kind']> = [
   'convert_lead',
   'set_lead_status',
+  'set_lead_follow_up',
   'park_lead',
 ];
 
@@ -397,11 +398,17 @@ async function applyLeadChange(
   ) {
     throw new BadRequestError(`"${change.status}" is not a valid lead status.`);
   }
+  if (change.kind === 'set_lead_follow_up' && !isPlainDate(change.date)) {
+    throw new BadRequestError(
+      'A follow-up date must be a calendar date (YYYY-MM-DD).',
+    );
+  }
   if (change.kind === 'park_lead' && change.reason.trim().length === 0) {
     throw new BadRequestError('Parking a lead needs a reason.');
   }
 
-  // The lead describer needs no deal context (budget, stage, follow-up).
+  // The lead describer needs no deal context (budget, stage); currentFollowUp is
+  // null since the cached lead read does not carry it onto this path.
   const changeText = describeChange(change, {
     currentFollowUp: null,
     currentStage: null,
@@ -413,8 +420,10 @@ async function applyLeadChange(
   }
 
   // set_lead_status and park_lead are a single Lead_Status write (a park also
-  // records the not-qualified reason). The field map is the allowlist; no other
-  // field is written. Identical to the old commitLead non-convert path.
+  // records the not-qualified reason); set_lead_follow_up is a single
+  // Next_Follow_up write. The field map is the allowlist; no other field is
+  // written. The status/park paths are identical to the old commitLead
+  // non-convert path; the follow-up path mirrors the deal set_follow_up write.
   let fields: Record<string, unknown>;
   if (change.kind === 'park_lead') {
     fields = {
@@ -423,6 +432,11 @@ async function applyLeadChange(
     };
   } else if (change.kind === 'set_lead_status') {
     fields = { Lead_Status: change.status };
+  } else if (change.kind === 'set_lead_follow_up') {
+    // The Leads module now carries Next_Follow_up (api_name matches Deals). The
+    // lead path writes the field map directly rather than via CHANGE_FIELD, which
+    // is deal-only. The date was validated by isPlainDate above.
+    fields = { Next_Follow_up: change.date };
   } else {
     // Unreachable: convert_lead is handled above and deal kinds never route
     // here. Keeps the switch exhaustive.
@@ -656,6 +670,7 @@ function fieldsFor(change: ProposedChange): Record<string, unknown> {
       );
     case 'convert_lead':
     case 'set_lead_status':
+    case 'set_lead_follow_up':
     case 'park_lead':
       throw new BadRequestError(
         'Lead changes are applied by their own lead path.',

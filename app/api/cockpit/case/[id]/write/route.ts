@@ -81,6 +81,7 @@ const ChangeSchema = z.discriminatedUnion('kind', [
     stage: z.string(),
   }),
   z.object({ kind: z.literal('set_lead_status'), status: z.string() }),
+  z.object({ kind: z.literal('set_lead_follow_up'), date: z.string() }),
   z.object({ kind: z.literal('park_lead'), reason: z.string() }),
 ]);
 

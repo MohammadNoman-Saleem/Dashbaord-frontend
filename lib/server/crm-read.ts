@@ -121,6 +121,10 @@ export interface LeadRecord {
   Country: string | null;
   Phone: string | null;
   Communication_Language: string | null;
+  /** Next follow-up date (Leads field, api_name Next_Follow_up, a date; same
+   *  name as on Deals, created on the module 2026-06-27). Lets the cockpit
+   *  surface and edit a lead's follow-up date the same way it does on a deal. */
+  Next_Follow_up: string | null;
 }
 
 export interface BookingRecord {
@@ -272,7 +276,7 @@ export class CrmReadService {
 
   // Cache key bumped whenever the field list grows so a stale entry can never
   // serve a shape without the new fields (see the legacy version history;
-  // currently v9 for deals, v5 for leads, v2 for bookings).
+  // currently v9 for deals, v7 for leads, v2 for bookings).
   deals(): Promise<CachedRead<DealRecord[]>> {
     return this.cache.read('zoho_crm:deals_v9', 'zoho_crm', async () => {
       const records = await this.zoho.getAll(`${CRM}/Deals`, {
@@ -284,12 +288,13 @@ export class CrmReadService {
   }
 
   leads(): Promise<CachedRead<LeadRecord[]>> {
-    // Key bumped to v6 when Last_Status_Change was added, so a warm v5 entry
-    // (without the field) can never be served against the new shape.
-    return this.cache.read('zoho_crm:leads_v6', 'zoho_crm', async () => {
+    // Key bumped to v7 when Next_Follow_up was added, so a warm v6 entry
+    // (without the field) can never be served against the new shape. (v6 added
+    // Last_Status_Change.)
+    return this.cache.read('zoho_crm:leads_v7', 'zoho_crm', async () => {
       const records = await this.zoho.getAll(`${CRM}/Leads`, {
         fields:
-          'Zoho_ID,First_Name,Last_Name,Email,Lead_Source,Lead_Status,Created_Time,Converted__s,Layout,Owner,Last_Activity_Time,Last_Status_Change,Intro_Call_Date_Time,Reason_Not_Qualified,Main_Concern_Reason_for_Consultation,Prefered_Country_of_Treatment_Consultation,Country,Phone,Communication_Language',
+          'Zoho_ID,First_Name,Last_Name,Email,Lead_Source,Lead_Status,Created_Time,Converted__s,Layout,Owner,Last_Activity_Time,Last_Status_Change,Intro_Call_Date_Time,Reason_Not_Qualified,Main_Concern_Reason_for_Consultation,Prefered_Country_of_Treatment_Consultation,Country,Phone,Communication_Language,Next_Follow_up',
       });
       // Zoho returns the flag under its real key Converted__s; normalize it onto
       // Converted so every consumer keeps reading record.Converted.
@@ -306,7 +311,7 @@ export class CrmReadService {
   async invalidate(): Promise<void> {
     await Promise.all([
       this.cache.invalidate('zoho_crm:deals_v9'),
-      this.cache.invalidate('zoho_crm:leads_v6'),
+      this.cache.invalidate('zoho_crm:leads_v7'),
     ]);
   }
 
