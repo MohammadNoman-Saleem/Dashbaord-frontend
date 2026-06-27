@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { Lock } from "lucide-react";
 
 /* Dense data table. Mirrors the mockup table rules: 13px body, 10.5px
@@ -28,6 +28,10 @@ type DataTableProps<T> = {
   rows: T[];
   /* Stable row key. Falls back to the row index. */
   rowKey?: (row: T, index: number) => string | number;
+  /* Opt-in clickable rows. When provided, each row becomes an activatable
+     button (click, Enter, or Space) and gets the pointer cursor; omitted, the
+     row renders exactly as a plain presentational row. */
+  onRowClick?: (row: T, index: number) => void;
   className?: string;
 };
 
@@ -37,7 +41,7 @@ function defaultCell(value: unknown): ReactNode {
   return String(value);
 }
 
-export function DataTable<T>({ columns, rows, rowKey, className }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, onRowClick, className }: DataTableProps<T>) {
   return (
     <div className={`overflow-x-auto ${className ?? ""}`}>
       <table className="w-full border-collapse text-[13px]">
@@ -63,7 +67,23 @@ export function DataTable<T>({ columns, rows, rowKey, className }: DataTableProp
         </thead>
         <tbody className="[&>tr:last-child>td]:border-b-0">
           {rows.map((row, index) => (
-            <tr key={rowKey ? rowKey(row, index) : index} className="hover:bg-accessible-soft">
+            <tr
+              key={rowKey ? rowKey(row, index) : index}
+              className={`hover:bg-accessible-soft${onRowClick ? " cursor-pointer" : ""}`}
+              {...(onRowClick
+                ? {
+                    role: "button",
+                    tabIndex: 0,
+                    onClick: () => onRowClick(row, index),
+                    onKeyDown: (e: KeyboardEvent<HTMLTableRowElement>) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        if (e.key === " ") e.preventDefault();
+                        onRowClick(row, index);
+                      }
+                    },
+                  }
+                : {})}
+            >
               {columns.map((col) => (
                 <td
                   key={col.key}

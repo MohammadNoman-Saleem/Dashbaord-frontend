@@ -37,6 +37,19 @@ export function buildDeepLink(link: DeepLink, currentAs?: string): string {
   return qs ? `${path}?${qs}` : path
 }
 
+/**
+ * Href that opens a case in the cockpit by its own record id. Sets ?case= to
+ * the case id, focus=cockpit-case so useFocusFlash scrolls to the case panel
+ * (data-focus-id="cockpit-case"), and carries the view-as override when given.
+ */
+export function cockpitCaseHref(caseId: string, currentAs?: string): string {
+  const search = new URLSearchParams()
+  search.set('case', caseId)
+  search.set('focus', 'cockpit-case')
+  if (currentAs) search.set('as', currentAs)
+  return `/cockpit?${search.toString()}`
+}
+
 /* Flash duration matches the .flash animation in app/globals.css (1.6s). */
 const FLASH_MS = 1600
 /* Panels load async (fixture delay today, network later), so the target

@@ -40,6 +40,7 @@ export default function CockpitPage() {
 function CockpitInner() {
   const searchParams = useSearchParams();
   const viewAs = searchParams.get("as") ?? undefined;
+  const caseParam = searchParams.get("case");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Phone search is an identifiable patient lookup. The route gates it to
@@ -58,7 +59,7 @@ function CockpitInner() {
   });
 
   const data = query.data?.data ?? null;
-  const activeId = selectedId ?? (data && data.active.length > 0 ? data.active[0].lead_ref.zoho_id : null);
+  const activeId = selectedId ?? caseParam ?? (data && data.active.length > 0 ? data.active[0].lead_ref.zoho_id : null);
 
   return (
     <Grid>

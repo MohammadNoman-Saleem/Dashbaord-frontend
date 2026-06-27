@@ -273,6 +273,9 @@ export interface UrgentData {
 export interface PriorityRow {
   patient_ref: PatientRefData
   patient_name?: string
+  /** The cockpit case lookup key: the lead's or deal's own record id. Distinct
+   *  from patient_ref.zoho_id, which is the contact id on deal rows. */
+  case_id: string
   /** tone: info = new lead, warn = going quiet, good = today's follow-up */
   why_now: { label: string; tone: 'info' | 'warn' | 'good' }
   /** Classified server-side (07 section 2): Telemedicine pipeline deals are

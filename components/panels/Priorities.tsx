@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Lock } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import type { PrioritiesData, PriorityRow } from "@/lib/api/contract";
 import { fetchEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
-import { buildDeepLink } from "@/lib/deepLink";
+import { buildDeepLink, cockpitCaseHref } from "@/lib/deepLink";
 import { usePillFilter } from "@/lib/usePillFilter";
 
 /* The priority queue: new leads first, then anyone going quiet, then today's
@@ -123,6 +123,7 @@ export function PrioritiesPanel({
   person: string;
   variant?: PrioritiesVariant;
 }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const viewAs = searchParams.get("as") ?? undefined;
   const limit = LIMITS[variant];
@@ -195,7 +196,8 @@ export function PrioritiesPanel({
                 <DataTable
                   columns={COLUMNS[variant]}
                   rows={rows}
-                  rowKey={(row) => row.patient_ref.zoho_id}
+                  rowKey={(row) => row.case_id}
+                  onRowClick={(row) => router.push(cockpitCaseHref(row.case_id, viewAs))}
                 />
               </div>
             );
