@@ -185,6 +185,19 @@ function CaseBody({
 
       {data.record_type === "lead" ? (
         <>
+          {/* Click-to-chat WhatsApp control, same as the deal branch above. A
+              lead is often the first-contact moment, so the case manager can
+              message the patient straight from the lead card. Gated to
+              name-seers (it needs the patient number, served by withPatientContact
+              for leads and deals alike); the control shows an honest "no number
+              on file" note when the lead has no phone. */}
+          {seesNames ? (
+            <WhatsAppMessage
+              resourceId={data.lead_ref.zoho_id}
+              patient={{ ...data, ...data.lead_ref }}
+              phone={data.patient_phone ?? null}
+            />
+          ) : null}
           <LeadActions
             resourceId={data.lead_ref.zoho_id}
             currentStatus={data.lead_status ?? null}
