@@ -1145,12 +1145,13 @@ export interface CockpitCaseData {
   /** Treatment or Telemedicine for deals; null for leads. */
   pipeline: CockpitPipeline | null
   /** The patient phone (E.164, e.g. "+97300000000"), served only to viewers
-   *  who may see patient identities, and only for deals (name-seers). Null
-   *  when no number is on file. Powers the click-to-chat WhatsApp link. */
+   *  who may see patient identities, for both deals and leads (name-seers).
+   *  Null when no number is on file. Powers the click-to-chat WhatsApp link. */
   patient_phone?: string | null
   /** The step-aware drafted WhatsApp line for the click-to-chat link, served
-   *  only to name-seers (deals). The case manager reviews it in WhatsApp and
-   *  sends; never sent by the dashboard. Null when no draft is available. */
+   *  only to name-seers, for both deals and leads. The case manager reviews it
+   *  in WhatsApp and sends; never sent by the dashboard. Null when no draft is
+   *  available. */
   whatsapp_message?: string | null
   /** The Leads Lead_Status value for an unconverted lead, or null for a deal.
    *  Prefills the update-status control. */
