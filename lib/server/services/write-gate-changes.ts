@@ -58,7 +58,14 @@ export type ProposedChange =
     }
   | { kind: 'set_lead_status'; status: string }
   | { kind: 'set_lead_follow_up'; date: string } // date as YYYY-MM-DD
-  | { kind: 'park_lead'; reason: string };
+  | { kind: 'park_lead'; reason: string }
+  // add_tag applies to BOTH deals and leads (a tag is case metadata, not
+  // module-specific). The write service detects the module from the id, so there
+  // is no separate lead kind. tag_names is a non-empty list of tag names.
+  | { kind: 'add_tag'; tag_names: string[] }
+  // remove_tag also applies to both modules; one tag per call (each chip's
+  // remove control sends the one tag it represents).
+  | { kind: 'remove_tag'; tag_name: string };
 
 export const ACTIVE_CHANGE_KINDS: ReadonlyArray<ProposedChange['kind']> = [
   'set_follow_up',
@@ -70,6 +77,8 @@ export const ACTIVE_CHANGE_KINDS: ReadonlyArray<ProposedChange['kind']> = [
   'set_lead_status',
   'set_lead_follow_up',
   'park_lead',
+  'add_tag',
+  'remove_tag',
 ];
 
 // The Lead_Status picklist (Leads Lead_Status), from the Zoho schema discovery.
@@ -280,6 +289,12 @@ export function describeChange(
     }
     case 'park_lead':
       return `Park this lead as Not Qualified (reason: ${change.reason})`;
+    case 'add_tag': {
+      const label = change.tag_names.length === 1 ? 'tag' : 'tags';
+      return `Add ${label}: ${change.tag_names.join(', ')}`;
+    }
+    case 'remove_tag':
+      return `Remove tag: ${change.tag_name}`;
   }
   // Unreachable for known kinds; satisfies the exhaustive return contract.
   return 'Apply the requested change';

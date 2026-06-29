@@ -95,6 +95,8 @@ function l01(): CockpitCaseData {
     patient_phone: '+97300000000',
     whatsapp_message: 'Hello, following up on your quotation. Happy to walk you through the next step whenever you are ready.',
     lead_status: null,
+    tags: ['Priority', 'Insurance pending'],
+    available_tags: ['Priority', 'Insurance pending', 'VIP', 'Stroke', 'Follow up'],
     in_funnel_days: 11,
     step_current: 'quotation',
     steps: steps('quotation'),
@@ -193,6 +195,8 @@ function other(id: string): CockpitCaseData {
       ? null
       : 'Hello, checking in on your case. Let me know if there is anything you need from us.',
     lead_status: isLead ? 'Intro Call Done' : null,
+    tags: [],
+    available_tags: ['Priority', 'VIP', 'Follow up'],
     in_funnel_days: 4,
     step_current: current,
     steps: steps(current),

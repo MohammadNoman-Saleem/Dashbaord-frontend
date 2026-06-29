@@ -352,6 +352,84 @@ export class ZohoWriteClient {
     }
     return { ok: !!dealId, dealId };
   }
+
+  /** Add or remove tags on a CRM record via the v3 tag actions:
+   *  POST /crm/v3/{module}/actions/{add_tags|remove_tags} with the v3 JSON body
+   *  { tags: [{ name }], ids: [recordId] } (the documented v3 shape; the older
+   *  ?tag_names=&ids= query form is v2). Zoho echoes a per-record { code }. Tag
+   *  names are case metadata, not patient identifiers; on a failure only the tag
+   *  COUNT and the Zoho status surface in the thrown error, never the names.
+   *  Needs a module WRITE scope on the token. */
+  private async tagAction(
+    action: 'add_tags' | 'remove_tags',
+    module: WritableModule,
+    recordId: string,
+    tagNames: string[],
+  ): Promise<ZohoWriteResult> {
+    const token = await this.auth.accessToken();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ZOHO_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(`${CRM}/${module}/actions/${action}`, {
+        method: 'POST',
+        headers: {
+          authorization: `Zoho-oauthtoken ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          tags: tagNames.map((name) => ({ name })),
+          ids: [recordId],
+        }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (controller.signal.aborted) {
+        throw new Error(
+          `Zoho CRM ${action} timed out after ${ZOHO_TIMEOUT_MS}ms on ${module}/${recordId}`,
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(
+        `Zoho CRM ${action} ${res.status} on ${module}/${recordId} [${tagNames.length} tag(s)]: ${body}`,
+      );
+    }
+
+    const json = (await res.json().catch(() => ({}))) as {
+      data?: Array<{ code?: string; details?: { id?: string } }>;
+    };
+    const record = json.data?.[0];
+    const code = record?.code ?? 'UNKNOWN';
+    return {
+      ok: code === 'SUCCESS',
+      code,
+      id: record?.details?.id ?? null,
+    };
+  }
+
+  /** Add one or more tags to a record. See tagAction. */
+  async addTags(
+    module: WritableModule,
+    recordId: string,
+    tagNames: string[],
+  ): Promise<ZohoWriteResult> {
+    return this.tagAction('add_tags', module, recordId, tagNames);
+  }
+
+  /** Remove one or more tags from a record. See tagAction. */
+  async removeTags(
+    module: WritableModule,
+    recordId: string,
+    tagNames: string[],
+  ): Promise<ZohoWriteResult> {
+    return this.tagAction('remove_tags', module, recordId, tagNames);
+  }
 }
 
 // globalThis-pinned singletons. Both reuse the one ZohoAuthService singleton so

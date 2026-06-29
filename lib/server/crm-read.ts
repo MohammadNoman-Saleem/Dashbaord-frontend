@@ -77,6 +77,10 @@ export interface DealRecord {
    *  data: only the cockpit send path and the name-seer case file ever touch it,
    *  and it is never logged or audited. */
   Patient_Mobile: string | null;
+  /** Tags on the record (Zoho Tag field, an array of { name }). Requested only
+   *  by the single-record case reads (dealById/leadById), so it is optional and
+   *  absent on the cached list reads. The case file maps these to tag names. */
+  Tag?: Array<{ name?: string | null }> | null;
 }
 
 export interface LeadRecord {
@@ -125,6 +129,10 @@ export interface LeadRecord {
    *  name as on Deals, created on the module 2026-06-27). Lets the cockpit
    *  surface and edit a lead's follow-up date the same way it does on a deal. */
   Next_Follow_up: string | null;
+  /** Tags on the record (Zoho Tag field, an array of { name }). Requested only
+   *  by the single-record case reads (dealById/leadById), so it is optional and
+   *  absent on the cached list reads. The case file maps these to tag names. */
+  Tag?: Array<{ name?: string | null }> | null;
 }
 
 export interface BookingRecord {
@@ -331,7 +339,7 @@ export class CrmReadService {
     try {
       const res = await this.zoho.get<{ data?: DealRecord[] }>(
         `${CRM}/Deals/${encodeURIComponent(id)}`,
-        { fields: DEAL_FIELDS },
+        { fields: `${DEAL_FIELDS},Tag` },
       );
       return res.data?.[0] ?? null;
     } catch (err) {
@@ -347,7 +355,7 @@ export class CrmReadService {
     try {
       const res = await this.zoho.get<{ data?: Array<Record<string, unknown>> }>(
         `${CRM}/Leads/${encodeURIComponent(id)}`,
-        { fields: LEAD_FIELDS },
+        { fields: `${LEAD_FIELDS},Tag` },
       );
       const record = res.data?.[0];
       if (!record) return null;
@@ -359,6 +367,24 @@ export class CrmReadService {
       if (isCrmNotFound(err)) return null;
       throw err;
     }
+  }
+
+  /** The org's tag names for a module (Zoho settings tag list), cached. Powers
+   *  the cockpit add-tag picker's suggestions. Module-scoped: Deals tags and
+   *  Leads tags are separate lists in Zoho. A cheap settings read, cached under a
+   *  dedicated key so it refreshes without touching the deal/lead caches. The
+   *  org cap is 200 tags per module, so the list is always a single page. */
+  orgTags(module: 'Deals' | 'Leads'): Promise<CachedRead<string[]>> {
+    const key =
+      module === 'Deals' ? 'zoho_crm:tags_deals_v1' : 'zoho_crm:tags_leads_v1';
+    return this.cache.read(key, 'zoho_crm', async () => {
+      const res = await this.zoho.get<{
+        tags?: Array<{ name?: string | null }>;
+      }>(`${CRM}/settings/tags`, { module });
+      return (res.tags ?? [])
+        .map((t) => (t?.name ?? '').trim())
+        .filter((name) => name.length > 0);
+    });
   }
 
   /** Bust the cached deals and leads reads. Called after a cockpit write to

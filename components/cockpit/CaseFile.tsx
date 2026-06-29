@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { AlertCircle, Check, Clock, Cpu, FileText, PenLine, StickyNote } from "lucide-react";
+import { AlertCircle, Check, Clock, Cpu, FileText, PenLine, Phone, StickyNote } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
@@ -43,6 +43,7 @@ import { StageMove } from "@/components/cockpit/StageMove";
 // revert; it is simply no longer rendered.
 // import { SendFirstContact } from "@/components/cockpit/SendFirstContact";
 import { WhatsAppMessage } from "@/components/cockpit/WhatsAppMessage";
+import { CaseTags } from "@/components/cockpit/CaseTags";
 import { EditCaseDetails } from "@/components/cockpit/EditCaseDetails";
 import { BuildQuotation } from "@/components/cockpit/BuildQuotation";
 import { DraftReferral } from "@/components/cockpit/DraftReferral";
@@ -145,6 +146,25 @@ function CaseBody({
       <Stepper steps={data.steps} />
       <NextAction data={data} />
 
+      {/* Patient phone, shown so the case manager can call or copy it. The
+          number is patient data: served by the API only to name-seers (so it is
+          present here only for them) and referenced only in this allowlisted
+          file. Shown for deals and leads alike, when a number is on file. */}
+      {seesNames && data.patient_phone ? (
+        <div className="mb-3 rounded-[12px] border border-line px-[15px] py-[13px]">
+          <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-3">
+            <Phone strokeWidth={1.8} aria-hidden="true" className="h-3.5 w-3.5" />
+            Phone
+          </div>
+          <a
+            href={`tel:${data.patient_phone}`}
+            className="text-[13px] text-title underline underline-offset-2"
+          >
+            {data.patient_phone}
+          </a>
+        </div>
+      ) : null}
+
       {data.record_type === "deal" ? (
         <>
           {/* Click-to-chat WhatsApp template control. Replaces the legacy
@@ -236,6 +256,12 @@ function CaseBody({
           </div>
         ))}
       </div>
+
+      <CaseTags
+        resourceId={data.lead_ref.zoho_id}
+        tags={data.tags}
+        availableTags={data.available_tags}
+      />
 
       <GrpLabel>Checklist</GrpLabel>
       <div className="mb-4 flex flex-wrap gap-2">
