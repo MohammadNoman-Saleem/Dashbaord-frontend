@@ -77,6 +77,10 @@ export interface DealRecord {
    *  data: only the cockpit send path and the name-seer case file ever touch it,
    *  and it is never logged or audited. */
   Patient_Mobile: string | null;
+  /** Tags on the record (Zoho Tag field, an array of { name }). Requested only
+   *  by the single-record case reads (dealById/leadById), so it is optional and
+   *  absent on the cached list reads. The case file maps these to tag names. */
+  Tag?: Array<{ name?: string | null }> | null;
 }
 
 export interface LeadRecord {
@@ -125,6 +129,10 @@ export interface LeadRecord {
    *  name as on Deals, created on the module 2026-06-27). Lets the cockpit
    *  surface and edit a lead's follow-up date the same way it does on a deal. */
   Next_Follow_up: string | null;
+  /** Tags on the record (Zoho Tag field, an array of { name }). Requested only
+   *  by the single-record case reads (dealById/leadById), so it is optional and
+   *  absent on the cached list reads. The case file maps these to tag names. */
+  Tag?: Array<{ name?: string | null }> | null;
 }
 
 export interface BookingRecord {
@@ -268,6 +276,24 @@ export function isOpenDeal(deal: DealRecord): boolean {
   );
 }
 
+// Field lists requested from Zoho for the deal and lead reads. Defined once and
+// shared by the cached list reads (deals/leads) and the fresh single-record
+// reads (dealById/leadById) so both always return the same record shape; a drift
+// here would desync a freshly read case from the cached lists.
+const DEAL_FIELDS =
+  'Zoho_ID,Deal_Name,Stage,Amount,Pipeline,Created_Time,Modified_Time,Contact_Name,Next_Follow_up,Owner,Lead_Source,Layout,Prefered_Country_of_Treatment_Consultation,Country,Closing_Date,Probability,Reason_For_Loss__s,Stage_Entry_Date,Last_Patient_Comm_Date,Welcome_Message_Sent_Date,Main_Concern_Reason_for_Consultation,Reason_Not_Qualified,Last_Activity_Time,Intro_Call_Date_Time,Patient_Budget,Treatment_Start_Date,Treatment_End_Date,Patient_Mobile';
+
+const LEAD_FIELDS =
+  'Zoho_ID,First_Name,Last_Name,Email,Lead_Source,Lead_Status,Created_Time,Converted__s,Layout,Owner,Last_Activity_Time,Last_Status_Change,Intro_Call_Date_Time,Reason_Not_Qualified,Main_Concern_Reason_for_Consultation,Prefered_Country_of_Treatment_Consultation,Country,Phone,Communication_Language,Next_Follow_up';
+
+// True when a Zoho GET by id came back as "no such record". A missing single
+// record answers 204 (the client returns an empty body for it, so data is just
+// absent), but a wrong-module or unknown id can answer 404; either way the case
+// read treats it as "not this module" and tries the other, never a hard error.
+function isCrmNotFound(err: unknown): boolean {
+  return err instanceof Error && /Zoho API error 404\b/.test(err.message);
+}
+
 export class CrmReadService {
   constructor(
     private readonly cache: CacheService,
@@ -280,8 +306,7 @@ export class CrmReadService {
   deals(): Promise<CachedRead<DealRecord[]>> {
     return this.cache.read('zoho_crm:deals_v9', 'zoho_crm', async () => {
       const records = await this.zoho.getAll(`${CRM}/Deals`, {
-        fields:
-          'Zoho_ID,Deal_Name,Stage,Amount,Pipeline,Created_Time,Modified_Time,Contact_Name,Next_Follow_up,Owner,Lead_Source,Layout,Prefered_Country_of_Treatment_Consultation,Country,Closing_Date,Probability,Reason_For_Loss__s,Stage_Entry_Date,Last_Patient_Comm_Date,Welcome_Message_Sent_Date,Main_Concern_Reason_for_Consultation,Reason_Not_Qualified,Last_Activity_Time,Intro_Call_Date_Time,Patient_Budget,Treatment_Start_Date,Treatment_End_Date,Patient_Mobile',
+        fields: DEAL_FIELDS,
       });
       return records as DealRecord[];
     });
@@ -293,8 +318,7 @@ export class CrmReadService {
     // Last_Status_Change.)
     return this.cache.read('zoho_crm:leads_v7', 'zoho_crm', async () => {
       const records = await this.zoho.getAll(`${CRM}/Leads`, {
-        fields:
-          'Zoho_ID,First_Name,Last_Name,Email,Lead_Source,Lead_Status,Created_Time,Converted__s,Layout,Owner,Last_Activity_Time,Last_Status_Change,Intro_Call_Date_Time,Reason_Not_Qualified,Main_Concern_Reason_for_Consultation,Prefered_Country_of_Treatment_Consultation,Country,Phone,Communication_Language,Next_Follow_up',
+        fields: LEAD_FIELDS,
       });
       // Zoho returns the flag under its real key Converted__s; normalize it onto
       // Converted so every consumer keeps reading record.Converted.
@@ -302,6 +326,64 @@ export class CrmReadService {
         ...r,
         Converted: r.Converted__s ?? null,
       })) as unknown as LeadRecord[];
+    });
+  }
+
+  /** Fresh, UNCACHED single-deal read by internal record id, in the SAME shape
+   *  as deals(). The cockpit case file reads through this so a just-written
+   *  change shows immediately: the post-write cache invalidate only clears the
+   *  writing instance's in-memory list (other instances keep a warm pre-write
+   *  list until the TTL), so reading the one record live is what stops the case
+   *  reverting on refresh. Returns null when no such deal exists. */
+  async dealById(id: string): Promise<DealRecord | null> {
+    try {
+      const res = await this.zoho.get<{ data?: DealRecord[] }>(
+        `${CRM}/Deals/${encodeURIComponent(id)}`,
+        { fields: `${DEAL_FIELDS},Tag` },
+      );
+      return res.data?.[0] ?? null;
+    } catch (err) {
+      if (isCrmNotFound(err)) return null;
+      throw err;
+    }
+  }
+
+  /** Fresh, UNCACHED single-lead read by internal record id, in the SAME shape
+   *  as leads() (Converted__s normalized onto Converted). Counterpart to
+   *  dealById for the cockpit case file. Returns null when no such lead exists. */
+  async leadById(id: string): Promise<LeadRecord | null> {
+    try {
+      const res = await this.zoho.get<{ data?: Array<Record<string, unknown>> }>(
+        `${CRM}/Leads/${encodeURIComponent(id)}`,
+        { fields: `${LEAD_FIELDS},Tag` },
+      );
+      const record = res.data?.[0];
+      if (!record) return null;
+      return {
+        ...record,
+        Converted: record.Converted__s ?? null,
+      } as unknown as LeadRecord;
+    } catch (err) {
+      if (isCrmNotFound(err)) return null;
+      throw err;
+    }
+  }
+
+  /** The org's tag names for a module (Zoho settings tag list), cached. Powers
+   *  the cockpit add-tag picker's suggestions. Module-scoped: Deals tags and
+   *  Leads tags are separate lists in Zoho. A cheap settings read, cached under a
+   *  dedicated key so it refreshes without touching the deal/lead caches. The
+   *  org cap is 200 tags per module, so the list is always a single page. */
+  orgTags(module: 'Deals' | 'Leads'): Promise<CachedRead<string[]>> {
+    const key =
+      module === 'Deals' ? 'zoho_crm:tags_deals_v1' : 'zoho_crm:tags_leads_v1';
+    return this.cache.read(key, 'zoho_crm', async () => {
+      const res = await this.zoho.get<{
+        tags?: Array<{ name?: string | null }>;
+      }>(`${CRM}/settings/tags`, { module });
+      return (res.tags ?? [])
+        .map((t) => (t?.name ?? '').trim())
+        .filter((name) => name.length > 0);
     });
   }
 

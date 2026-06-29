@@ -135,10 +135,171 @@ export async function applyChange(
     throw new BadRequestError(`Unsupported change "${String(change.kind)}".`);
   }
 
+  // add_tag works on both modules (a tag is case metadata, not module-specific),
+  // so it is handled before the deal/lead split: applyAddTag detects the module
+  // from the id and writes through Zoho's add_tags action.
+  if (change.kind === 'add_tag') {
+    return applyAddTag(viewer, resourceId, change);
+  }
+  if (change.kind === 'remove_tag') {
+    return applyRemoveTag(viewer, resourceId, change);
+  }
   if (LEAD_CHANGE_KINDS.includes(change.kind)) {
     return applyLeadChange(viewer, resourceId, change);
   }
   return applyDealChange(viewer, resourceId, change);
+}
+
+/** Add one or more tags to a deal or lead. A tag is case metadata, not patient
+ *  data and not module-specific, so the module is detected from the id (via the
+ *  tolerant single-record reads, which return null for the wrong module) and the
+ *  tags are written through Zoho's add_tags action. Audits the field KEY only,
+ *  never the tag text. */
+async function applyAddTag(
+  viewer: RequestViewer,
+  resourceId: string,
+  change: Extract<ProposedChange, { kind: 'add_tag' }>,
+): Promise<ApplyChangeResult> {
+  const names = Array.from(
+    new Set(change.tag_names.map((t) => t.trim()).filter((t) => t.length > 0)),
+  );
+  if (names.length === 0) {
+    throw new BadRequestError('Add at least one tag.');
+  }
+
+  const crm = getCrmRead();
+  const [deal, lead] = await Promise.all([
+    crm.dealById(resourceId),
+    crm.leadById(resourceId),
+  ]);
+  const targetModule: 'Deals' | 'Leads' | null = deal
+    ? 'Deals'
+    : lead
+      ? 'Leads'
+      : null;
+  if (!targetModule) {
+    throw new NotFoundError('That record does not exist in Zoho.');
+  }
+  const entityType = targetModule === 'Deals' ? 'zoho_deals' : 'zoho_leads';
+
+  const changeText = describeChange(change, {
+    currentFollowUp: null,
+    currentStage: null,
+    currentPatientBudget: null,
+  });
+
+  const writeResult = await getZohoWriteClient().addTags(
+    targetModule,
+    resourceId,
+    names,
+  );
+
+  if (!writeResult.ok) {
+    await getAudit().log({
+      actor: viewer.key,
+      actor_role: viewer.role,
+      action: 'cockpit.write.failed',
+      entity_type: entityType,
+      entity_id: resourceId,
+      before: null,
+      after: null,
+      context: { change_kind: change.kind, zoho_code: writeResult.code },
+    });
+    throw new ConflictError(
+      'Zoho refused the tag. Nothing was changed; try again or tell Al Saeed.',
+    );
+  }
+
+  // Audit the field KEY only; never the tag values. The change-list text (which
+  // names the tags) is the UI confirm line, returned to the control, not logged.
+  await getAudit().log({
+    actor: viewer.key,
+    actor_role: viewer.role,
+    action: 'cockpit.write.commit',
+    entity_type: entityType,
+    entity_id: resourceId,
+    before: null,
+    after: { fields: ['Tag'] },
+    context: { change_kind: change.kind, zoho_code: writeResult.code },
+  });
+
+  // The write changed live Zoho data; bust the crm-read cache.
+  await getCrmRead().invalidate();
+
+  return { committed: true, change_list: [changeText], resource_id: resourceId };
+}
+
+/** Remove a single tag from a deal or lead. Mirrors applyAddTag: the module is
+ *  detected from the id (tolerant single-record reads), the tag is removed
+ *  through Zoho's remove_tags action, and the write is audited by field KEY
+ *  only, never the tag text. */
+async function applyRemoveTag(
+  viewer: RequestViewer,
+  resourceId: string,
+  change: Extract<ProposedChange, { kind: 'remove_tag' }>,
+): Promise<ApplyChangeResult> {
+  const name = change.tag_name.trim();
+  if (!name) {
+    throw new BadRequestError('Name the tag to remove.');
+  }
+
+  const crm = getCrmRead();
+  const [deal, lead] = await Promise.all([
+    crm.dealById(resourceId),
+    crm.leadById(resourceId),
+  ]);
+  const targetModule: 'Deals' | 'Leads' | null = deal
+    ? 'Deals'
+    : lead
+      ? 'Leads'
+      : null;
+  if (!targetModule) {
+    throw new NotFoundError('That record does not exist in Zoho.');
+  }
+  const entityType = targetModule === 'Deals' ? 'zoho_deals' : 'zoho_leads';
+
+  const changeText = describeChange(change, {
+    currentFollowUp: null,
+    currentStage: null,
+    currentPatientBudget: null,
+  });
+
+  const writeResult = await getZohoWriteClient().removeTags(
+    targetModule,
+    resourceId,
+    [name],
+  );
+
+  if (!writeResult.ok) {
+    await getAudit().log({
+      actor: viewer.key,
+      actor_role: viewer.role,
+      action: 'cockpit.write.failed',
+      entity_type: entityType,
+      entity_id: resourceId,
+      before: null,
+      after: null,
+      context: { change_kind: change.kind, zoho_code: writeResult.code },
+    });
+    throw new ConflictError(
+      'Zoho refused the tag removal. Nothing was changed; try again or tell Al Saeed.',
+    );
+  }
+
+  await getAudit().log({
+    actor: viewer.key,
+    actor_role: viewer.role,
+    action: 'cockpit.write.commit',
+    entity_type: entityType,
+    entity_id: resourceId,
+    before: null,
+    after: { fields: ['Tag'] },
+    context: { change_kind: change.kind, zoho_code: writeResult.code },
+  });
+
+  await getCrmRead().invalidate();
+
+  return { committed: true, change_list: [changeText], resource_id: resourceId };
 }
 
 // ---------------------------------------------------------------------------
@@ -668,6 +829,9 @@ function fieldsFor(change: ProposedChange): Record<string, unknown> {
       throw new BadRequestError(
         'send_first_contact is applied by its own send path.',
       );
+    case 'add_tag':
+    case 'remove_tag':
+      throw new BadRequestError('Tag changes are applied by their own tag path.');
     case 'convert_lead':
     case 'set_lead_status':
     case 'set_lead_follow_up':

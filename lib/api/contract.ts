@@ -1156,6 +1156,13 @@ export interface CockpitCaseData {
   /** The Leads Lead_Status value for an unconverted lead, or null for a deal.
    *  Prefills the update-status control. */
   lead_status?: string | null
+  /** Tag names on the record (Zoho Tag field), or an empty array. Shown as chips
+   *  on the case file; the add-tag control appends to this set. Not gated: tags
+   *  are case metadata, not patient identifiers. */
+  tags: string[]
+  /** The org's tag names for this record's module, for the add-tag picker's
+   *  suggestions. Not gated. */
+  available_tags: string[]
   in_funnel_days: number
   step_current: string
   steps: CockpitStep[]

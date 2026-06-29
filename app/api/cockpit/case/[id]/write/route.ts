@@ -83,6 +83,11 @@ const ChangeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('set_lead_status'), status: z.string() }),
   z.object({ kind: z.literal('set_lead_follow_up'), date: z.string() }),
   z.object({ kind: z.literal('park_lead'), reason: z.string() }),
+  z.object({
+    kind: z.literal('add_tag'),
+    tag_names: z.array(z.string().min(1)).min(1),
+  }),
+  z.object({ kind: z.literal('remove_tag'), tag_name: z.string().min(1) }),
 ]);
 
 const WriteSchema = z.object({ change: ChangeSchema });

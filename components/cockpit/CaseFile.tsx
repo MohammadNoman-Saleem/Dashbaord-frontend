@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
-import { AlertCircle, Check, Clock, Cpu, FileText, PenLine, StickyNote } from "lucide-react";
+import { AlertCircle, Check, Clock, Cpu, FileText, PenLine, Phone, StickyNote } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
@@ -43,6 +43,7 @@ import { StageMove } from "@/components/cockpit/StageMove";
 // revert; it is simply no longer rendered.
 // import { SendFirstContact } from "@/components/cockpit/SendFirstContact";
 import { WhatsAppMessage } from "@/components/cockpit/WhatsAppMessage";
+import { CaseTags } from "@/components/cockpit/CaseTags";
 import { EditCaseDetails } from "@/components/cockpit/EditCaseDetails";
 import { BuildQuotation } from "@/components/cockpit/BuildQuotation";
 import { DraftReferral } from "@/components/cockpit/DraftReferral";
@@ -145,6 +146,48 @@ function CaseBody({
       <Stepper steps={data.steps} />
       <NextAction data={data} />
 
+      {/* The case file: the record details, the patient phone (name-seers only),
+          and the tags, grouped in one bordered box above the WhatsApp control.
+          The phone is patient data, served by the API only to name-seers and
+          referenced only in this allowlisted file. */}
+      <div className="mb-4 rounded-[12px] border border-line px-[15px] py-[13px]">
+        <GrpLabel>Case file</GrpLabel>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 max-[520px]:grid-cols-1">
+          {data.details.map((d) => (
+            <div key={d.k}>
+              <div className="text-[10.5px] uppercase tracking-[0.06em] text-ink-3">
+                {d.k}
+              </div>
+              <div className="text-[13px] text-title">{d.v}</div>
+            </div>
+          ))}
+        </div>
+
+        {seesNames && data.patient_phone ? (
+          <div className="mt-3">
+            <div className="flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.06em] text-ink-3">
+              <Phone strokeWidth={1.8} aria-hidden="true" className="h-3 w-3" />
+              Phone
+            </div>
+            <a
+              href={`tel:${data.patient_phone}`}
+              className="text-[13px] text-title underline underline-offset-2"
+            >
+              {data.patient_phone}
+            </a>
+          </div>
+        ) : null}
+
+        <div className="mt-4">
+          <CaseTags
+            resourceId={data.lead_ref.zoho_id}
+            tags={data.tags}
+            availableTags={data.available_tags}
+            flat
+          />
+        </div>
+      </div>
+
       {data.record_type === "deal" ? (
         <>
           {/* Click-to-chat WhatsApp template control. Replaces the legacy
@@ -226,16 +269,6 @@ function CaseBody({
           />
         </>
       ) : null}
-
-      <GrpLabel>Case file</GrpLabel>
-      <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3 max-[520px]:grid-cols-1">
-        {data.details.map((d) => (
-          <div key={d.k}>
-            <div className="text-[10.5px] uppercase tracking-[0.06em] text-ink-3">{d.k}</div>
-            <div className="text-[13px] text-title">{d.v}</div>
-          </div>
-        ))}
-      </div>
 
       <GrpLabel>Checklist</GrpLabel>
       <div className="mb-4 flex flex-wrap gap-2">

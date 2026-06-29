@@ -204,6 +204,11 @@ export interface CaseFile {
     approx: boolean;
     draft_message: null;
   };
+  // Tag names on the record (Zoho Tag field), or an empty array. Shown as chips
+  // on the case file. Not gated: tags are case metadata, not patient identifiers.
+  tags: string[];
+  // The org's tag names for this record's module, for the add-tag picker.
+  available_tags: string[];
   details: Array<{ k: string; v: string }>;
   checklist: Array<{ label: string; done: boolean; date: string | null }>;
   notes: Array<{ title: string; body: string; source: string }>;
@@ -470,6 +475,29 @@ function conditionOf(c: NormalizedCase, viewer: RequestViewer): string {
   return c.specialtyLabel;
 }
 
+// The patient's stated preferred country (Deals and Leads
+// Prefered_Country_of_Treatment_Consultation, a multiselect that arrives as a
+// string or a string[]). Joined to a plain comma list for display, or null when
+// unset. The case file shows this raw value as its own "Preferred country" row,
+// alongside the grouped "Destination" label.
+function joinPreferred(value: string | string[] | null): string | null {
+  if (value == null) return null;
+  const text = Array.isArray(value) ? value.filter(Boolean).join(', ') : value;
+  return text.trim() || null;
+}
+
+// The record's tag names (Zoho Tag field, an array of { name }). Mapped to a
+// plain string[] for the case file's tag chips; empty when the record has no
+// tags or the field was not returned.
+function tagNames(
+  value: Array<{ name?: string | null }> | null | undefined,
+): string[] {
+  if (!value) return [];
+  return value
+    .map((t) => (t?.name ?? '').trim())
+    .filter((name) => name.length > 0);
+}
+
 // -------------------------------------------------------------------------
 // Queue
 // -------------------------------------------------------------------------
@@ -615,9 +643,53 @@ async function caseFile(
   id: string,
   viewer: RequestViewer,
 ): Promise<{ data: CaseFile | null; parts: SourceMeta[] }> {
-  const { cases, parts } = await population();
-  const found = cases.find((c) => c.zoho_id === id);
+  // Read THIS one record live from Zoho instead of from the cached deal/lead
+  // lists. A single-record read reflects a just-written change immediately, so
+  // the case file never reverts to a stale value on refresh (the post-write
+  // cache invalidate only clears the writing instance's copy; a refresh served
+  // by another instance would otherwise show its warm pre-write list). The id
+  // does not say which module it is, so both are tried; a wrong-module id comes
+  // back null. Cost is one or two live Zoho reads per case open, by design.
+  const crm = getCrmRead();
+  const [deal, lead] = await Promise.all([crm.dealById(id), crm.leadById(id)]);
+
+  // Fresh, uncached reads: stamp the source meta as live (updated_at = now, not
+  // stale) so the envelope honestly reports the case as freshly read.
+  const parts: SourceMeta[] = [
+    { fetched_at: new Date(), cached: false, stale: false, reliable: true },
+  ];
+
+  // Apply the same filters population() uses: a deal counts only on a patient
+  // pipeline, and a converted lead is carried by its deal, not as a lead.
+  let found: NormalizedCase | null = null;
+  let preferredCountry: string | null = null;
+  let tags: string[] = [];
+  if (deal && PATIENT_PIPELINES.includes(deal.Pipeline ?? '')) {
+    found = fromDeal(deal);
+    preferredCountry = joinPreferred(
+      deal.Prefered_Country_of_Treatment_Consultation,
+    );
+    tags = tagNames(deal.Tag);
+  } else if (lead && !lead.Converted) {
+    found = fromLead(lead);
+    preferredCountry = joinPreferred(
+      lead.Prefered_Country_of_Treatment_Consultation,
+    );
+    tags = tagNames(lead.Tag);
+  }
   if (!found) return { data: null, parts };
+
+  // The org's tag list for this record's module, for the add-tag picker. Cached
+  // metadata (org tags rarely change), so its freshness is not merged into parts:
+  // the case record above is the live read; this is only suggestions.
+  const tagModule = found.recordType === 'lead' ? 'Leads' : 'Deals';
+  // Best-effort: if the tag-list read fails (e.g. the token lacks the
+  // settings.tags read scope) fall back to no suggestions rather than failing
+  // the whole case file. Typing a new tag still works without suggestions.
+  const availableTags = await crm
+    .orgTags(tagModule)
+    .then((read) => read.data)
+    .catch(() => [] as string[]);
 
   const now = new Date();
   const clock = governingClock(found.clockInputs, now);
@@ -630,8 +702,17 @@ async function caseFile(
       )
     : 0;
 
+  // Condition shows the specialty label for everyone; the raw concern moved to
+  // its own "Reason for treatment" row so it is not shown twice. Reason for
+  // treatment is the raw Main_Concern text and, like every raw clinical concern
+  // in the cockpit, is shown only to viewers who see patient names. Preferred
+  // country is the patient's stated country, shown to all staff.
   const details: Array<{ k: string; v: string }> = [
-    { k: 'Condition', v: conditionOf(found, viewer) },
+    { k: 'Condition', v: found.specialtyLabel },
+    ...(viewer.sees_patient_names && found.concernRaw?.trim()
+      ? [{ k: 'Reason for treatment', v: found.concernRaw.trim() }]
+      : []),
+    { k: 'Preferred country', v: preferredCountry ?? 'Not set' },
     { k: 'Destination', v: found.destination ?? 'Destination not set' },
     { k: 'Origin', v: found.origin },
     { k: 'Source', v: found.source },
@@ -663,6 +744,8 @@ async function caseFile(
       approx: clock.approx,
       draft_message: null,
     },
+    tags,
+    available_tags: availableTags,
     details,
     // The checklist, notes, partners and documents are not modeled in the
     // cached CRM reads in v1. Rather than invent rows, the case file returns
