@@ -615,8 +615,30 @@ async function caseFile(
   id: string,
   viewer: RequestViewer,
 ): Promise<{ data: CaseFile | null; parts: SourceMeta[] }> {
-  const { cases, parts } = await population();
-  const found = cases.find((c) => c.zoho_id === id);
+  // Read THIS one record live from Zoho instead of from the cached deal/lead
+  // lists. A single-record read reflects a just-written change immediately, so
+  // the case file never reverts to a stale value on refresh (the post-write
+  // cache invalidate only clears the writing instance's copy; a refresh served
+  // by another instance would otherwise show its warm pre-write list). The id
+  // does not say which module it is, so both are tried; a wrong-module id comes
+  // back null. Cost is one or two live Zoho reads per case open, by design.
+  const crm = getCrmRead();
+  const [deal, lead] = await Promise.all([crm.dealById(id), crm.leadById(id)]);
+
+  // Fresh, uncached reads: stamp the source meta as live (updated_at = now, not
+  // stale) so the envelope honestly reports the case as freshly read.
+  const parts: SourceMeta[] = [
+    { fetched_at: new Date(), cached: false, stale: false, reliable: true },
+  ];
+
+  // Apply the same filters population() uses: a deal counts only on a patient
+  // pipeline, and a converted lead is carried by its deal, not as a lead.
+  let found: NormalizedCase | null = null;
+  if (deal && PATIENT_PIPELINES.includes(deal.Pipeline ?? '')) {
+    found = fromDeal(deal);
+  } else if (lead && !lead.Converted) {
+    found = fromLead(lead);
+  }
   if (!found) return { data: null, parts };
 
   const now = new Date();
