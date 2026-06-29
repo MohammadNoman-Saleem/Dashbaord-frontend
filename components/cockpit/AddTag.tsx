@@ -23,11 +23,15 @@ const WRITE_FAILURE_COPY =
 export function AddTag({
   resourceId,
   availableTags = [],
+  flat = false,
 }: {
   resourceId: string;
   /** The org's existing tag names for this record's module, offered as
    *  suggestions. Free text is still allowed: typing a new name creates it. */
   availableTags?: string[];
+  /** When true, render without the bordered box wrapper because the parent
+   *  already provides the box (the case-file box). */
+  flat?: boolean;
 }) {
   const toast = useToast();
   const [text, setText] = useState("");
@@ -49,7 +53,11 @@ export function AddTag({
     .filter((t) => t.length > 0);
 
   return (
-    <div className="mt-3 rounded-[12px] border border-line px-[15px] py-[13px]">
+    <div
+      className={
+        flat ? "" : "mt-3 rounded-[12px] border border-line px-[15px] py-[13px]"
+      }
+    >
       <div className="mb-2 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-3">
         <Tag strokeWidth={1.8} aria-hidden="true" className="h-3.5 w-3.5" />
         Add a tag

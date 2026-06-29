@@ -21,10 +21,14 @@ export function CaseTags({
   resourceId,
   tags,
   availableTags,
+  flat = false,
 }: {
   resourceId: string;
   tags: string[];
   availableTags: string[];
+  /** Passed to the add control so it renders without its own border when the
+   *  parent already provides a box (the case-file box). */
+  flat?: boolean;
 }) {
   const toast = useToast();
   const remove = useCockpitWrite(resourceId, {
@@ -61,7 +65,7 @@ export function CaseTags({
           <span className="text-[12px] text-ink-3">No tags yet</span>
         )}
       </div>
-      <AddTag resourceId={resourceId} availableTags={availableTags} />
+      <AddTag resourceId={resourceId} availableTags={availableTags} flat={flat} />
     </>
   );
 }
