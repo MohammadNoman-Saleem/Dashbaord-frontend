@@ -223,6 +223,10 @@ function AppointmentsContent() {
           const m = data.metrics;
           const maxStage = Math.max(1, ...data.stage_breakdown.map((s) => s.count));
           const maxRevenue = Math.max(1, ...data.by_doctor.map((d) => d.revenue_bhd));
+          const maxSaleemIncome = Math.max(
+            1,
+            ...data.by_doctor.map((d) => d.saleem_income_bhd ?? 0),
+          );
           const stageRows = data.stage_breakdown.map((s) => ({
             label: s.name,
             value: s.count,
@@ -232,6 +236,11 @@ function AppointmentsContent() {
             label: d.name,
             value: fmtBHD(d.revenue_bhd),
             pct: (d.revenue_bhd / maxRevenue) * 100,
+          }));
+          const doctorSaleemRows = data.by_doctor.map((d) => ({
+            label: d.name,
+            value: fmtBHD(d.saleem_income_bhd ?? 0),
+            pct: ((d.saleem_income_bhd ?? 0) / maxSaleemIncome) * 100,
           }));
           return (
             <Grid className={flags.unreliable ? "opacity-55" : undefined}>
@@ -261,6 +270,19 @@ function AppointmentsContent() {
                 note="Share of bookings completed"
               />
 
+              <KpiCard
+                className={spans.c3}
+                label="Gross income"
+                value={fmtBHD(m.gross_income_bhd ?? 0)}
+                note="Total fees from completed appointments"
+              />
+              <KpiCard
+                className={spans.c3}
+                label="Saleem income"
+                value={fmtBHD(m.saleem_income_bhd ?? 0)}
+                note="Saleem share after the provider payout"
+              />
+
               <div className={spans.c6} data-focus-id="appointments-stages">
                 <Card>
                   <CardHeader
@@ -288,10 +310,19 @@ function AppointmentsContent() {
                     {data.by_doctor.length === 0 ? (
                       <p className="py-2 text-[13px] text-ink-2">No doctor activity in this period yet.</p>
                     ) : (
-                      <MiniBars rows={doctorRows} />
+                      <>
+                        <p className="mb-[7px] text-[10.5px] font-bold uppercase tracking-[.07em] text-ink-3">
+                          Gross revenue
+                        </p>
+                        <MiniBars rows={doctorRows} />
+                        <p className="mb-[7px] mt-[15px] text-[10.5px] font-bold uppercase tracking-[.07em] text-ink-3">
+                          Saleem income
+                        </p>
+                        <MiniBars rows={doctorSaleemRows} />
+                      </>
                     )}
                   </div>
-                  <CardFooter note="Bar length tracks revenue, not booking count." />
+                  <CardFooter note="Top bars track gross revenue; lower bars track Saleem income." />
                 </Card>
               </div>
 

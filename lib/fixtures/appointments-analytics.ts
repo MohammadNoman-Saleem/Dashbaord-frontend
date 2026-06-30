@@ -79,7 +79,14 @@ export function fixture(params?: Record<string, string | number | undefined>): E
 
   const data = {
     period,
-    metrics: { total: 3, completed: 2, revenue_bhd: 35.9, completion_rate_pct: 67 },
+    metrics: {
+      total: 3,
+      completed: 2,
+      revenue_bhd: 35.9,
+      completion_rate_pct: 67,
+      gross_income_bhd: 35.9,
+      saleem_income_bhd: 10.4,
+    },
     stage_breakdown: [
       { name: 'Pending Payment', count: 0 },
       { name: 'Pending', count: 0 },
@@ -89,9 +96,9 @@ export function fixture(params?: Record<string, string | number | undefined>): E
       { name: 'Done', count: 2 },
     ],
     by_doctor: [
-      { name: 'Dr. Layla H.', count: 1, done: 1, revenue_bhd: 9.9 },
-      { name: 'Dr. Aysha A.', count: 1, done: 1, revenue_bhd: 26.0 },
-      { name: 'Dr. S. Kareem', count: 1, done: 0, revenue_bhd: 0 },
+      { name: 'Dr. Layla H.', count: 1, done: 1, revenue_bhd: 9.9, saleem_income_bhd: 3.9 },
+      { name: 'Dr. Aysha A.', count: 1, done: 1, revenue_bhd: 26.0, saleem_income_bhd: 6.5 },
+      { name: 'Dr. S. Kareem', count: 1, done: 0, revenue_bhd: 0, saleem_income_bhd: 0 },
     ],
     recent,
   } satisfies AppointmentsAnalyticsData

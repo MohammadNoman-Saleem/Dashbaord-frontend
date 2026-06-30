@@ -21,6 +21,12 @@
 //
 // SERVER ONLY. Node runtime (it reaches pg/Zoho through getCrmRead()).
 import { getCrmRead, type BookingRecord } from '../crm-read';
+import {
+  computeBookingSplit,
+  getPayoutRulesService,
+  pickRules,
+  segmentOf,
+} from './payouts';
 import { patientSerializer, type PatientRef } from '../privacy';
 import type { SourceMeta } from '../envelope';
 import type { RequestViewer } from '../auth/viewer';
@@ -79,6 +85,16 @@ function feeState(status: string | null): 'paid' | 'hold' | 'done' {
 function doctorName(booking: BookingRecord): string {
   if (typeof booking.Doctor === 'string') return booking.Doctor;
   return booking.Doctor?.name ?? 'Unassigned';
+}
+
+// The booking Doctor lookup's Zoho id, mirroring resolveLookup in payouts.ts:
+// an id exists only when the field is an object, never for a bare string.
+function doctorId(booking: BookingRecord): string | null {
+  const field = booking.Doctor;
+  if (field && typeof field === 'object') {
+    return field.id != null ? String(field.id) : null;
+  }
+  return null;
 }
 
 function relativeDay(iso: string | null): string {
@@ -220,7 +236,21 @@ async function analytics(
   period: AppointmentsPeriod,
   viewer: RequestViewer,
 ): Promise<{ data: AppointmentsAnalyticsData; parts: SourceMeta[] }> {
-  const read = await getCrmRead().bookings();
+  const [read, ruleRows, doctorsRead, hospitalsRead] = await Promise.all([
+    getCrmRead().bookings(),
+    getPayoutRulesService()
+      .all()
+      .then((rows) => ({ ok: true as const, rows }))
+      .catch(() => ({ ok: false as const, rows: [] })),
+    getCrmRead()
+      .doctors()
+      .then((r) => ({ ok: true as const, data: r.data }))
+      .catch(() => ({ ok: false as const, data: [] })),
+    getCrmRead()
+      .hospitals()
+      .then((r) => ({ ok: true as const, data: r.data }))
+      .catch(() => ({ ok: false as const, data: [] })),
+  ]);
   let real = read.data.filter((b) => (b.Rate ?? 0) > 1);
 
   const startDay = periodStartDay(period);
@@ -265,6 +295,65 @@ async function analytics(
   }
   const by_doctor = [...doctorMap.values()].sort((a, b) => b.done - a.done);
 
+  // Gross income (sum of Rate over Done bookings, equal to revenue_bhd) and
+  // Saleem income (sum of the commission-engine split) over the same Done set
+  // the doctor loop counts. Reuses the shared engine so the figures match the
+  // Payouts tab exactly. If the rules, doctors, or hospitals read failed, the
+  // income fields stay undefined and the rest of the payload still returns.
+  let grossIncome: number | undefined;
+  let saleemIncome: number | undefined;
+  if (ruleRows.ok && doctorsRead.ok && hospitalsRead.ok) {
+    const ruleSet = pickRules(ruleRows.rows);
+
+    const docPctMap = new Map<string, number | null>();
+    const docHospitalMap = new Map<string, string | null>();
+    for (const d of doctorsRead.data) {
+      const hosp =
+        d.Parent_Account && typeof d.Parent_Account === 'object'
+          ? d.Parent_Account.id != null
+            ? String(d.Parent_Account.id)
+            : null
+          : null;
+      docPctMap.set(String(d.id), d.Commission_Percentage ?? null);
+      docHospitalMap.set(String(d.id), hosp);
+    }
+
+    const hospPctMap = new Map<string, number | null>();
+    for (const h of hospitalsRead.data) {
+      hospPctMap.set(String(h.id), h.Commission_Percentage ?? null);
+    }
+
+    let gross = 0;
+    let saleem = 0;
+    for (const b of doneRows) {
+      const id = doctorId(b);
+      const docPct = id != null ? docPctMap.get(id) ?? null : null;
+      const hospId = id != null ? docHospitalMap.get(id) ?? null : null;
+      const hospPct = hospId != null ? hospPctMap.get(hospId) ?? null : null;
+      const segment = segmentOf(b.Type);
+      const rate = b.Rate ?? 0;
+      gross = round2(gross + rate);
+      if (!segment) continue;
+      const split = computeBookingSplit(
+        segment,
+        rate,
+        docPct,
+        hospPct,
+        ruleSet,
+        id,
+      );
+      saleem = round2(saleem + split.saleemRevenue);
+      const entry = doctorMap.get(doctorName(b));
+      if (entry) {
+        entry.saleem_income_bhd = round2(
+          (entry.saleem_income_bhd ?? 0) + split.saleemRevenue,
+        );
+      }
+    }
+    grossIncome = gross;
+    saleemIncome = saleem;
+  }
+
   const recent = [...real]
     .sort((a, b) =>
       (b.From ?? b.Created_At ?? '').localeCompare(
@@ -280,6 +369,8 @@ async function analytics(
       completed,
       revenue_bhd: revenue,
       completion_rate_pct: completionRate,
+      gross_income_bhd: grossIncome,
+      saleem_income_bhd: saleemIncome,
     },
     stage_breakdown,
     by_doctor,

@@ -461,8 +461,8 @@ export interface AppointmentsAnalyticsRow {
   date: string | null
 }
 export interface AppointmentsStageCount { name: string; count: number }
-export interface AppointmentsDoctorRow { name: string; count: number; done: number; revenue_bhd: number }
-export interface AppointmentsAnalyticsMetrics { total: number; completed: number; revenue_bhd: number; completion_rate_pct: number }
+export interface AppointmentsDoctorRow { name: string; count: number; done: number; revenue_bhd: number; saleem_income_bhd?: number }
+export interface AppointmentsAnalyticsMetrics { total: number; completed: number; revenue_bhd: number; completion_rate_pct: number; gross_income_bhd?: number; saleem_income_bhd?: number }
 export interface AppointmentsAnalyticsData {
   period: AppointmentsPeriod
   metrics: AppointmentsAnalyticsMetrics
