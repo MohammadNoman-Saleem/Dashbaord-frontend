@@ -259,12 +259,6 @@ function AppointmentsContent() {
               />
               <KpiCard
                 className={spans.c3}
-                label="Revenue"
-                value={fmtBHD(m.revenue_bhd)}
-                note="Fees from this period"
-              />
-              <KpiCard
-                className={spans.c3}
                 label="Completion rate"
                 value={`${m.completion_rate_pct}%`}
                 note="Share of bookings completed"
@@ -274,7 +268,7 @@ function AppointmentsContent() {
                 className={spans.c3}
                 label="Gross income"
                 value={fmtBHD(m.gross_income_bhd ?? 0)}
-                note="Total fees from completed appointments"
+                note="Fees from completed and pending-review appointments"
               />
               <KpiCard
                 className={spans.c3}

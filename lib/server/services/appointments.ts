@@ -263,6 +263,11 @@ async function analytics(
 
   const total = real.length;
   const doneRows = real.filter((b) => b.Status === 'Done');
+  // Income (gross and Saleem) counts completed AND pending-review appointments,
+  // a wider set than the "completed" volume metric below, per the agreed rule.
+  const incomeRows = real.filter(
+    (b) => b.Status === 'Done' || b.Status === 'Awaiting Review',
+  );
   const completed = doneRows.length;
   const revenue = round2(
     doneRows.reduce((sum, b) => sum + (b.Rate ?? 0), 0),
@@ -325,7 +330,7 @@ async function analytics(
 
     let gross = 0;
     let saleem = 0;
-    for (const b of doneRows) {
+    for (const b of incomeRows) {
       const id = doctorId(b);
       const docPct = id != null ? docPctMap.get(id) ?? null : null;
       const hospId = id != null ? docHospitalMap.get(id) ?? null : null;

@@ -602,11 +602,14 @@ export function computeBookingSplit(
   const effPct = commissionSet
     ? Number(pct)
     : num(rule?.params?.commission_pct);
-  const commission = round2((rate * effPct) / 100);
+  // Commission is taken on the fee after the service charge, not the full fee.
+  const commissionBase = Math.max(0, round2(rate - service));
+  const commission = round2((commissionBase * effPct) / 100);
   const saleemRevenue = round2(commission + service);
   return {
     saleemRevenue,
-    providerPayout: round2(rate - commission),
+    // The provider keeps the fee minus everything Saleem takes.
+    providerPayout: round2(rate - saleemRevenue),
     ruleLabel: rule?.label ?? 'Scheduled appointment',
     commissionSet,
   };
