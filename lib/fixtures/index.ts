@@ -7,6 +7,7 @@ import type { Envelope } from '@/lib/api/envelope'
 
 import { fixture as agentsFixture } from './agents'
 import { fixture as appointmentsFixture } from './appointments'
+import { fixture as appointmentsAnalyticsFixture } from './appointments-analytics'
 import { fixture as attentionFixture } from './attention'
 import { fixture as blockersFixture } from './blockers'
 import { fixture as boardFixture } from './board'
@@ -88,6 +89,7 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   providers: providersFixture,
   handoffs: handoffsFixture,
   appointments: appointmentsFixture,
+  appointments_analytics: appointmentsAnalyticsFixture,
   financials: financialsFixture,
   financials_forecast: financialsForecastFixture,
   financials_burn: financialsBurnFixture,

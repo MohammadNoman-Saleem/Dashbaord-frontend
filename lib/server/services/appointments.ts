@@ -24,6 +24,13 @@ import { getCrmRead, type BookingRecord } from '../crm-read';
 import { patientSerializer, type PatientRef } from '../privacy';
 import type { SourceMeta } from '../envelope';
 import type { RequestViewer } from '../auth/viewer';
+import type {
+  AppointmentsAnalyticsData,
+  AppointmentsAnalyticsRow,
+  AppointmentsDoctorRow,
+  AppointmentsPeriod,
+  AppointmentsStageCount,
+} from '@/lib/api/contract';
 
 export interface AppointmentRowData {
   time: string;
@@ -144,9 +151,148 @@ async function board(
   };
 }
 
+// The six booking stages, in the fixed funnel order the page renders. Counts
+// fall only into an exact Status match; any other status is ignored, matching
+// the legacy analytics route.
+const STAGE_ORDER = [
+  'Pending Payment',
+  'Pending',
+  'Confirmed',
+  'Session Started',
+  'Awaiting Review',
+  'Done',
+] as const;
+
+// Start of the period in Bahrain civil time, returned as the Bahrain calendar
+// day string (YYYY-MM-DD) a booking's own Bahrain day is compared against. mtd
+// is the first of the current month, qtd the first of the current quarter, ytd
+// January 1, all has no start (null). Computing the boundary from the Bahrain
+// day parts keeps the comparison entirely in Bahrain time, never the server's.
+function periodStartDay(period: AppointmentsPeriod): string | null {
+  if (period === 'all') return null;
+  const parts = new Date().toLocaleDateString('en-CA', {
+    timeZone: BAHRAIN_TZ,
+  });
+  const [year, month] = parts.split('-').map((n) => Number(n));
+  if (period === 'ytd') return `${year}-01-01`;
+  if (period === 'qtd') {
+    const quarterMonth = Math.floor((month - 1) / 3) * 3 + 1;
+    return `${year}-${String(quarterMonth).padStart(2, '0')}-01`;
+  }
+  // mtd
+  return `${year}-${String(month).padStart(2, '0')}-01`;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+// Build one analytics row. The patient reference (record id plus initials) is
+// built for everyone through the same serializer board() uses; patient_name is
+// appended only for a viewer holding sees_patient_names, via withName. The raw
+// patient name is never assigned to the row outside that allowlisted path, and
+// the booking Email is never touched here.
+function toAnalyticsRow(
+  booking: BookingRecord,
+  viewer: RequestViewer,
+): AppointmentsAnalyticsRow {
+  const row: AppointmentsAnalyticsRow = {
+    id: booking.id,
+    name: booking.Name ?? '·',
+    patient_ref: patientSerializer.ref(
+      booking.Patient?.id ?? booking.id,
+      booking.Patient?.name,
+    ),
+    doctor: doctorName(booking),
+    status: booking.Status ?? '·',
+    fee_bhd: booking.Rate != null ? booking.Rate : 0,
+    date: booking.From ?? booking.Created_At ?? null,
+  };
+  return patientSerializer.withName(row, booking.Patient?.name, viewer);
+}
+
+// Analytics over the bookings module: period-filtered metrics, the fixed-order
+// stage breakdown, per-doctor activity, and the full filtered row list. Reuses
+// the same cached read, test-booking filter (Rate > 1), and patient gate as
+// board(). Ported from the legacy /api/zoho/appointments route, with the period
+// comparison moved to Bahrain civil time.
+async function analytics(
+  period: AppointmentsPeriod,
+  viewer: RequestViewer,
+): Promise<{ data: AppointmentsAnalyticsData; parts: SourceMeta[] }> {
+  const read = await getCrmRead().bookings();
+  let real = read.data.filter((b) => (b.Rate ?? 0) > 1);
+
+  const startDay = periodStartDay(period);
+  if (startDay) {
+    real = real.filter((b) => {
+      const day = bahrainDay(b.From ?? b.Created_At);
+      return day !== '' && day >= startDay;
+    });
+  }
+
+  const total = real.length;
+  const doneRows = real.filter((b) => b.Status === 'Done');
+  const completed = doneRows.length;
+  const revenue = round2(
+    doneRows.reduce((sum, b) => sum + (b.Rate ?? 0), 0),
+  );
+  const completionRate = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+  const stageCounts = new Map<string, number>(STAGE_ORDER.map((s) => [s, 0]));
+  for (const b of real) {
+    const s = b.Status ?? '';
+    if (stageCounts.has(s)) stageCounts.set(s, (stageCounts.get(s) ?? 0) + 1);
+  }
+  const stage_breakdown: AppointmentsStageCount[] = STAGE_ORDER.map((name) => ({
+    name,
+    count: stageCounts.get(name) ?? 0,
+  }));
+
+  const doctorMap = new Map<string, AppointmentsDoctorRow>();
+  for (const b of real) {
+    const name = doctorName(b);
+    let entry = doctorMap.get(name);
+    if (!entry) {
+      entry = { name, count: 0, done: 0, revenue_bhd: 0 };
+      doctorMap.set(name, entry);
+    }
+    entry.count += 1;
+    if (b.Status === 'Done') {
+      entry.done += 1;
+      entry.revenue_bhd = round2(entry.revenue_bhd + (b.Rate ?? 0));
+    }
+  }
+  const by_doctor = [...doctorMap.values()].sort((a, b) => b.done - a.done);
+
+  const recent = [...real]
+    .sort((a, b) =>
+      (b.From ?? b.Created_At ?? '').localeCompare(
+        a.From ?? a.Created_At ?? '',
+      ),
+    )
+    .map((b) => toAnalyticsRow(b, viewer));
+
+  const data: AppointmentsAnalyticsData = {
+    period,
+    metrics: {
+      total,
+      completed,
+      revenue_bhd: revenue,
+      completion_rate_pct: completionRate,
+    },
+    stage_breakdown,
+    by_doctor,
+    recent,
+  };
+
+  return { data, parts: [read.meta] };
+}
+
 // The appointments service as a plain object, replacing the @Injectable
 // AppointmentsService. The route handler calls board() exactly as the Nest
 // controller called the injected service.
 export const appointmentsService = {
   board,
+  analytics,
 };

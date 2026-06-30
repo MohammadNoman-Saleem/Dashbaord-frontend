@@ -26,6 +26,7 @@ export const qk = {
   providers: () => ['pipeline', 'providers'] as const,
   handoffs: () => ['handoffs'] as const,
   appointments: () => ['appointments'] as const,
+  appointmentsAnalytics: (period: string) => ['appointments', 'analytics', period] as const,
   financials: () => ['financials'] as const,
   financialsForecast: () => ['financials', 'forecast'] as const,
   financialsBurn: () => ['financials', 'burn'] as const,

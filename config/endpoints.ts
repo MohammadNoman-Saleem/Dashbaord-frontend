@@ -26,6 +26,7 @@ export type EndpointKey =
   | 'providers'
   | 'handoffs'
   | 'appointments'
+  | 'appointments_analytics'
   | 'financials'
   | 'financials_forecast'
   | 'financials_burn'
@@ -94,6 +95,7 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   providers: 'live',
   handoffs: 'live',
   appointments: 'live',
+  appointments_analytics: 'live',
   financials: 'live',
   financials_forecast: 'live',
   financials_burn: 'live',

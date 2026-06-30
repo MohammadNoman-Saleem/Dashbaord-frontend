@@ -23,7 +23,7 @@ export interface PatientRefData {
 }
 
 export interface DeepLink {
-  view: 'home' | 'cockpit' | 'cases' | 'board' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'social'
+  view: 'home' | 'cockpit' | 'cases' | 'board' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'social' | 'appointments'
   tab?: string
   focus?: string
 }
@@ -446,6 +446,29 @@ export interface AppointmentRow {
 export interface AppointmentsData {
   today: AppointmentRow[]
   recent_done: AppointmentRow[]
+}
+
+// /api/appointments/analytics
+export type AppointmentsPeriod = 'mtd' | 'qtd' | 'ytd' | 'all'
+export interface AppointmentsAnalyticsRow {
+  id: string
+  name: string
+  patient_ref: PatientRefData
+  patient_name?: string
+  doctor: string
+  status: string
+  fee_bhd: number
+  date: string | null
+}
+export interface AppointmentsStageCount { name: string; count: number }
+export interface AppointmentsDoctorRow { name: string; count: number; done: number; revenue_bhd: number }
+export interface AppointmentsAnalyticsMetrics { total: number; completed: number; revenue_bhd: number; completion_rate_pct: number }
+export interface AppointmentsAnalyticsData {
+  period: AppointmentsPeriod
+  metrics: AppointmentsAnalyticsMetrics
+  stage_breakdown: AppointmentsStageCount[]
+  by_doctor: AppointmentsDoctorRow[]
+  recent: AppointmentsAnalyticsRow[]
 }
 
 // /api/financials
