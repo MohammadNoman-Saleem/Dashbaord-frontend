@@ -349,11 +349,12 @@ function resolveLookup(field: ZohoLookup | string | null): {
 /** Which segment an appointment Type falls in. Treatment lives in a separate
  *  Deals pipeline and is handled by the manual free-appointment path, not
  *  here. */
-export function segmentOf(type: string | null): 'scheduled' | 'novo' | null {
-  if (typeof type !== 'string') return null;
-  if (type.startsWith('novo')) return 'novo';
-  if (type === 'standard') return 'scheduled';
-  return null;
+// Every completed booking earns commission. Novo is the only special segment
+// (Type starts with "novo"); everything else, including a missing or
+// unrecognized Type, is treated as standard, so no booking is left out.
+export function segmentOf(type: string | null): 'scheduled' | 'novo' {
+  if (typeof type === 'string' && type.startsWith('novo')) return 'novo';
+  return 'scheduled';
 }
 
 interface RuleSet {
@@ -479,7 +480,6 @@ export class CommissionService {
       if (rate <= 1) continue;
       if (bahrainCycle(b.From ?? b.Created_At) !== cycle) continue;
       const segment = segmentOf(b.Type);
-      if (!segment) continue;
 
       const doc = resolveLookup(b.Doctor);
       const docRec = doc.id ? doctorMap.get(doc.id) : null;

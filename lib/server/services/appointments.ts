@@ -333,7 +333,6 @@ async function analytics(
       const segment = segmentOf(b.Type);
       const rate = b.Rate ?? 0;
       gross = round2(gross + rate);
-      if (!segment) continue;
       const split = computeBookingSplit(
         segment,
         rate,
