@@ -1,4 +1,4 @@
-// GET /api/appointments/analytics?period=mtd|qtd|ytd|all
+// GET /api/appointments/analytics?period=mtd|qtd|ytd|all[&month=YYYY-MM]
 // Read-only analytics over the Appointment_Bookings module: period-filtered
 // metrics, the fixed-order stage breakdown, per-doctor activity, and the full
 // filtered row list. Thin: resolve the viewer, read and validate the period,
@@ -27,9 +27,22 @@ function readPeriod(req: Request): AppointmentsPeriod {
     : 'mtd';
 }
 
+// A specific calendar month as YYYY-MM, when the caller wants one month rather
+// than a rolling period. Anything not shaped YYYY-MM is ignored so the period
+// keyword applies instead.
+function readMonth(req: Request): string | undefined {
+  const raw = new URL(req.url).searchParams.get('month');
+  return raw && /^\d{4}-\d{2}$/.test(raw) ? raw : undefined;
+}
+
 export const GET = handler(async (req, ctx) => {
   const viewer = ctx.requireViewer();
   const period = readPeriod(req);
-  const { data, parts } = await appointmentsService.analytics(period, viewer);
+  const month = readMonth(req);
+  const { data, parts } = await appointmentsService.analytics(
+    period,
+    viewer,
+    month,
+  );
   return withMeta(data, mergeMeta(parts));
 });

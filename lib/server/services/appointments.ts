@@ -36,6 +36,8 @@ import type {
   AppointmentsDoctorRow,
   AppointmentsPeriod,
   AppointmentsStageCount,
+  AppointmentsStatusCount,
+  AppointmentsTypeCount,
 } from '@/lib/api/contract';
 
 export interface AppointmentRowData {
@@ -199,8 +201,33 @@ function periodStartDay(period: AppointmentsPeriod): string | null {
   return `${year}-${String(month).padStart(2, '0')}-01`;
 }
 
+// The [start, end) Bahrain-day bounds of a calendar month given as YYYY-MM, so
+// a month filter is closed at both ends. end is the first day of the next month
+// (exclusive), rolling the year at December. Returns null for a value that is
+// not a real YYYY-MM, so the caller falls back to the period keyword.
+function monthWindow(month: string): { start: string; end: string } | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const mon = Number(m[2]);
+  if (mon < 1 || mon > 12) return null;
+  const start = `${year}-${String(mon).padStart(2, '0')}-01`;
+  const nextYear = mon === 12 ? year + 1 : year;
+  const nextMon = mon === 12 ? 1 : mon + 1;
+  const end = `${nextYear}-${String(nextMon).padStart(2, '0')}-01`;
+  return { start, end };
+}
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+// Normalized Type for classification and the diagnostic: trimmed, internal
+// whitespace collapsed, lowercased. The raw field is free text and inconsistent
+// ("Novo Instant", "obesity ", "Obesity Awareness"), so the distinct-value
+// count and any future Novo-set match run on this form, never the raw string.
+function normalizeType(t: string | null | undefined): string {
+  return (t ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 // Build one analytics row. The patient reference (record id plus initials) is
@@ -221,6 +248,7 @@ function toAnalyticsRow(
     ),
     doctor: doctorName(booking),
     status: booking.Status ?? '·',
+    type: booking.Type ?? null,
     fee_bhd: booking.Rate != null ? booking.Rate : 0,
     date: booking.From ?? booking.Created_At ?? null,
   };
@@ -235,6 +263,7 @@ function toAnalyticsRow(
 async function analytics(
   period: AppointmentsPeriod,
   viewer: RequestViewer,
+  month?: string,
 ): Promise<{ data: AppointmentsAnalyticsData; parts: SourceMeta[] }> {
   const [read, ruleRows, doctorsRead, hospitalsRead] = await Promise.all([
     getCrmRead().bookings(),
@@ -253,12 +282,23 @@ async function analytics(
   ]);
   let real = read.data.filter((b) => (b.Rate ?? 0) > 1);
 
-  const startDay = periodStartDay(period);
-  if (startDay) {
+  // A specific calendar month (YYYY-MM) takes precedence over the period
+  // keyword and bounds both ends, so "June" means June only, not June onward.
+  // Otherwise the period keyword sets an open-ended start.
+  const win = month ? monthWindow(month) : null;
+  if (win) {
     real = real.filter((b) => {
       const day = bahrainDay(b.From ?? b.Created_At);
-      return day !== '' && day >= startDay;
+      return day !== '' && day >= win.start && day < win.end;
     });
+  } else {
+    const startDay = periodStartDay(period);
+    if (startDay) {
+      real = real.filter((b) => {
+        const day = bahrainDay(b.From ?? b.Created_At);
+        return day !== '' && day >= startDay;
+      });
+    }
   }
 
   const total = real.length;
@@ -307,6 +347,7 @@ async function analytics(
   // income fields stay undefined and the rest of the payload still returns.
   let grossIncome: number | undefined;
   let saleemIncome: number | undefined;
+  let commissionUnset: number | undefined;
   if (ruleRows.ok && doctorsRead.ok && hospitalsRead.ok) {
     const ruleSet = pickRules(ruleRows.rows);
 
@@ -330,6 +371,7 @@ async function analytics(
 
     let gross = 0;
     let saleem = 0;
+    let unset = 0;
     for (const b of incomeRows) {
       const id = doctorId(b);
       const docPct = id != null ? docPctMap.get(id) ?? null : null;
@@ -352,10 +394,21 @@ async function analytics(
         entry.saleem_income_bhd = round2(
           (entry.saleem_income_bhd ?? 0) + split.saleemRevenue,
         );
+        // Diagnostic: the commission rate the engine resolved for this doctor,
+        // their own first, then the hospital. Null means neither was set and the
+        // booking used the rule default (often 0), which is where a wrong or
+        // missing per-doctor percentage shows up.
+        entry.commission_pct = docPct ?? hospPct;
+      }
+      // A standard booking with no doctor and no hospital rate fell to the
+      // default. Count these so the page can flag how many bookings defaulted.
+      if (segment === 'scheduled' && docPct == null && hospPct == null) {
+        unset += 1;
       }
     }
     grossIncome = gross;
     saleemIncome = saleem;
+    commissionUnset = unset;
   }
 
   const recent = [...real]
@@ -366,6 +419,41 @@ async function analytics(
     )
     .map((b) => toAnalyticsRow(b, viewer));
 
+  // Reconciliation diagnostic (revenue spec, step 1), over the same windowed,
+  // real (Rate > 1) set the metrics use. status_breakdown shows the completed
+  // basis gap (which statuses carry gross); type_distribution surfaces every
+  // raw Type spelling with its normalized form and current track, so the Novo
+  // set can be built from what the data actually contains.
+  const statusAgg = new Map<string, { count: number; gross: number }>();
+  for (const b of real) {
+    const s = b.Status && b.Status.trim() ? b.Status : '(none)';
+    const e = statusAgg.get(s) ?? { count: 0, gross: 0 };
+    e.count += 1;
+    e.gross = round2(e.gross + (b.Rate ?? 0));
+    statusAgg.set(s, e);
+  }
+  const status_breakdown: AppointmentsStatusCount[] = [...statusAgg.entries()]
+    .map(([status, v]) => ({ status, count: v.count, gross_bhd: v.gross }))
+    .sort((a, b) => b.gross_bhd - a.gross_bhd);
+
+  const typeAgg = new Map<string, number>();
+  for (const b of real) {
+    const raw = b.Type && b.Type.trim() ? b.Type : '(none)';
+    typeAgg.set(raw, (typeAgg.get(raw) ?? 0) + 1);
+  }
+  const type_distribution: AppointmentsTypeCount[] = [...typeAgg.entries()]
+    .map(([type_raw, count]) => {
+      const isNone = type_raw === '(none)';
+      const seg = segmentOf(isNone ? null : type_raw);
+      return {
+        type_raw,
+        type_normalized: isNone ? '(none)' : normalizeType(type_raw),
+        count,
+        track: seg === 'novo' ? ('novo' as const) : ('standard' as const),
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+
   const data: AppointmentsAnalyticsData = {
     period,
     metrics: {
@@ -375,9 +463,12 @@ async function analytics(
       completion_rate_pct: completionRate,
       gross_income_bhd: grossIncome,
       saleem_income_bhd: saleemIncome,
+      commission_unset: commissionUnset,
     },
     stage_breakdown,
     by_doctor,
+    status_breakdown,
+    type_distribution,
     recent,
   };
 

@@ -19,7 +19,10 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import type {
   AppointmentsAnalyticsData,
   AppointmentsAnalyticsRow,
+  AppointmentsDoctorRow,
   AppointmentsPeriod,
+  AppointmentsStatusCount,
+  AppointmentsTypeCount,
   GrowthRetentionData,
 } from "@/lib/api/contract";
 import { fetchEnvelope } from "@/lib/api/fetcher";
@@ -46,6 +49,22 @@ const PERIOD_ITEMS = [
 
 const PERIODS: AppointmentsPeriod[] = ["mtd", "qtd", "ytd", "all"];
 
+/* The month picker offers the current month and the twelve before it, newest
+   first, as YYYY-MM values with a readable label. Browser-local time is fine
+   here: this is only the option list, and the actual window is computed in
+   Bahrain time on the server. */
+function recentMonths(count: number): { value: string; label: string }[] {
+  const now = new Date();
+  const out: { value: string; label: string }[] = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    out.push({ value, label });
+  }
+  return out;
+}
+
 /* Status to Chip variant. Done reads as good; the in-flight stages read as
    neutral information; everything else stays muted. There is no red. */
 function statusVariant(status: string): ChipVariant {
@@ -66,6 +85,12 @@ function dateCell(date: string | null): string {
   return date ? fmtDate(date) : "-";
 }
 
+/* Appointment type text. A null or empty type reads as a calm dash; a booking
+   with no type is treated as standard by the commission engine. */
+function typeCell(type: string | null): string {
+  return type && type.trim() ? type : "-";
+}
+
 /* The reference the team reads for a patient, mirroring PatientRef's own
    display rule. Never the patient name, so this is safe for a CSV cell. */
 function patientReference(row: AppointmentsAnalyticsRow): string {
@@ -82,12 +107,13 @@ function csvField(value: string): string {
 /* Build a CSV from the visible rows and download it through a transient
    anchor. The patient column carries only the reference, never the name. */
 function downloadRecentCsv(rows: AppointmentsAnalyticsRow[]): void {
-  const header = ["Appointment", "Patient (ref)", "Doctor", "Status", "Fee BHD", "Date"];
+  const header = ["Appointment", "Patient (ref)", "Doctor", "Type", "Status", "Fee BHD", "Date"];
   const lines = rows.map((row) =>
     [
       row.name,
       patientReference(row),
       row.doctor,
+      row.type ?? "",
       row.status,
       row.fee_bhd > 0 ? String(Math.round(row.fee_bhd)) : "",
       row.date ? fmtDate(row.date) : "",
@@ -116,6 +142,7 @@ const RECENT_COLUMNS: DataTableColumn<AppointmentsAnalyticsRow>[] = [
     render: (row) => <PatientRef patient={{ ...row, ...row.patient_ref }} />,
   },
   { key: "doctor", label: "Doctor" },
+  { key: "type", label: "Type", render: (row) => typeCell(row.type) },
   {
     key: "status",
     label: "Status",
@@ -144,6 +171,49 @@ const COHORT_COLUMNS: DataTableColumn<CohortRow>[] = [
     numeric: true,
     render: (r) => fmtBHD(r.repeat_revenue),
   },
+];
+
+/* The commission rate the engine resolved for a doctor (their own first, then
+   the hospital). "not set" means neither was found, so the doctor's bookings
+   used the rule default. This is the column to scan when Saleem income looks
+   low: a doctor you expect at 10, 15, or 20 percent showing "not set" is where
+   the per-doctor percentage is failing to resolve. */
+function commissionCell(pct: number | null | undefined): string {
+  return pct == null ? "not set" : `${pct}%`;
+}
+
+const DOCTOR_COLUMNS: DataTableColumn<AppointmentsDoctorRow>[] = [
+  { key: "name", label: "Doctor" },
+  { key: "count", label: "Appts", numeric: true, render: (d) => d.count.toLocaleString() },
+  {
+    key: "commission_pct",
+    label: "Commission %",
+    numeric: true,
+    render: (d) => commissionCell(d.commission_pct),
+  },
+  {
+    key: "saleem",
+    label: "Saleem BHD",
+    numeric: true,
+    render: (d) => fmtBHD(d.saleem_income_bhd ?? 0),
+  },
+];
+
+/* Reconciliation diagnostic tables (revenue spec, step 1). Status breakdown
+   shows where gross sits so the completed basis is visible; type distribution
+   shows every raw spelling with its normalized form and the track assigned
+   today, so the Novo set can be completed from real data. */
+const STATUS_COLUMNS: DataTableColumn<AppointmentsStatusCount>[] = [
+  { key: "status", label: "Status" },
+  { key: "count", label: "Count", numeric: true, render: (r) => r.count.toLocaleString() },
+  { key: "gross", label: "Gross BHD", numeric: true, render: (r) => fmtBHD(r.gross_bhd) },
+];
+
+const TYPE_COLUMNS: DataTableColumn<AppointmentsTypeCount>[] = [
+  { key: "type_raw", label: "Type" },
+  { key: "type_normalized", label: "Normalized" },
+  { key: "count", label: "Count", numeric: true, render: (r) => r.count.toLocaleString() },
+  { key: "track", label: "Track", render: (r) => (r.track === "novo" ? "Novo" : "Standard") },
 ];
 
 function AnalyticsSkeleton() {
@@ -178,13 +248,20 @@ function AppointmentsContent() {
     ? (requested as AppointmentsPeriod)
     : "mtd";
 
+  // A specific month (YYYY-MM), when picked, overrides the period pills. The
+  // period stays in the URL as the fallback for when the month is cleared.
+  const requestedMonth = searchParams.get("month");
+  const monthValid =
+    requestedMonth && /^\d{4}-\d{2}$/.test(requestedMonth) ? requestedMonth : null;
+  const monthOptions = recentMonths(13);
+
   const query = useQuery({
-    queryKey: [...qk.appointmentsAnalytics(period)],
+    queryKey: [...qk.appointmentsAnalytics(period, monthValid ?? undefined)],
     queryFn: () =>
       fetchEnvelope<AppointmentsAnalyticsData>(
         "appointments_analytics",
         "/appointments/analytics",
-        { period },
+        { period, month: monthValid ?? undefined },
       ),
   });
 
@@ -195,9 +272,12 @@ function AppointmentsContent() {
     queryFn: () => fetchEnvelope<GrowthRetentionData>("growth_retention", "/growth/retention"),
   });
 
-  function navigate(nextPeriod: string) {
+  // One place to set the window. period is always written so clearing the month
+  // falls back to it; month is written only when a specific month is chosen.
+  function pushParams(nextPeriod: string, nextMonth: string | null) {
     const params = new URLSearchParams();
     params.set("period", nextPeriod);
+    if (nextMonth) params.set("month", nextMonth);
     const viewAs = searchParams.get("as");
     if (viewAs) params.set("as", viewAs);
     router.push(`/appointments?${params.toString()}`);
@@ -210,37 +290,37 @@ function AppointmentsContent() {
           <h2 className="mb-1 text-[26px] max-[880px]:text-[22px]">{title.title}</h2>
           <p className="text-[13.5px] text-ink-2">{title.sub}</p>
         </div>
-        <Pills
-          items={PERIOD_ITEMS}
-          value={period}
-          onChange={navigate}
-          aria-label="Reporting period"
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Pills
+            items={PERIOD_ITEMS}
+            value={monthValid ? "" : period}
+            onChange={(p) => pushParams(p, null)}
+            aria-label="Reporting period"
+          />
+          <select
+            aria-label="Specific month"
+            value={monthValid ?? ""}
+            onChange={(e) => pushParams(period, e.target.value || null)}
+            className="rounded-[9px] border border-line bg-surface px-2.5 py-1.5 text-[12.5px] text-ink"
+          >
+            <option value="">Or pick a month</option>
+            {monthOptions.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <QueryPanel query={query} skeleton={<AnalyticsSkeleton />}>
         {(data, _meta, flags) => {
           const m = data.metrics;
           const maxStage = Math.max(1, ...data.stage_breakdown.map((s) => s.count));
-          const maxRevenue = Math.max(1, ...data.by_doctor.map((d) => d.revenue_bhd));
-          const maxSaleemIncome = Math.max(
-            1,
-            ...data.by_doctor.map((d) => d.saleem_income_bhd ?? 0),
-          );
           const stageRows = data.stage_breakdown.map((s) => ({
             label: s.name,
             value: s.count,
             pct: (s.count / maxStage) * 100,
-          }));
-          const doctorRows = data.by_doctor.map((d) => ({
-            label: d.name,
-            value: fmtBHD(d.revenue_bhd),
-            pct: (d.revenue_bhd / maxRevenue) * 100,
-          }));
-          const doctorSaleemRows = data.by_doctor.map((d) => ({
-            label: d.name,
-            value: fmtBHD(d.saleem_income_bhd ?? 0),
-            pct: ((d.saleem_income_bhd ?? 0) / maxSaleemIncome) * 100,
           }));
           return (
             <Grid className={flags.unreliable ? "opacity-55" : undefined}>
@@ -298,25 +378,68 @@ function AppointmentsContent() {
                 <Card>
                   <CardHeader
                     title="Doctor breakdown"
-                    subtitle="Revenue by doctor across this period."
+                    subtitle="Resolved commission rate and Saleem income by doctor."
                   />
-                  <div className="px-[18px] pb-4 pt-[13px]">
+                  <div className="px-[18px] pb-2 pt-[5px]">
                     {data.by_doctor.length === 0 ? (
                       <p className="py-2 text-[13px] text-ink-2">No doctor activity in this period yet.</p>
                     ) : (
-                      <>
-                        <p className="mb-[7px] text-[10.5px] font-bold uppercase tracking-[.07em] text-ink-3">
-                          Gross revenue
-                        </p>
-                        <MiniBars rows={doctorRows} />
-                        <p className="mb-[7px] mt-[15px] text-[10.5px] font-bold uppercase tracking-[.07em] text-ink-3">
-                          Saleem income
-                        </p>
-                        <MiniBars rows={doctorSaleemRows} />
-                      </>
+                      <DataTable
+                        columns={DOCTOR_COLUMNS}
+                        rows={data.by_doctor}
+                        rowKey={(d) => d.name}
+                      />
                     )}
                   </div>
-                  <CardFooter note="Top bars track gross revenue; lower bars track Saleem income." />
+                  <CardFooter
+                    note={
+                      m.commission_unset && m.commission_unset > 0
+                        ? `${m.commission_unset} standard bookings had no commission rate set and used the default. Check those doctors in Zoho.`
+                        : "Every standard booking resolved a commission rate."
+                    }
+                  />
+                </Card>
+              </div>
+
+              <div className={spans.c6} data-focus-id="appointments-status">
+                <Card>
+                  <CardHeader
+                    title="Status breakdown"
+                    subtitle="Every status in this period, with its gross."
+                  />
+                  <div className="px-[18px] pb-2 pt-[5px]">
+                    {data.status_breakdown.length === 0 ? (
+                      <p className="py-2 text-[13px] text-ink-2">No bookings in this period yet.</p>
+                    ) : (
+                      <DataTable
+                        columns={STATUS_COLUMNS}
+                        rows={data.status_breakdown}
+                        rowKey={(r) => r.status}
+                      />
+                    )}
+                  </div>
+                  <CardFooter note="Completed basis is Done plus Awaiting Review; the other statuses are excluded." />
+                </Card>
+              </div>
+
+              <div className={spans.c6} data-focus-id="appointments-types">
+                <Card>
+                  <CardHeader
+                    title="Type distribution"
+                    subtitle="Distinct booking types, normalized, and the track assigned today."
+                  />
+                  <div className="px-[18px] pb-2 pt-[5px]">
+                    {data.type_distribution.length === 0 ? (
+                      <p className="py-2 text-[13px] text-ink-2">No booking types in this period yet.</p>
+                    ) : (
+                      <DataTable
+                        columns={TYPE_COLUMNS}
+                        rows={data.type_distribution}
+                        rowKey={(r) => r.type_raw}
+                      />
+                    )}
+                  </div>
+                  <CardFooter note="Use these spellings to complete the Novo set. Track shown is the current classification." />
                 </Card>
               </div>
 

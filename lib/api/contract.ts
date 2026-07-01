@@ -457,17 +457,27 @@ export interface AppointmentsAnalyticsRow {
   patient_name?: string
   doctor: string
   status: string
+  type: string | null
   fee_bhd: number
   date: string | null
 }
 export interface AppointmentsStageCount { name: string; count: number }
-export interface AppointmentsDoctorRow { name: string; count: number; done: number; revenue_bhd: number; saleem_income_bhd?: number }
-export interface AppointmentsAnalyticsMetrics { total: number; completed: number; revenue_bhd: number; completion_rate_pct: number; gross_income_bhd?: number; saleem_income_bhd?: number }
+export interface AppointmentsDoctorRow { name: string; count: number; done: number; revenue_bhd: number; saleem_income_bhd?: number; commission_pct?: number | null }
+export interface AppointmentsAnalyticsMetrics { total: number; completed: number; revenue_bhd: number; completion_rate_pct: number; gross_income_bhd?: number; saleem_income_bhd?: number; commission_unset?: number }
+// Reconciliation diagnostic (revenue spec, step 1). status_breakdown is every
+// Status present in the window with its count and gross, so the completed-basis
+// gap is visible. type_distribution is every distinct raw Type with its
+// normalized form, count, and the track the engine currently assigns, so the
+// Novo set can be completed from real spellings.
+export interface AppointmentsStatusCount { status: string; count: number; gross_bhd: number }
+export interface AppointmentsTypeCount { type_raw: string; type_normalized: string; count: number; track: 'novo' | 'standard' }
 export interface AppointmentsAnalyticsData {
   period: AppointmentsPeriod
   metrics: AppointmentsAnalyticsMetrics
   stage_breakdown: AppointmentsStageCount[]
   by_doctor: AppointmentsDoctorRow[]
+  status_breakdown: AppointmentsStatusCount[]
+  type_distribution: AppointmentsTypeCount[]
   recent: AppointmentsAnalyticsRow[]
 }
 

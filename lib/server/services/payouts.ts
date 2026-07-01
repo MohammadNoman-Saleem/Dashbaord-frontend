@@ -349,12 +349,26 @@ function resolveLookup(field: ZohoLookup | string | null): {
 /** Which segment an appointment Type falls in. Treatment lives in a separate
  *  Deals pipeline and is handled by the manual free-appointment path, not
  *  here. */
-// Every completed booking earns commission. Novo is the only special segment
-// (Type starts with "novo"); everything else, including a missing or
-// unrecognized Type, is treated as standard, so no booking is left out.
+// The confirmed Novo (obesity) track booking types, normalized. The source of
+// truth for these values is the revenue spec and the live Type distribution;
+// kept as a constant here so segmentOf stays a pure, unit-testable function. If
+// they ever need to be editable without a deploy, move them to the novo payout
+// rule's params and thread them in.
+const NOVO_TYPES = new Set(['novo_scheduled', 'novo_instant']);
+
+// Normalized booking Type: trimmed, inner whitespace collapsed, lowercased. The
+// Zoho Type field is free text with inconsistent casing and spacing, so every
+// classification runs on this form, never the raw string.
+function normalizeBookingType(type: string | null): string {
+  return (type ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+// A consult is Novo when its normalized Type is in the Novo set; everything
+// else, including a missing or unrecognized Type, is treated as standard, so no
+// booking is left out. This replaces the old startsWith('novo') test, which was
+// case sensitive and missed the real values ("Novo Instant", "novo_scheduled").
 export function segmentOf(type: string | null): 'scheduled' | 'novo' {
-  if (typeof type === 'string' && type.startsWith('novo')) return 'novo';
-  return 'scheduled';
+  return NOVO_TYPES.has(normalizeBookingType(type)) ? 'novo' : 'scheduled';
 }
 
 interface RuleSet {
