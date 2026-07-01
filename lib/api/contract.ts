@@ -23,7 +23,7 @@ export interface PatientRefData {
 }
 
 export interface DeepLink {
-  view: 'home' | 'cockpit' | 'cases' | 'board' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'social' | 'appointments'
+  view: 'home' | 'cockpit' | 'cases' | 'board' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'social' | 'appointments' | 'crm'
   tab?: string
   focus?: string
 }
