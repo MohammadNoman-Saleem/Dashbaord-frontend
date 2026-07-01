@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
+import { CrmOverviewTab } from "@/components/crm/CrmOverviewTab";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Tabs } from "@/components/ui/Tabs";
 import { useFocusFlash } from "@/lib/deepLink";
@@ -80,12 +81,16 @@ function CrmContent() {
         aria-label="CRM tabs"
       />
 
-      <Card>
-        <CardHeader title={placeholder.title} subtitle={placeholder.sub} />
-        <p className="px-[18px] pb-4 pt-[13px] text-[13px] text-ink-2">
-          This tab is being built.
-        </p>
-      </Card>
+      {tab === "overview" ? (
+        <CrmOverviewTab />
+      ) : (
+        <Card>
+          <CardHeader title={placeholder.title} subtitle={placeholder.sub} />
+          <p className="px-[18px] pb-4 pt-[13px] text-[13px] text-ink-2">
+            This tab is being built.
+          </p>
+        </Card>
+      )}
     </>
   );
 }

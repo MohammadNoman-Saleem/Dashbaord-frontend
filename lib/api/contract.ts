@@ -481,6 +481,45 @@ export interface AppointmentsAnalyticsData {
   recent: AppointmentsAnalyticsRow[]
 }
 
+// /api/crm/metrics
+export interface CrmPipelineMetric {
+  total: number
+  this_month: number
+  last_month: number
+  change_pct: number
+  won: number
+  lost: number
+  open: number
+  value_bhd: number
+  win_rate_pct: number
+  loss_rate_pct: number
+}
+export interface CrmMetricsData {
+  total_leads: number
+  total_deals: number
+  total_leads_this_month: number
+  total_leads_last_month: number
+  leads_change_pct: number
+  total_deals_this_month: number
+  total_deals_last_month: number
+  deals_change_pct: number
+  total_deals_open: number
+  total_won: number
+  pipeline_value_bhd: number
+  by_pipeline: Record<string, CrmPipelineMetric>
+}
+
+// /api/crm/funnel
+export type CrmFunnelPeriod = 'mtd' | 'ytd' | 'all'
+export type CrmFunnelSegment = 'Customers' | 'Providers'
+export interface CrmFunnelMonthPoint { month: string; leads: number; deals: number; won: number }
+export interface CrmFunnelSummary { total_leads: number; total_deals: number; total_won: number; leads_to_deals_pct: number; deals_to_won_pct: number }
+export interface CrmFunnelData {
+  funnels: Record<CrmFunnelSegment, CrmFunnelMonthPoint[]>
+  summary: Record<CrmFunnelSegment, CrmFunnelSummary>
+  period: CrmFunnelPeriod
+}
+
 // /api/financials
 export interface FinancialsData {
   platform_revenue: {

@@ -32,6 +32,8 @@ export type EndpointKey =
   | 'financials_burn'
   | 'financials_receivables'
   | 'crm'
+  | 'crm_metrics'
+  | 'crm_funnel'
   | 'marketing'
   | 'funnels_general'
   | 'funnels_direct'
@@ -101,6 +103,8 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   financials_burn: 'live',
   financials_receivables: 'live',
   crm: 'live',
+  crm_metrics: 'live',
+  crm_funnel: 'live',
   marketing: 'live',
   funnels_general: 'live',
   funnels_direct: 'live',

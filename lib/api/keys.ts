@@ -28,6 +28,8 @@ export const qk = {
   appointments: () => ['appointments'] as const,
   appointmentsAnalytics: (period: string, month?: string) =>
     ['appointments', 'analytics', period, month ?? null] as const,
+  crmMetrics: () => ['crm', 'metrics'] as const,
+  crmFunnel: (period: string) => ['crm', 'funnel', period] as const,
   financials: () => ['financials'] as const,
   financialsForecast: () => ['financials', 'forecast'] as const,
   financialsBurn: () => ['financials', 'burn'] as const,
