@@ -435,6 +435,7 @@ export interface HandoffsData {
 
 // /api/appointments
 export interface AppointmentRow {
+  id: string
   time: string
   doctor: string
   patient_ref: PatientRefData
@@ -760,6 +761,10 @@ export interface MarketingData {
 }
 
 // /api/funnels/:tab
+/** Reporting-period presets the Direct, Scheduled, and Novo tabs switch
+ *  between; passed to those routes as ?period=. Mirrors the service's
+ *  FunnelPeriod. */
+export type FunnelPeriod = 'mtd' | 'qtd' | 'ytd' | 'all'
 export interface FunnelStep {
   label: string
   count: number

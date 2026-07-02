@@ -11,11 +11,29 @@
 // lib/fixtures/me.ts (03 section 3 describes it loosely). It is defined
 // here, not imported, because panels never import fixture modules.
 
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { ApiError, fetchEnvelope } from '@/lib/api/fetcher'
 import { qk } from '@/lib/api/keys'
+
+// Hydration flag via the same useSyncExternalStore idiom as lib/theme.ts:
+// false on the server and on the first client render, true afterward. The
+// signed-in viewer resolves client-side, and the per-session query cache can be
+// warm on the first client render while the server prerendered with no viewer.
+// Holding me back until hydrated keeps the first client render equal to the
+// server for every useViewer consumer, so viewer-dependent UI (the sidebar nav,
+// the person menu avatar) never triggers a hydration mismatch.
+const subscribeHydrated = () => () => {}
+const getHydratedSnapshot = () => true
+const getHydratedServerSnapshot = () => false
 
 export interface ViewerPerson {
   key: string
@@ -85,8 +103,16 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
     }
   }, [unauthenticated, pathname, router])
 
-  const me = query.data?.data ?? null
-  const isLoading = query.isPending
+  // Until hydrated, report the same not-ready state the server rendered with
+  // (no viewer, still loading), regardless of a warm client-side cache. After
+  // hydration the real query values flow through and consumers re-render.
+  const hydrated = useSyncExternalStore(
+    subscribeHydrated,
+    getHydratedSnapshot,
+    getHydratedServerSnapshot,
+  )
+  const me = hydrated ? (query.data?.data ?? null) : null
+  const isLoading = !hydrated || query.isPending
 
   const value = useMemo<ViewerState>(() => {
     const effectivePerson = me

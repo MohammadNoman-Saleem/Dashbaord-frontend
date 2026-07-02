@@ -99,7 +99,7 @@ export function NovoTab({ query }: { query: UseQueryResult<Envelope<FunnelNovoDa
             className={spans.c3}
             label="BMI checks finished"
             value={data.tiles.bmi_checks.value.toLocaleString()}
-            note="Completed checks this month"
+            note="Completed checks in this period"
             dot="good"
           />
 
@@ -196,7 +196,7 @@ export function NovoTab({ query }: { query: UseQueryResult<Envelope<FunnelNovoDa
             <Card>
               <CardHeader
                 title="Landing traffic by campaign tag"
-                subtitle="Where Novo visitors came from this month."
+                subtitle="Where Novo visitors came from in this period."
               />
               <div className="px-[18px] pb-2 pt-2">
                 {data.landing_by_campaign.length === 0 ? (

@@ -53,7 +53,7 @@ export function ScheduledTab({ query }: { query: UseQueryResult<Envelope<FunnelS
               query={query}
               skeleton={FUNNEL_SKELETON}
               isEmpty={(d) => d.steps.length === 0}
-              emptyCopy="No scheduled funnel data for this month yet."
+              emptyCopy="No scheduled funnel data for this period yet."
             >
               {(d, _meta, flags) => (
                 <div className={flags.unreliable ? "opacity-55" : undefined}>

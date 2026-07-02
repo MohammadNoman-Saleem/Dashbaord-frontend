@@ -41,6 +41,7 @@ import type {
 } from '@/lib/api/contract';
 
 export interface AppointmentRowData {
+  id: string;
   time: string;
   doctor: string;
   patient_ref: PatientRef;
@@ -125,6 +126,7 @@ function toRow(
   const when = booking.From ?? booking.Created_At;
   const dayLabel = done ? relativeDay(when) : 'Today';
   const row: AppointmentRowData = {
+    id: booking.id,
     time: `${dayLabel} ${bahrainTime(when)}`.trim(),
     doctor: doctorName(booking),
     patient_ref: patientSerializer.ref(
