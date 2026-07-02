@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Saleem WhatsApp panel",
+  "version": "0.1.0",
+  "description": "Identifies the active WhatsApp Web chat against Zoho and shows the patient case beside the conversation, with one-click write-back. Never sends messages.",
+  "permissions": ["storage", "sidePanel"],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "http://localhost:3000/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["adapter/wa-dom.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    }
+  ],
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "action": {
+    "default_title": "Saleem panel"
+  },
+  "options_page": "options.html"
+}

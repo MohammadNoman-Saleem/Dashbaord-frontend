@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Saleem panel</title>
+    <style>
+      /* Saleem light theme (values mirror styles/tokens.css). Forced light so the
+         panel does not follow the OS dark mode. */
+      :root {
+        color-scheme: light;
+        --bg: #f2f1f0;
+        --surface: #ffffff;
+        --surface-2: #f7f7f6;
+        --ink: #0b2530;
+        --muted: rgba(7, 58, 79, 0.62);
+        --title: #073a4f;
+        --accent: #588be4;
+        --accent-text: #3667c5;
+        --on-accent: #ffffff;
+        --green: #2e7d67;
+        --line: rgba(7, 58, 79, 0.14);
+        --r: 12px;
+        --r-sm: 9px;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font: 13px/1.45 system-ui, sans-serif;
+        margin: 0;
+        padding: 12px;
+        background: var(--bg);
+        color: var(--ink);
+      }
+      .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+      .brand .mark {
+        width: 22px; height: 22px; border-radius: 6px; background: var(--accent);
+        color: var(--on-accent); font-weight: 700; display: grid; place-items: center; font-size: 13px;
+      }
+      h1 { font-size: 14px; margin: 0; color: var(--title); }
+      .sub { color: var(--muted); font-size: 11px; margin: 2px 0 10px; }
+      .status { font-size: 11px; color: var(--accent-text); min-height: 14px; margin-bottom: 8px; }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        padding: 11px;
+        margin-bottom: 10px;
+      }
+      .card h2 { font-size: 11px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+      .row { display: flex; justify-content: space-between; gap: 10px; margin: 4px 0; }
+      .row .k { color: var(--muted); }
+      .row .v { text-align: right; font-weight: 500; color: var(--ink); }
+      .name { font-size: 16px; font-weight: 700; color: var(--title); margin-bottom: 6px; }
+      .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+      .tag {
+        display: inline-flex; align-items: center; gap: 5px;
+        background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px;
+        padding: 2px 9px; font-size: 11px; color: var(--muted);
+      }
+      .tag .x { cursor: pointer; font-weight: 700; color: var(--muted); }
+      .tag .x:hover { color: var(--title); }
+      .hist { margin: 6px 0; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+      .hist:last-child { border-bottom: 0; }
+      .hist .t { font-weight: 600; }
+      .hist .d { color: var(--muted); font-size: 12px; }
+      label { display: block; font-size: 11px; color: var(--muted); margin: 9px 0 3px; }
+      select, textarea, input {
+        width: 100%; padding: 7px; border: 1px solid var(--line); border-radius: var(--r-sm);
+        font: inherit; background: var(--surface); color: var(--ink);
+      }
+      textarea { min-height: 54px; resize: vertical; }
+      button {
+        width: 100%; margin-top: 7px; padding: 8px; border: 0; border-radius: var(--r-sm);
+        background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 600; cursor: pointer;
+      }
+      button:hover { filter: brightness(1.05); }
+      button:disabled { opacity: .5; cursor: default; }
+      .addtag { display: flex; gap: 6px; align-items: center; }
+      .addtag input { flex: 1; }
+      .addtag button { width: auto; margin: 0; padding: 7px 12px; }
+      .hint { font-size: 11px; color: var(--muted); }
+      .hidden { display: none; }
+      a { color: var(--accent-text); }
+      .divider { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+      .loading-row { display: flex; align-items: center; gap: 9px; color: var(--muted); }
+      .spinner {
+        width: 18px; height: 18px; border: 2px solid var(--line);
+        border-top-color: var(--accent); border-radius: 50%;
+        animation: spin .7s linear infinite; flex: none;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .skeleton { height: 11px; border-radius: 6px; margin: 8px 0; background:
+        linear-gradient(90deg, var(--surface-2) 25%, var(--line) 37%, var(--surface-2) 63%);
+        background-size: 400% 100%; animation: shimmer 1.3s ease-in-out infinite; }
+      .skeleton.w60 { width: 60%; } .skeleton.w40 { width: 40%; } .skeleton.w80 { width: 80%; }
+      @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+    </style>
+  </head>
+  <body>
+    <div class="brand"><span class="mark">S</span><h1>Saleem panel</h1></div>
+    <div class="sub">Zoho case for the open WhatsApp chat</div>
+    <div class="status" id="status"></div>
+
+    <div id="notConfigured" class="card hidden">
+      <h2>Set up</h2>
+      <p class="hint">Sign in first: open the extension <a href="#" id="openOptions">options</a>, enter the backend URL and your dashboard username and password.</p>
+    </div>
+
+    <div id="empty" class="card hidden">
+      <p class="hint" id="emptyText">Open a WhatsApp chat to see the patient's case.</p>
+    </div>
+
+    <div id="loading" class="card hidden">
+      <div class="loading-row"><span class="spinner"></span><span id="loadingText">Looking up...</span></div>
+      <div class="skeleton w60"></div>
+      <div class="skeleton w80"></div>
+      <div class="skeleton w40"></div>
+    </div>
+
+    <div id="patient" class="hidden">
+      <div class="card">
+        <h2>Patient</h2>
+        <div class="name" id="pName">-</div>
+        <div class="row"><span class="k">Reference</span><span class="v" id="pRef">-</span></div>
+        <div class="row"><span class="k">Stage</span><span class="v" id="pStage">-</span></div>
+        <div class="row"><span class="k">Pipeline</span><span class="v" id="pPipeline">-</span></div>
+        <div class="row"><span class="k">Owner</span><span class="v" id="pOwner">-</span></div>
+        <div class="row"><span class="k">Next action</span><span class="v" id="pNext">-</span></div>
+        <div class="row"><span class="k">Follow up</span><span class="v" id="pFollow">-</span></div>
+        <div class="tags" id="pTags"></div>
+        <div class="addtag" style="margin-top: 8px">
+          <input type="text" id="tagInput" list="tagOptions" placeholder="Add a tag" />
+          <datalist id="tagOptions"></datalist>
+          <button id="tagBtn">Add</button>
+        </div>
+      </div>
+
+      <div class="card" id="detailsCard">
+        <h2>Case details</h2>
+
+        <div id="leadDetails" class="hidden">
+          <label for="statusSelect">Status</label>
+          <select id="statusSelect"></select>
+          <button id="statusBtn">Update status</button>
+        </div>
+
+        <div id="dealDetails" class="hidden">
+          <label for="budgetInput">Patient budget (BHD)</label>
+          <input type="number" id="budgetInput" min="0" step="1" placeholder="e.g. 4180" />
+          <label for="startInput">Treatment start</label>
+          <input type="date" id="startInput" />
+          <label for="endInput">Treatment end</label>
+          <input type="date" id="endInput" />
+          <button id="detailsBtn">Save details</button>
+        </div>
+      </div>
+
+      <div class="card hidden" id="historyCard">
+        <h2>History</h2>
+        <div id="history"></div>
+      </div>
+
+      <div class="card">
+        <h2>Actions</h2>
+
+        <div id="advanceWrap">
+          <label for="stageSelect">Advance stage</label>
+          <select id="stageSelect"></select>
+          <button id="advanceBtn">Advance stage</button>
+        </div>
+
+        <label for="noteText">Log a note</label>
+        <textarea id="noteText" placeholder="Interaction note (saved to Zoho)"></textarea>
+        <button id="noteBtn">Save note</button>
+
+        <label for="followDate">Set follow up</label>
+        <input type="date" id="followDate" />
+        <button id="followBtn">Set follow up</button>
+      </div>
+    </div>
+
+    <hr class="divider" />
+    <label for="manualPhone">Test lookup (type a phone in Zoho)</label>
+    <input type="text" id="manualPhone" placeholder="e.g. 97312345678" />
+    <button id="manualBtn">Look up</button>
+
+    <script src="panel.js"></script>
+  </body>
+</html>

@@ -62,23 +62,26 @@ function requestedAs(req: Request): string | null {
   }
 }
 
-/** Resolve the viewer or return null when there is no valid auth. The MCP path
- *  and DB hydration are identical to requireViewer; only the no-auth outcome
- *  differs (null instead of a throw), for the rare route that treats an
- *  anonymous caller specially. Most routes call requireViewer. */
-export async function getViewer(
+// The session JWT from an Authorization: Bearer header. This is the Chrome
+// extension's auth path: the saleem_session cookie is SameSite=Lax and is not
+// sent on a cross-origin chrome-extension:// fetch, so the extension stores the
+// token (from POST /api/auth/token) and presents it here. Returns null when the
+// header is absent or not a Bearer token.
+function bearerToken(req: Request): string | null {
+  const header = req.headers.get('authorization');
+  if (!header) return null;
+  const m = /^Bearer\s+(.+)$/i.exec(header.trim());
+  return m ? m[1].trim() : null;
+}
+
+// Verify a session token (from the cookie OR the Bearer header) and hydrate the
+// viewer FRESH from the database, resolving ?as= only when can_view_as. Returns
+// null on any failure (invalid/expired token, unknown user). Shared by
+// getViewer and requireViewer so the cookie and bearer paths are identical.
+async function viewerFromToken(
+  token: string,
   req: Request,
 ): Promise<RequestViewer | null> {
-  const env = getEnv();
-
-  const mcpKey = req.headers.get(MCP_KEY_HEADER);
-  if (mcpKey && safeEqual(mcpKey, env.MCP_SERVICE_KEY)) {
-    return MCP_VIEWER;
-  }
-
-  const token = readCookie(req, SESSION_COOKIE);
-  if (!token) return null;
-
   let claims;
   try {
     claims = await verifyToken(token);
@@ -92,8 +95,7 @@ export async function getViewer(
   if (!user) return null;
 
   const as = requestedAs(req);
-  const viewedPerson =
-    user.can_view_as && as ? as.toLowerCase() : user.key;
+  const viewedPerson = user.can_view_as && as ? as.toLowerCase() : user.key;
 
   return {
     key: user.key,
@@ -108,6 +110,28 @@ export async function getViewer(
   };
 }
 
+/** Resolve the viewer or return null when there is no valid auth. The MCP path
+ *  and DB hydration are identical to requireViewer; only the no-auth outcome
+ *  differs (null instead of a throw), for the rare route that treats an
+ *  anonymous caller specially. Most routes call requireViewer. */
+export async function getViewer(
+  req: Request,
+): Promise<RequestViewer | null> {
+  const env = getEnv();
+
+  const mcpKey = req.headers.get(MCP_KEY_HEADER);
+  if (mcpKey && safeEqual(mcpKey, env.MCP_SERVICE_KEY)) {
+    return MCP_VIEWER;
+  }
+
+  // Bearer header (extension) takes precedence over the cookie (browser app);
+  // either carries the same signed session JWT.
+  const token = bearerToken(req) ?? readCookie(req, SESSION_COOKIE);
+  if (!token) return null;
+
+  return viewerFromToken(token, req);
+}
+
 /** Resolve the viewer or throw UnauthorizedError with the right plain-language
  *  message. Routes call this. The message distinguishes "never signed in" from
  *  "session expired" exactly as the guard did. */
@@ -119,34 +143,12 @@ export async function requireViewer(req: Request): Promise<RequestViewer> {
     return MCP_VIEWER;
   }
 
-  const token = readCookie(req, SESSION_COOKIE);
+  const token = bearerToken(req) ?? readCookie(req, SESSION_COOKIE);
   if (!token) throw new UnauthorizedError('Sign in to continue.');
 
-  let claims;
-  try {
-    claims = await verifyToken(token);
-  } catch {
+  const viewer = await viewerFromToken(token, req);
+  if (!viewer) {
     throw new UnauthorizedError('Your session expired. Sign in again.');
   }
-
-  const user = await findByKey(claims.sub);
-  if (!user) {
-    throw new UnauthorizedError('Your session expired. Sign in again.');
-  }
-
-  const as = requestedAs(req);
-  const viewedPerson =
-    user.can_view_as && as ? as.toLowerCase() : user.key;
-
-  return {
-    key: user.key,
-    name: user.name,
-    role: user.role,
-    department: user.department,
-    sees_patient_names: user.sees_patient_names,
-    can_view_as: user.can_view_as,
-    can_edit_payout_rules: user.can_edit_payout_rules,
-    viewed_person: viewedPerson,
-    is_service: false,
-  };
+  return viewer;
 }
