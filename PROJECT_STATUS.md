@@ -11,6 +11,7 @@ Last updated: 2026-06-27.
 
 ---
 
+
 ## 1. What this app is
 
 - The internal dashboard UI plus its own API. Route groups `app/(auth)` (login)
