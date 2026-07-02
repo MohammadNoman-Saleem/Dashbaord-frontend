@@ -15,6 +15,7 @@ import {
   type DealRecord,
   type LeadRecord,
 } from '../crm-read';
+import { patientSerializer } from '../privacy';
 import type { SourceMeta } from '../envelope';
 import type {
   CrmFunnelData,
@@ -22,6 +23,12 @@ import type {
   CrmFunnelPeriod,
   CrmFunnelSegment,
   CrmFunnelSummary,
+  CrmLeadFunnelData,
+  CrmLeadFunnelPeriod,
+  CrmLeadFunnelStage,
+  CrmLeadRow,
+  CrmLeadSourcesData,
+  CrmLeadsData,
   CrmMetricsData,
   CrmPipelineMetric,
 } from '@/lib/api/contract';
@@ -225,4 +232,150 @@ async function funnel(
   return { data: { funnels, summary, period }, parts: [dealsRead.meta, leadsRead.meta] };
 }
 
-export const crmAnalytics = { metrics, funnel };
+// The lead-stage vocabulary (old lead-funnel route). A lead counts toward a
+// stage if its Lead_Status is at or past that stage, or if it has converted.
+const CONTACTED_STATUSES = new Set([
+  'Waiting Response',
+  'Intro Call Scheduled',
+  'Intro Call Done',
+  'Deal Ready',
+]);
+const CALL_DONE_STATUSES = new Set(['Intro Call Done', 'Deal Ready']);
+
+// The cumulative lead funnel for a set of leads. Not Qualified is tracked
+// separately, not as a stage. Rates are one-decimal percentages.
+function buildLeadFunnel(leads: LeadRecord[]): CrmLeadFunnelStage {
+  const total = leads.length;
+  const notQualified = leads.filter((l) => l.Lead_Status === 'Not Qualified').length;
+  const converted = leads.filter((l) => l.Converted === true).length;
+  const contacted = leads.filter(
+    (l) => (l.Lead_Status != null && CONTACTED_STATUSES.has(l.Lead_Status)) || l.Converted === true,
+  ).length;
+  const callDone = leads.filter(
+    (l) => (l.Lead_Status != null && CALL_DONE_STATUSES.has(l.Lead_Status)) || l.Converted === true,
+  ).length;
+  const dealReady = leads.filter(
+    (l) => l.Lead_Status === 'Deal Ready' || l.Converted === true,
+  ).length;
+  return {
+    total,
+    contacted,
+    call_done: callDone,
+    deal_ready: dealReady,
+    converted,
+    not_qualified: notQualified,
+    contacted_rate: rate(contacted, total),
+    call_done_rate: rate(callDone, total),
+    deal_ready_rate: rate(dealReady, total),
+    converted_rate: rate(converted, total),
+    not_qualified_rate: rate(notQualified, total),
+    new_to_contacted: rate(contacted, total),
+    contacted_to_call_done: rate(callDone, contacted),
+    call_done_to_deal_ready: rate(dealReady, callDone),
+    deal_ready_to_converted: rate(converted, dealReady),
+  };
+}
+
+// Bahrain-time period test for the lead funnel: mtd is the current month, ytd
+// is the current year, all is unbounded.
+function inLeadPeriod(iso: string | null, period: CrmLeadFunnelPeriod): boolean {
+  if (period === 'all') return true;
+  const key = monthKey(iso);
+  if (key === '') return false;
+  const now = currentMonthKey();
+  return period === 'mtd' ? key === now : key.slice(0, 4) === now.slice(0, 4);
+}
+
+async function leadFunnel(
+  period: CrmLeadFunnelPeriod,
+): Promise<{ data: CrmLeadFunnelData; parts: SourceMeta[] }> {
+  const read = await getCrmRead().leads();
+  const leads = read.data.filter((l) => inLeadPeriod(l.Created_Time, period));
+  const seg = (name: CrmFunnelSegment) =>
+    leads.filter((l) => LEAD_LAYOUT_TO_KEY[l.Layout?.name ?? ''] === name);
+  const data: CrmLeadFunnelData = {
+    overall: buildLeadFunnel(leads),
+    by_segment: {
+      Customers: buildLeadFunnel(seg('Customers')),
+      Providers: buildLeadFunnel(seg('Providers')),
+    },
+    period,
+  };
+  return { data, parts: [read.meta] };
+}
+
+// Lead sources grouped over the cached leads read, filtered by the same period
+// and segment as the lead funnel so both cards move together. The old route
+// read only the first 100 rows, which under-counted; this counts every matching
+// lead. A missing source buckets as Unknown. A segment other than Customers or
+// Providers (including overall) applies no segment filter.
+async function leadSources(
+  period: CrmLeadFunnelPeriod,
+  segment: string | undefined,
+): Promise<{ data: CrmLeadSourcesData; parts: SourceMeta[] }> {
+  const read = await getCrmRead().leads();
+  const inSeg = (l: LeadRecord) =>
+    segment !== 'Customers' && segment !== 'Providers'
+      ? true
+      : LEAD_LAYOUT_TO_KEY[l.Layout?.name ?? ''] === segment;
+  const leads = read.data.filter(
+    (l) => inLeadPeriod(l.Created_Time, period) && inSeg(l),
+  );
+  const counts = new Map<string, number>();
+  for (const l of leads) {
+    const name = l.Lead_Source && l.Lead_Source.trim() ? l.Lead_Source : 'Unknown';
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  const sources = [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+  return { data: { sources }, parts: [read.meta] };
+}
+
+const LEADS_PAGE_SIZE = 25;
+const LEADS_MAX_PAGE_SIZE = 100;
+
+// The all-leads table, newest first, privacy-gated to initials (no name, email,
+// or phone ever leaves the server). Optional status filter; the distinct
+// statuses present are returned so the client can build the filter control.
+async function leads(
+  pageRaw: string | undefined,
+  pageSizeRaw: string | undefined,
+  statusRaw: string | undefined,
+): Promise<{ data: CrmLeadsData; parts: SourceMeta[] }> {
+  const read = await getCrmRead().leads();
+  const pageSize = Math.min(
+    LEADS_MAX_PAGE_SIZE,
+    Math.max(1, Number(pageSizeRaw) || LEADS_PAGE_SIZE),
+  );
+  const page = Math.max(1, Number(pageRaw) || 1);
+
+  const sorted = [...read.data].sort((a, b) =>
+    (b.Created_Time ?? '').localeCompare(a.Created_Time ?? ''),
+  );
+  const statuses = [
+    ...new Set(sorted.map((l) => l.Lead_Status).filter((s): s is string => Boolean(s))),
+  ].sort();
+
+  const filtered = statusRaw ? sorted.filter((l) => l.Lead_Status === statusRaw) : sorted;
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const clamped = Math.min(page, pages);
+  const rows: CrmLeadRow[] = filtered
+    .slice((clamped - 1) * pageSize, clamped * pageSize)
+    .map((l) => {
+      const name = [l.First_Name, l.Last_Name].filter(Boolean).join(' ');
+      return {
+        id: l.id,
+        ref: l.Zoho_ID ?? l.id,
+        initials: patientSerializer.initialsOf(name),
+        segment: LEAD_LAYOUT_TO_KEY[l.Layout?.name ?? ''] ?? '·',
+        lead_source: l.Lead_Source ?? '·',
+        lead_status: l.Lead_Status ?? '·',
+        created: l.Created_Time,
+      };
+    });
+  return { data: { rows, page: clamped, pages, total, statuses }, parts: [read.meta] };
+}
+
+export const crmAnalytics = { metrics, funnel, leadFunnel, leadSources, leads };

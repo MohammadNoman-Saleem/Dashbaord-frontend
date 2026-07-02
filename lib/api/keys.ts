@@ -30,6 +30,10 @@ export const qk = {
     ['appointments', 'analytics', period, month ?? null] as const,
   crmMetrics: () => ['crm', 'metrics'] as const,
   crmFunnel: (period: string) => ['crm', 'funnel', period] as const,
+  crmLeads: (page: number, status: string) => ['crm', 'leads', page, status] as const,
+  crmLeadSources: (period: string, segment: string) =>
+    ['crm', 'lead-sources', period, segment] as const,
+  crmLeadFunnel: (period: string) => ['crm', 'lead-funnel', period] as const,
   financials: () => ['financials'] as const,
   financialsForecast: () => ['financials', 'forecast'] as const,
   financialsBurn: () => ['financials', 'burn'] as const,

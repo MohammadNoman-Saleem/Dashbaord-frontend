@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
+import { CrmLeadsTab } from "@/components/crm/CrmLeadsTab";
 import { CrmOverviewTab } from "@/components/crm/CrmOverviewTab";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Tabs } from "@/components/ui/Tabs";
@@ -83,6 +84,8 @@ function CrmContent() {
 
       {tab === "overview" ? (
         <CrmOverviewTab />
+      ) : tab === "leads" ? (
+        <CrmLeadsTab />
       ) : (
         <Card>
           <CardHeader title={placeholder.title} subtitle={placeholder.sub} />

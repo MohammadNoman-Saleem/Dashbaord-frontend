@@ -520,6 +520,53 @@ export interface CrmFunnelData {
   period: CrmFunnelPeriod
 }
 
+// /api/crm/lead-sources
+export interface CrmLeadSource { name: string; count: number }
+export interface CrmLeadSourcesData { sources: CrmLeadSource[] }
+
+// /api/crm/lead-funnel
+export type CrmLeadFunnelPeriod = 'all' | 'ytd' | 'mtd'
+export interface CrmLeadFunnelStage {
+  total: number
+  contacted: number
+  call_done: number
+  deal_ready: number
+  converted: number
+  not_qualified: number
+  contacted_rate: number
+  call_done_rate: number
+  deal_ready_rate: number
+  converted_rate: number
+  not_qualified_rate: number
+  new_to_contacted: number
+  contacted_to_call_done: number
+  call_done_to_deal_ready: number
+  deal_ready_to_converted: number
+}
+export interface CrmLeadFunnelData {
+  overall: CrmLeadFunnelStage
+  by_segment: Record<CrmFunnelSegment, CrmLeadFunnelStage>
+  period: CrmLeadFunnelPeriod
+}
+
+// /api/crm/leads
+export interface CrmLeadRow {
+  id: string
+  ref: string
+  initials: string
+  segment: string
+  lead_source: string
+  lead_status: string
+  created: string | null
+}
+export interface CrmLeadsData {
+  rows: CrmLeadRow[]
+  page: number
+  pages: number
+  total: number
+  statuses: string[]
+}
+
 // /api/financials
 export interface FinancialsData {
   platform_revenue: {

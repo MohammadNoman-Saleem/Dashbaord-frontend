@@ -21,6 +21,9 @@ import { fixture as cockpitQueueFixture } from './cockpit-queue'
 import { fixture as cockpitSlaPolicyFixture } from './cockpit-sla-policy'
 import { fixture as crmFixture } from './crm'
 import { fixture as crmFunnelFixture } from './crm-funnel'
+import { fixture as crmLeadFunnelFixture } from './crm-lead-funnel'
+import { fixture as crmLeadSourcesFixture } from './crm-lead-sources'
+import { fixture as crmLeadsFixture } from './crm-leads'
 import { fixture as crmMetricsFixture } from './crm-metrics'
 import { fixture as deliverablesFixture } from './deliverables'
 import { fixture as financialsFixture } from './financials'
@@ -99,6 +102,9 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   crm: crmFixture,
   crm_metrics: crmMetricsFixture,
   crm_funnel: crmFunnelFixture,
+  crm_leads: crmLeadsFixture,
+  crm_lead_sources: crmLeadSourcesFixture,
+  crm_lead_funnel: crmLeadFunnelFixture,
   marketing: marketingFixture,
   funnels_general: funnelsGeneralFixture,
   funnels_direct: funnelsDirectFixture,

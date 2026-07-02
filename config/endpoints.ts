@@ -34,6 +34,9 @@ export type EndpointKey =
   | 'crm'
   | 'crm_metrics'
   | 'crm_funnel'
+  | 'crm_leads'
+  | 'crm_lead_sources'
+  | 'crm_lead_funnel'
   | 'marketing'
   | 'funnels_general'
   | 'funnels_direct'
@@ -105,6 +108,9 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   crm: 'live',
   crm_metrics: 'live',
   crm_funnel: 'live',
+  crm_leads: 'live',
+  crm_lead_sources: 'live',
+  crm_lead_funnel: 'live',
   marketing: 'live',
   funnels_general: 'live',
   funnels_direct: 'live',
