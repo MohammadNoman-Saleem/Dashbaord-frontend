@@ -55,12 +55,20 @@ export const DIRECT_FUNNELS: Record<'full' | 'instant', DirectFunnelConfig> = {
 export const SCHEDULED_FUNNEL_ID = '90007484';
 
 /** The four Novo channel funnels (Path A completed BMI, Path B skipped it).
- *  The first entry is the primary funnel rendered as the Novo step chart. */
+ *  All four render as their own step chart on the Novo tab. */
 export const NOVO_GROUP_FUNNELS = [
-  { key: 'novo_a_instant', id: '90004018' },
-  { key: 'novo_a_scheduled', id: '90007191' },
-  { key: 'novo_b_instant', id: '90007280' },
-  { key: 'novo_b_scheduled', id: '90007301' },
+  { key: 'novo_a_instant', id: '90004018', label: 'Novo A, instant' },
+  { key: 'novo_a_scheduled', id: '90007191', label: 'Novo A, scheduled' },
+  { key: 'novo_b_instant', id: '90007280', label: 'Novo B, instant' },
+  { key: 'novo_b_scheduled', id: '90007301', label: 'Novo B, scheduled' },
+];
+
+/** The two Saleem Direct funnels shown as a benchmark beside the Novo funnels
+ *  (the Novo-vs-Direct comparison the old dashboard carried). Same saved-funnel
+ *  IDs the Direct and Scheduled tabs use, grouped here for the Novo tab. */
+export const NOVO_DIRECT_BENCHMARKS = [
+  { key: 'direct_instant', id: DIRECT_FUNNELS.instant.funnelId, label: 'Direct instant' },
+  { key: 'direct_scheduled', id: SCHEDULED_FUNNEL_ID, label: 'Direct scheduled' },
 ];
 
 // Page view events with plain labels for the top-pages list.

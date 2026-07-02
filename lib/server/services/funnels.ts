@@ -40,6 +40,7 @@ import {
   NOVO_CTA_KNOWN_VALUES,
   NOVO_CTA_PROPERTY,
   NOVO_GROUP_FUNNELS,
+  NOVO_DIRECT_BENCHMARKS,
   NOVO_LANDING_EVENT,
   NOVO_UTM_PROPERTY,
   PAGE_VIEW_EVENTS,
@@ -55,6 +56,15 @@ export interface FunnelStepData {
   label: string;
   count: number;
   pct_of_first: number;
+}
+
+/** A saved funnel rendered with a name, for the Novo tab's Novo and Direct
+ *  comparison grids. */
+export interface NamedFunnelPayload {
+  key: string;
+  label: string;
+  steps: FunnelStepData[];
+  end_to_end_pct: number;
 }
 
 export interface FunnelGeneralPayload {
@@ -97,7 +107,8 @@ export interface FunnelNovoPayload {
     real_consults: { value: number | null; chip: 'verified' };
     bmi_checks: { value: number };
   };
-  funnel: FunnelStepData[];
+  novo_funnels: NamedFunnelPayload[];
+  direct_benchmarks: NamedFunnelPayload[];
   ctas_by_type: Array<{
     label: string;
     count: number;
@@ -485,9 +496,14 @@ export class FunnelsService {
     const opts: MixpanelQueryOptions = { bypassTtl: bypass };
     const window = monthToDate();
     try {
-      const [funnelReads, landing, ctas, bmi, utm, flag] = await Promise.all([
+      const [funnelReads, directReads, landing, ctas, bmi, utm, flag] = await Promise.all([
         Promise.all(
           NOVO_GROUP_FUNNELS.map((f) =>
+            this.savedFunnelSteps(f.id, window, bypass),
+          ),
+        ),
+        Promise.all(
+          NOVO_DIRECT_BENCHMARKS.map((f) =>
             this.savedFunnelSteps(f.id, window, bypass),
           ),
         ),
@@ -543,6 +559,23 @@ export class FunnelsService {
         return sum + (last?.count ?? 0);
       }, 0);
 
+      const buildNamed = (
+        defs: ReadonlyArray<{ key: string; label: string }>,
+        reads: ReadonlyArray<{ steps: AggStep[] }>,
+      ): NamedFunnelPayload[] =>
+        defs.map((d, i) => {
+          const steps = this.toSteps(reads[i]?.steps ?? []);
+          return {
+            key: d.key,
+            label: d.label,
+            steps,
+            end_to_end_pct:
+              steps.length > 0 ? steps[steps.length - 1].pct_of_first : 0,
+          };
+        });
+      const novoFunnels = buildNamed(NOVO_GROUP_FUNNELS, funnelReads);
+      const directBenchmarks = buildNamed(NOVO_DIRECT_BENCHMARKS, directReads);
+
       const ctaRows = this.segmentRows(ctas).map((row) => ({
         label: humanize(row.label),
         count: row.count,
@@ -567,6 +600,7 @@ export class FunnelsService {
       if (flag) parts.push(flag);
       parts.push(
         ...funnelReads.map((r) => r.meta),
+        ...directReads.map((r) => r.meta),
         landing.meta,
         ctas.meta,
         bmi.meta,
@@ -594,7 +628,8 @@ export class FunnelsService {
             real_consults: { value: null, chip: 'verified' },
             bmi_checks: { value: bmiChecks },
           },
-          funnel: this.toSteps(funnelReads[0]?.steps ?? []),
+          novo_funnels: novoFunnels,
+          direct_benchmarks: directBenchmarks,
           ctas_by_type: ctaRows,
           bmi_categories: bmiRows.map((r) => ({
             label: humanize(r.label),

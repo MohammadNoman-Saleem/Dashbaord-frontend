@@ -765,6 +765,14 @@ export interface FunnelStep {
   count: number
   pct_of_first: number
 }
+/** A saved funnel rendered with a name, for the Novo tab's Novo and Direct
+ *  comparison grids. end_to_end_pct is the last step as a percent of the first. */
+export interface NamedFunnel {
+  key: string
+  label: string
+  steps: FunnelStep[]
+  end_to_end_pct: number
+}
 export interface FunnelGeneralData {
   tiles: {
     /** Null when Mixpanel sessions are not enabled for the project. */
@@ -801,7 +809,8 @@ export interface FunnelNovoData {
     real_consults: { value: number | null; chip: 'verified' }
     bmi_checks: { value: number }
   }
-  funnel: FunnelStep[]
+  novo_funnels: NamedFunnel[]
+  direct_benchmarks: NamedFunnel[]
   ctas_by_type: Array<{ label: string; count: number; not_instrumented?: boolean }>
   bmi_categories: Array<{ label: string; count: number }>
   landing_by_campaign: Array<{ label: string; views: number }>
