@@ -11,6 +11,7 @@ import {
   getCrmRead,
   LOST_STAGE,
   PIPELINE_NAMES,
+  PIPELINE_STAGES,
   WON_STAGE,
   type DealRecord,
   type LeadRecord,
@@ -26,11 +27,22 @@ import type {
   CrmLeadFunnelData,
   CrmLeadFunnelPeriod,
   CrmLeadFunnelStage,
+  CrmDealRow,
+  CrmDealsData,
+  CrmJourneyBreakdown,
+  CrmJourneyData,
   CrmLeadRow,
   CrmLeadSourcesData,
   CrmLeadsData,
   CrmMetricsData,
+  CrmPipelineData,
   CrmPipelineMetric,
+  CrmPipelinePeriod,
+  CrmPipelineStage,
+  CrmPipelineSummary,
+  CrmSubtypeBreakdown,
+  CrmSubtypeData,
+  CrmSubtypeSummary,
 } from '@/lib/api/contract';
 
 const BAHRAIN_TZ = 'Asia/Bahrain';
@@ -378,4 +390,276 @@ async function leads(
   return { data: { rows, page: clamped, pages, total, statuses }, parts: [read.meta] };
 }
 
-export const crmAnalytics = { metrics, funnel, leadFunnel, leadSources, leads };
+// ----- Deals tab -----
+
+const JOURNEY_TAGS = ['ASSISTED_JOURNEY', 'NAVIGATION_ONLY'];
+const SUBTYPE_TAGS = ['Direct', 'Sponsored'];
+const CUSTOMER_PIPELINES = ['Telemedicine', 'Treatment'];
+const CUSTOMER_PIPELINE_SET = new Set(CUSTOMER_PIPELINES);
+// Treatment stages in funnel order including the terminal lost stage, matching
+// the old journey route. Built from the shared active-stage list plus the lost
+// stage so there is one source of truth.
+const TREATMENT_STAGES = [...PIPELINE_STAGES.Treatment, LOST_STAGE.Treatment];
+
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+// The first of the deal's tags that is in the allowed set, else null.
+function firstTagIn(d: DealRecord, allowed: string[]): string | null {
+  for (const t of d.Tag ?? []) {
+    if (t.name != null && allowed.includes(t.name)) return t.name;
+  }
+  return null;
+}
+
+async function pipeline(
+  period: CrmPipelinePeriod,
+): Promise<{ data: CrmPipelineData; parts: SourceMeta[] }> {
+  const read = await getCrmRead().deals();
+  const deals = read.data.filter((d) => inLeadPeriod(d.Created_Time, period));
+
+  const map = new Map<string, Map<string, { count: number; value: number }>>();
+  for (const d of deals) {
+    const pipe = d.Pipeline ?? 'Unknown';
+    const stage = d.Stage ?? 'Unknown';
+    if (!map.has(pipe)) map.set(pipe, new Map());
+    const sm = map.get(pipe)!;
+    const e = sm.get(stage) ?? { count: 0, value: 0 };
+    e.count += 1;
+    e.value += d.Amount ?? 0;
+    sm.set(stage, e);
+  }
+
+  const pipelines: Record<string, CrmPipelineSummary> = {};
+  for (const pipe of PIPELINE_NAMES) {
+    const sm = map.get(pipe) ?? new Map<string, { count: number; value: number }>();
+    const ordered = [...PIPELINE_STAGES[pipe], LOST_STAGE[pipe]];
+    const known = new Set(ordered);
+    const extras = [...sm.keys()].filter((s) => !known.has(s));
+    const stages: CrmPipelineStage[] = [...ordered, ...extras].map((name) => ({
+      name,
+      count: sm.get(name)?.count ?? 0,
+      value_bhd: Math.round(sm.get(name)?.value ?? 0),
+    }));
+    const pDeals = deals.filter((d) => d.Pipeline === pipe);
+    const won = pDeals.filter((d) => d.Stage === WON_STAGE[pipe]).length;
+    const lostDeals = pDeals.filter((d) => d.Stage === LOST_STAGE[pipe]);
+    const lost = lostDeals.length;
+    const reasons = new Map<string, number>();
+    for (const d of lostDeals) {
+      const reason =
+        d.Reason_For_Loss__s && d.Reason_For_Loss__s.trim()
+          ? d.Reason_For_Loss__s
+          : 'No reason specified';
+      reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+    }
+    pipelines[pipe] = {
+      stages,
+      total: pDeals.length,
+      won,
+      lost,
+      open: pDeals.length - won - lost,
+      value_bhd: Math.round(pDeals.reduce((s, d) => s + (d.Amount ?? 0), 0)),
+      win_rate_pct: rate(won, pDeals.length),
+      loss_rate_pct: rate(lost, pDeals.length),
+      loss_reasons: [...reasons.entries()]
+        .map(([reason, count]) => ({ reason, count }))
+        .sort((a, b) => b.count - a.count),
+    };
+  }
+  return { data: { pipelines, period }, parts: [read.meta] };
+}
+
+function journeyBreakdown(deals: DealRecord[]): CrmJourneyBreakdown {
+  const won = deals.filter((d) => d.Stage === 'Treatment Completed');
+  const lost = deals.filter((d) => d.Stage === 'Lost / Inactive');
+  const total = deals.length;
+  const stageCounts = new Map<string, number>();
+  for (const d of deals) {
+    const s = d.Stage ?? 'Unknown';
+    stageCounts.set(s, (stageCounts.get(s) ?? 0) + 1);
+  }
+  const stages = TREATMENT_STAGES.map((name) => ({ name, count: stageCounts.get(name) ?? 0 }));
+
+  const wonWithDates = won.filter((d) => d.Created_Time && d.Closing_Date);
+  const avg_days_to_completion =
+    wonWithDates.length > 0
+      ? Math.round(
+          wonWithDates.reduce(
+            (s, d) =>
+              s +
+              (new Date(d.Closing_Date as string).getTime() -
+                new Date(d.Created_Time as string).getTime()) /
+                DAY_MS,
+            0,
+          ) / wonWithDates.length,
+        )
+      : null;
+
+  // Approximation: days since Created_Time for deals currently in each stage.
+  // True time-in-stage needs the Zoho History API (Phase 2 in the old route).
+  const stage_avg_days: Record<string, number | null> = {};
+  for (const name of TREATMENT_STAGES) {
+    const inStage = deals.filter((d) => d.Stage === name && d.Created_Time);
+    stage_avg_days[name] =
+      inStage.length > 0
+        ? Math.round(
+            inStage.reduce(
+              (s, d) => s + (Date.now() - new Date(d.Created_Time as string).getTime()) / DAY_MS,
+              0,
+            ) / inStage.length,
+          )
+        : null;
+  }
+
+  return {
+    total,
+    won: won.length,
+    lost: lost.length,
+    open: total - won.length - lost.length,
+    value_bhd: Math.round(deals.reduce((s, d) => s + (d.Amount ?? 0), 0)),
+    win_rate_pct: rate(won.length, total),
+    loss_rate_pct: rate(lost.length, total),
+    stages,
+    avg_days_to_completion,
+    stage_avg_days,
+  };
+}
+
+async function journey(): Promise<{ data: CrmJourneyData; parts: SourceMeta[] }> {
+  const read = await getCrmRead().deals();
+  const treatment = read.data.filter((d) => d.Pipeline === 'Treatment');
+  const buckets: Record<string, DealRecord[]> = {
+    ASSISTED_JOURNEY: [],
+    NAVIGATION_ONLY: [],
+    Untagged: [],
+  };
+  for (const d of treatment) buckets[firstTagIn(d, JOURNEY_TAGS) ?? 'Untagged'].push(d);
+  const tags = [...JOURNEY_TAGS, 'Untagged'];
+  const by_tag: Record<string, CrmJourneyBreakdown> = {};
+  for (const tag of tags) by_tag[tag] = journeyBreakdown(buckets[tag]);
+  return { data: { total: treatment.length, by_tag, tags }, parts: [read.meta] };
+}
+
+function subtypeBreakdown(deals: DealRecord[], pipeline: string): CrmSubtypeBreakdown {
+  const total = deals.length;
+  const won = deals.filter((d) => d.Stage === WON_STAGE[pipeline]).length;
+  const lost = deals.filter((d) => d.Stage === LOST_STAGE[pipeline]).length;
+  return {
+    total,
+    won,
+    lost,
+    open: total - won - lost,
+    value_bhd: Math.round(deals.reduce((s, d) => s + (d.Amount ?? 0), 0)),
+    win_rate_pct: rate(won, total),
+    loss_rate_pct: rate(lost, total),
+  };
+}
+
+async function subtype(): Promise<{ data: CrmSubtypeData; parts: SourceMeta[] }> {
+  const read = await getCrmRead().deals();
+  const customer = read.data.filter(
+    (d) => d.Pipeline != null && CUSTOMER_PIPELINE_SET.has(d.Pipeline),
+  );
+  // The old route initialized these buckets with uppercase keys but wrote with
+  // the title-case tag names, so Direct and Sponsored silently missed. Fixed
+  // by keying the buckets on the same title-case names getSubtype returns.
+  const buckets: Record<string, DealRecord[]> = { Direct: [], Sponsored: [], Untagged: [] };
+  for (const d of customer) buckets[firstTagIn(d, SUBTYPE_TAGS) ?? 'Untagged'].push(d);
+  const subtypes = [...SUBTYPE_TAGS, 'Untagged'];
+  const by_subtype: Record<string, CrmSubtypeSummary> = {};
+  for (const tag of subtypes) {
+    const tagDeals = buckets[tag];
+    const total = tagDeals.length;
+    const allWon = tagDeals.filter(
+      (d) => d.Pipeline != null && d.Stage === WON_STAGE[d.Pipeline],
+    ).length;
+    const allLost = tagDeals.filter(
+      (d) => d.Pipeline != null && d.Stage === LOST_STAGE[d.Pipeline],
+    ).length;
+    by_subtype[tag] = {
+      total,
+      won: allWon,
+      lost: allLost,
+      open: total - allWon - allLost,
+      value_bhd: Math.round(tagDeals.reduce((s, d) => s + (d.Amount ?? 0), 0)),
+      win_rate_pct: rate(allWon, total),
+      loss_rate_pct: rate(allLost, total),
+      by_pipeline: Object.fromEntries(
+        CUSTOMER_PIPELINES.map((pipe) => [
+          pipe,
+          subtypeBreakdown(tagDeals.filter((d) => d.Pipeline === pipe), pipe),
+        ]),
+      ),
+    };
+  }
+  return { data: { total: customer.length, by_subtype, subtypes }, parts: [read.meta] };
+}
+
+const DEALS_PAGE_SIZE = 25;
+const DEALS_MAX_PAGE_SIZE = 100;
+
+function dealOutcome(d: DealRecord): 'won' | 'lost' | 'open' {
+  const pipe = d.Pipeline ?? '';
+  if (d.Stage === WON_STAGE[pipe]) return 'won';
+  if (d.Stage === LOST_STAGE[pipe]) return 'lost';
+  return 'open';
+}
+
+// The row label is privacy-gated: customer-pipeline deals carry a patient, so
+// they show the reference plus initials only; provider and corporate deals
+// carry a business name in Deal_Name.
+function dealRecordLabel(d: DealRecord): string {
+  if (d.Pipeline != null && CUSTOMER_PIPELINE_SET.has(d.Pipeline)) {
+    return `${d.Zoho_ID ?? d.id} · ${patientSerializer.initialsOf(d.Contact_Name?.name)}`;
+  }
+  return d.Deal_Name ?? 'Unnamed deal';
+}
+
+async function dealsTable(
+  pageRaw: string | undefined,
+  pageSizeRaw: string | undefined,
+  pipelineRaw: string | undefined,
+): Promise<{ data: CrmDealsData; parts: SourceMeta[] }> {
+  const read = await getCrmRead().deals();
+  const pageSize = Math.min(
+    DEALS_MAX_PAGE_SIZE,
+    Math.max(1, Number(pageSizeRaw) || DEALS_PAGE_SIZE),
+  );
+  const page = Math.max(1, Number(pageRaw) || 1);
+  const sorted = [...read.data].sort((a, b) =>
+    (b.Created_Time ?? '').localeCompare(a.Created_Time ?? ''),
+  );
+  const filtered = pipelineRaw ? sorted.filter((d) => d.Pipeline === pipelineRaw) : sorted;
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const clamped = Math.min(page, pages);
+  const rows: CrmDealRow[] = filtered
+    .slice((clamped - 1) * pageSize, clamped * pageSize)
+    .map((d) => ({
+      id: d.id,
+      record: dealRecordLabel(d),
+      owner: d.Owner?.name ?? '·',
+      pipeline: d.Pipeline ?? '·',
+      stage: d.Stage ?? '·',
+      outcome: dealOutcome(d),
+      amount_bhd: Math.round(d.Amount ?? 0),
+      lead_source: d.Lead_Source ?? '·',
+      created: d.Created_Time,
+    }));
+  return {
+    data: { rows, page: clamped, pages, total, pipelines: PIPELINE_NAMES },
+    parts: [read.meta],
+  };
+}
+
+export const crmAnalytics = {
+  metrics,
+  funnel,
+  leadFunnel,
+  leadSources,
+  leads,
+  pipeline,
+  journey,
+  subtype,
+  dealsTable,
+};

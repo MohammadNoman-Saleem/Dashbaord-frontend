@@ -567,6 +567,84 @@ export interface CrmLeadsData {
   statuses: string[]
 }
 
+// /api/crm/pipeline
+export type CrmPipelinePeriod = 'all' | 'mtd' | 'ytd'
+export interface CrmPipelineStage { name: string; count: number; value_bhd: number }
+export interface CrmLossReason { reason: string; count: number }
+export interface CrmPipelineSummary {
+  stages: CrmPipelineStage[]
+  total: number
+  won: number
+  lost: number
+  open: number
+  value_bhd: number
+  win_rate_pct: number
+  loss_rate_pct: number
+  loss_reasons: CrmLossReason[]
+}
+export interface CrmPipelineData {
+  pipelines: Record<string, CrmPipelineSummary>
+  period: CrmPipelinePeriod
+}
+
+// /api/crm/journey
+export interface CrmJourneyBreakdown {
+  total: number
+  won: number
+  lost: number
+  open: number
+  value_bhd: number
+  win_rate_pct: number
+  loss_rate_pct: number
+  stages: Array<{ name: string; count: number }>
+  avg_days_to_completion: number | null
+  stage_avg_days: Record<string, number | null>
+}
+export interface CrmJourneyData {
+  total: number
+  by_tag: Record<string, CrmJourneyBreakdown>
+  tags: string[]
+}
+
+// /api/crm/subtype
+export interface CrmSubtypeBreakdown {
+  total: number
+  won: number
+  lost: number
+  open: number
+  value_bhd: number
+  win_rate_pct: number
+  loss_rate_pct: number
+}
+export interface CrmSubtypeSummary extends CrmSubtypeBreakdown {
+  by_pipeline: Record<string, CrmSubtypeBreakdown>
+}
+export interface CrmSubtypeData {
+  total: number
+  by_subtype: Record<string, CrmSubtypeSummary>
+  subtypes: string[]
+}
+
+// /api/crm/deals
+export interface CrmDealRow {
+  id: string
+  record: string
+  owner: string
+  pipeline: string
+  stage: string
+  outcome: 'won' | 'lost' | 'open'
+  amount_bhd: number
+  lead_source: string
+  created: string | null
+}
+export interface CrmDealsData {
+  rows: CrmDealRow[]
+  page: number
+  pages: number
+  total: number
+  pipelines: string[]
+}
+
 // /api/financials
 export interface FinancialsData {
   platform_revenue: {

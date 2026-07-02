@@ -20,11 +20,15 @@ import { fixture as cockpitParkedFixture } from './cockpit-parked'
 import { fixture as cockpitQueueFixture } from './cockpit-queue'
 import { fixture as cockpitSlaPolicyFixture } from './cockpit-sla-policy'
 import { fixture as crmFixture } from './crm'
+import { fixture as crmDealsFixture } from './crm-deals'
 import { fixture as crmFunnelFixture } from './crm-funnel'
+import { fixture as crmJourneyFixture } from './crm-journey'
 import { fixture as crmLeadFunnelFixture } from './crm-lead-funnel'
 import { fixture as crmLeadSourcesFixture } from './crm-lead-sources'
 import { fixture as crmLeadsFixture } from './crm-leads'
 import { fixture as crmMetricsFixture } from './crm-metrics'
+import { fixture as crmPipelineFixture } from './crm-pipeline'
+import { fixture as crmSubtypeFixture } from './crm-subtype'
 import { fixture as deliverablesFixture } from './deliverables'
 import { fixture as financialsFixture } from './financials'
 import { fixture as financialsBurnFixture } from './financials-burn'
@@ -105,6 +109,10 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   crm_leads: crmLeadsFixture,
   crm_lead_sources: crmLeadSourcesFixture,
   crm_lead_funnel: crmLeadFunnelFixture,
+  crm_pipeline: crmPipelineFixture,
+  crm_journey: crmJourneyFixture,
+  crm_subtype: crmSubtypeFixture,
+  crm_deals: crmDealsFixture,
   marketing: marketingFixture,
   funnels_general: funnelsGeneralFixture,
   funnels_direct: funnelsDirectFixture,
