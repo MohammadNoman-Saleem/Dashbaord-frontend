@@ -140,9 +140,10 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   board_assignable_users: 'live',
   social_ga4: 'live',
   social_platforms: 'live',
-  // POST-only seam for raising IT tickets. There is no backing route, so this is
-  // fixture: mutateEnvelope no-ops in fixture mode rather than 404ing a live call.
-  it_support: 'fixture',
+  // POST-only seam for raising IT tickets: creates a Zoho Projects task in the
+  // IT project. Live with the route on this branch; the route still refuses
+  // unless WRITE_GATE_ENABLED is on server-side, so merging enables no write.
+  it_support: 'live',
   brief: 'live',
   payouts_summary: 'live',
   payouts_bookings: 'live',

@@ -10,7 +10,7 @@ import {
 import { AlertCircle, Check, ExternalLink, MinusCircle, X } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { BlockerItem, BlockersData } from "@/lib/api/contract";
+import type { BlockerItem, BlockersData, ItSupportTicketData } from "@/lib/api/contract";
 import type { Envelope } from "@/lib/api/envelope";
 import { fetchEnvelope, mutateEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
@@ -18,6 +18,7 @@ import { useViewer, type Viewer } from "@/lib/viewer";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Field, FieldInput } from "@/components/ui/Field";
 import { Chip } from "@/components/ui/Chip";
+import { Tabs } from "@/components/ui/Tabs";
 import { ListRow } from "@/components/ui/ListRow";
 import { QueryPanel } from "@/components/ui/QueryPanel";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -48,6 +49,24 @@ const ZOHO_TASK_URL =
 const WRITE_FAILURE_COPY =
   "Couldn't save. Your numbers are safe. Try again, or tell Al Saeed if it repeats.";
 
+type RaiseTab = "ops" | "it";
+
+// IT ticket categories (each routes to a Zoho tasklist) and priorities (each
+// drives the SLA and the owner routing). The server validates against the same
+// lists; the SLA hint here is display only, in words, matching the resolution
+// windows in IT_HELPDESK_SLA.
+const IT_CATEGORIES = ["Bugs", "Features", "Access", "Integrations", "General"];
+
+const IT_PRIORITIES: Array<{ key: string; label: string; sla: string }> = [
+  { key: "critical", label: "Critical", sla: "Resolution due within 4 hours" },
+  { key: "high", label: "High", sla: "Resolution due within 1 day" },
+  { key: "medium", label: "Medium", sla: "Resolution due within 3 days" },
+  { key: "low", label: "Low", sla: "Resolution due within 1 week" },
+];
+
+const IT_INPUT_CLASSES =
+  "w-full rounded-inner border border-line bg-surface-2 px-[11px] py-[8.5px] text-[13.5px] text-ink focus:border-transparent focus:outline-2 focus:outline-accent focus:outline-offset-0";
+
 /* Module-level counter for optimistic ids. The live endpoint assigns the
    real id once the write goes through saleem-api. */
 let tmpIdCounter = 0;
@@ -67,9 +86,18 @@ export function RaiseDrawer({ open, onClose }: RaiseDrawerProps) {
   const panelRef = useRef<HTMLElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
 
+  /* Which raise: an ops blocker for Aziz, or an IT ticket for the IT team. */
+  const [tab, setTab] = useState<RaiseTab>("ops");
+
   /* Ops form. */
   const [text, setText] = useState("");
   const [waitingOn, setWaitingOn] = useState("");
+
+  /* IT ticket form. */
+  const [itTitle, setItTitle] = useState("");
+  const [itDescription, setItDescription] = useState("");
+  const [itCategory, setItCategory] = useState("General");
+  const [itPriority, setItPriority] = useState("medium");
 
   /* Writes attribute to the real signed-in person, never the viewed person
      (03 section 3), so this reads me rather than effectivePerson. */
@@ -142,6 +170,32 @@ export function RaiseDrawer({ open, onClose }: RaiseDrawerProps) {
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: qk.blockers() });
+    },
+  });
+
+  /* IT ticket raise posts to /api/it-support, which creates a Zoho Projects
+     task routed to IT. There is no optimistic list: IT tickets live in Zoho,
+     not on the blockers board. */
+  const itMutation = useMutation({
+    mutationFn: (input: {
+      title: string;
+      description?: string;
+      category: string;
+      priority: string;
+    }) => mutateEnvelope<ItSupportTicketData>("it_support", "POST", "/it-support", input),
+    onError: () =>
+      toast(
+        "Couldn't raise the IT ticket. Try again, or tell IT if it repeats.",
+        AlertCircle,
+      ),
+    onSuccess: (data) => {
+      const assigned = data?.data?.assigned_to ?? [];
+      const who = assigned.length ? assigned.join(", ") : "the IT team";
+      toast(`IT ticket raised. Assigned to ${who}.`, Check);
+      setItTitle("");
+      setItDescription("");
+      setItCategory("General");
+      setItPriority("medium");
     },
   });
 
@@ -229,6 +283,19 @@ export function RaiseDrawer({ open, onClose }: RaiseDrawerProps) {
     setWaitingOn("");
   }
 
+  function handleItRaise(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = itTitle.trim();
+    if (title.length < 3 || itMutation.isPending) return;
+    const description = itDescription.trim();
+    itMutation.mutate({
+      title,
+      ...(description ? { description } : {}),
+      category: itCategory,
+      priority: itPriority,
+    });
+  }
+
   function rowAction(item: BlockerItem) {
     // Ownership wins over role: a raiser always withdraws their own item,
     // even when they could also unblock (an informally resolved blocker is
@@ -311,6 +378,100 @@ export function RaiseDrawer({ open, onClose }: RaiseDrawerProps) {
           </IconButton>
         </div>
 
+        <div className="px-[18px] pt-3">
+          <Tabs
+            items={[
+              { key: "ops", label: "Ops blocker" },
+              { key: "it", label: "IT ticket" },
+            ]}
+            value={tab}
+            onChange={(key) => setTab(key as RaiseTab)}
+            aria-label="Raise type"
+          />
+        </div>
+
+        {tab === "it" ? (
+          <div className="flex-1 overflow-y-auto px-[18px] py-[14px]">
+            <p className="mb-3 text-[12.5px] leading-relaxed text-ink-2">
+              Raise an IT or product issue. It goes to the IT team in Zoho with
+              an owner and a due date set from the priority.
+            </p>
+            <form onSubmit={handleItRaise} className="flex flex-col gap-[10px]">
+              <div>
+                <label className={LABEL_CLASSES} htmlFor="it-title">
+                  Title
+                </label>
+                <input
+                  id="it-title"
+                  className={IT_INPUT_CLASSES}
+                  autoComplete="off"
+                  placeholder="Short summary of the issue"
+                  value={itTitle}
+                  onChange={(event) => setItTitle(event.target.value)}
+                />
+              </div>
+              <div>
+                <label className={LABEL_CLASSES} htmlFor="it-desc">
+                  Description (optional)
+                </label>
+                <textarea
+                  id="it-desc"
+                  rows={4}
+                  className={IT_INPUT_CLASSES}
+                  placeholder="What happened, any steps, and anything that helps IT"
+                  value={itDescription}
+                  onChange={(event) => setItDescription(event.target.value)}
+                />
+              </div>
+              <div>
+                <label className={LABEL_CLASSES} htmlFor="it-category">
+                  Category
+                </label>
+                <select
+                  id="it-category"
+                  className={IT_INPUT_CLASSES}
+                  value={itCategory}
+                  onChange={(event) => setItCategory(event.target.value)}
+                >
+                  {IT_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={LABEL_CLASSES} htmlFor="it-priority">
+                  Priority
+                </label>
+                <select
+                  id="it-priority"
+                  className={IT_INPUT_CLASSES}
+                  value={itPriority}
+                  onChange={(event) => setItPriority(event.target.value)}
+                >
+                  {IT_PRIORITIES.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11.5px] text-ink-3">
+                  {IT_PRIORITIES.find((p) => p.key === itPriority)?.sla ?? ""}
+                </p>
+              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                className="w-full justify-center"
+                disabled={itTitle.trim().length < 3 || itMutation.isPending}
+              >
+                {itMutation.isPending ? "Raising..." : "Raise IT ticket"}
+              </Button>
+            </form>
+          </div>
+        ) : (
+          <>
         <div className="flex-1 overflow-y-auto px-[18px] py-[14px]">
           <p className="mb-3 text-[12.5px] leading-relaxed text-ink-2">
             Stuck on something? Raise it here. It goes to Aziz, who owns the
@@ -413,6 +574,8 @@ export function RaiseDrawer({ open, onClose }: RaiseDrawerProps) {
             </Button>
           </form>
         </div>
+          </>
+        )}
       </aside>
     </>
   );

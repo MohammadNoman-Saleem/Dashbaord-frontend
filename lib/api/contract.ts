@@ -1053,6 +1053,12 @@ export interface BoardCreateTaskResult {
 export interface ItSupportTicketData {
   /** Zoho task id of the new ticket; null only if Zoho answered without one. */
   ticket_id: string | null
+  /** Assignee names the ticket was routed to, from the priority routing. */
+  assigned_to: string[]
+  /** Resolution due date (ISO), set from the priority SLA. */
+  due_at: string
+  /** Assignee names that did not resolve to a Zoho user, and so were skipped. */
+  unresolved_owners: string[]
 }
 
 // /api/tasks

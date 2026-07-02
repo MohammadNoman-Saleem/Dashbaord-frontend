@@ -133,7 +133,7 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   // POST-only endpoint: mutateEnvelope resolves null in fixture mode and
   // never calls getFixture, so this stub only satisfies the record type.
   it_support: () => ({
-    data: { ticket_id: null },
+    data: { ticket_id: null, assigned_to: [], due_at: '', unresolved_owners: [] },
     meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
   }),
   brief: briefFixture,
