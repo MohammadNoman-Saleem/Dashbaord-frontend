@@ -7,6 +7,7 @@ import type { Envelope } from '@/lib/api/envelope'
 
 import { fixture as agentsFixture } from './agents'
 import { fixture as appointmentsFixture } from './appointments'
+import { fixture as appointmentsAnalyticsFixture } from './appointments-analytics'
 import { fixture as attentionFixture } from './attention'
 import { fixture as blockersFixture } from './blockers'
 import { fixture as boardFixture } from './board'
@@ -19,6 +20,16 @@ import { fixture as cockpitParkedFixture } from './cockpit-parked'
 import { fixture as cockpitQueueFixture } from './cockpit-queue'
 import { fixture as cockpitSlaPolicyFixture } from './cockpit-sla-policy'
 import { fixture as crmFixture } from './crm'
+import { fixture as crmDealsFixture } from './crm-deals'
+import { fixture as crmFunnelFixture } from './crm-funnel'
+import { fixture as crmJourneyFixture } from './crm-journey'
+import { fixture as crmLeadFunnelFixture } from './crm-lead-funnel'
+import { fixture as crmLeadSourcesFixture } from './crm-lead-sources'
+import { fixture as crmLeadsFixture } from './crm-leads'
+import { fixture as crmMetricsFixture } from './crm-metrics'
+import { fixture as crmPipelineFixture } from './crm-pipeline'
+import { fixture as crmSegmentsFixture } from './crm-segments'
+import { fixture as crmSubtypeFixture } from './crm-subtype'
 import { fixture as deliverablesFixture } from './deliverables'
 import { fixture as financialsFixture } from './financials'
 import { fixture as financialsBurnFixture } from './financials-burn'
@@ -88,11 +99,22 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   providers: providersFixture,
   handoffs: handoffsFixture,
   appointments: appointmentsFixture,
+  appointments_analytics: appointmentsAnalyticsFixture,
   financials: financialsFixture,
   financials_forecast: financialsForecastFixture,
   financials_burn: financialsBurnFixture,
   financials_receivables: financialsReceivablesFixture,
   crm: crmFixture,
+  crm_metrics: crmMetricsFixture,
+  crm_funnel: crmFunnelFixture,
+  crm_leads: crmLeadsFixture,
+  crm_lead_sources: crmLeadSourcesFixture,
+  crm_lead_funnel: crmLeadFunnelFixture,
+  crm_pipeline: crmPipelineFixture,
+  crm_journey: crmJourneyFixture,
+  crm_subtype: crmSubtypeFixture,
+  crm_deals: crmDealsFixture,
+  crm_segments: crmSegmentsFixture,
   marketing: marketingFixture,
   funnels_general: funnelsGeneralFixture,
   funnels_direct: funnelsDirectFixture,
@@ -111,7 +133,7 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   // POST-only endpoint: mutateEnvelope resolves null in fixture mode and
   // never calls getFixture, so this stub only satisfies the record type.
   it_support: () => ({
-    data: { ticket_id: null },
+    data: { ticket_id: null, assigned_to: [], due_at: '', unresolved_owners: [] },
     meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
   }),
   brief: briefFixture,

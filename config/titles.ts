@@ -74,4 +74,12 @@ export const TITLES: Record<ViewKey, ViewTitle> = {
     title: 'Social',
     sub: 'Website traffic and the social accounts, side by side',
   },
+  appointments: {
+    title: 'Appointments',
+    sub: 'Booking volume, stage breakdown, doctor activity, and revenue from Zoho bookings',
+  },
+  crm: {
+    title: 'CRM',
+    sub: 'Leads, deals, pipeline health, and conversion across the funnel',
+  },
 }

@@ -2,7 +2,9 @@
 
 import {
   Building2,
+  CalendarCheck,
   ChevronLeft,
+  Contact,
   Cpu,
   Filter,
   Gauge,
@@ -36,6 +38,8 @@ const WORKSPACE_NAV: NavEntry[] = [
      Command Center (second position) at the build lead's request. */
   { href: "/cockpit", label: "Cockpit", icon: Gauge },
   { href: "/cases", label: "Cases & Pipeline", icon: Layers },
+  { href: "/crm", label: "CRM", icon: Contact },
+  { href: "/appointments", label: "Appointments", icon: CalendarCheck },
   /* Team board is NOT in the approved v3 mockup; it is the legacy kanban
      port, styled with the existing design system and flagged for Khalid's
      review per the parking-list rule. */

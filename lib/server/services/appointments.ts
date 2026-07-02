@@ -21,9 +21,24 @@
 //
 // SERVER ONLY. Node runtime (it reaches pg/Zoho through getCrmRead()).
 import { getCrmRead, type BookingRecord } from '../crm-read';
+import {
+  computeBookingSplit,
+  getPayoutRulesService,
+  pickRules,
+  segmentOf,
+} from './payouts';
 import { patientSerializer, type PatientRef } from '../privacy';
 import type { SourceMeta } from '../envelope';
 import type { RequestViewer } from '../auth/viewer';
+import type {
+  AppointmentsAnalyticsData,
+  AppointmentsAnalyticsRow,
+  AppointmentsDoctorRow,
+  AppointmentsPeriod,
+  AppointmentsStageCount,
+  AppointmentsStatusCount,
+  AppointmentsTypeCount,
+} from '@/lib/api/contract';
 
 export interface AppointmentRowData {
   time: string;
@@ -72,6 +87,16 @@ function feeState(status: string | null): 'paid' | 'hold' | 'done' {
 function doctorName(booking: BookingRecord): string {
   if (typeof booking.Doctor === 'string') return booking.Doctor;
   return booking.Doctor?.name ?? 'Unassigned';
+}
+
+// The booking Doctor lookup's Zoho id, mirroring resolveLookup in payouts.ts:
+// an id exists only when the field is an object, never for a bare string.
+function doctorId(booking: BookingRecord): string | null {
+  const field = booking.Doctor;
+  if (field && typeof field === 'object') {
+    return field.id != null ? String(field.id) : null;
+  }
+  return null;
 }
 
 function relativeDay(iso: string | null): string {
@@ -144,9 +169,316 @@ async function board(
   };
 }
 
+// The six booking stages, in the fixed funnel order the page renders. Counts
+// fall only into an exact Status match; any other status is ignored, matching
+// the legacy analytics route.
+const STAGE_ORDER = [
+  'Pending Payment',
+  'Pending',
+  'Confirmed',
+  'Session Started',
+  'Awaiting Review',
+  'Done',
+] as const;
+
+// Start of the period in Bahrain civil time, returned as the Bahrain calendar
+// day string (YYYY-MM-DD) a booking's own Bahrain day is compared against. mtd
+// is the first of the current month, qtd the first of the current quarter, ytd
+// January 1, all has no start (null). Computing the boundary from the Bahrain
+// day parts keeps the comparison entirely in Bahrain time, never the server's.
+function periodStartDay(period: AppointmentsPeriod): string | null {
+  if (period === 'all') return null;
+  const parts = new Date().toLocaleDateString('en-CA', {
+    timeZone: BAHRAIN_TZ,
+  });
+  const [year, month] = parts.split('-').map((n) => Number(n));
+  if (period === 'ytd') return `${year}-01-01`;
+  if (period === 'qtd') {
+    const quarterMonth = Math.floor((month - 1) / 3) * 3 + 1;
+    return `${year}-${String(quarterMonth).padStart(2, '0')}-01`;
+  }
+  // mtd
+  return `${year}-${String(month).padStart(2, '0')}-01`;
+}
+
+// The [start, end) Bahrain-day bounds of a calendar month given as YYYY-MM, so
+// a month filter is closed at both ends. end is the first day of the next month
+// (exclusive), rolling the year at December. Returns null for a value that is
+// not a real YYYY-MM, so the caller falls back to the period keyword.
+function monthWindow(month: string): { start: string; end: string } | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const mon = Number(m[2]);
+  if (mon < 1 || mon > 12) return null;
+  const start = `${year}-${String(mon).padStart(2, '0')}-01`;
+  const nextYear = mon === 12 ? year + 1 : year;
+  const nextMon = mon === 12 ? 1 : mon + 1;
+  const end = `${nextYear}-${String(nextMon).padStart(2, '0')}-01`;
+  return { start, end };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+// Normalized Type for classification and the diagnostic: trimmed, internal
+// whitespace collapsed, lowercased. The raw field is free text and inconsistent
+// ("Novo Instant", "obesity ", "Obesity Awareness"), so the distinct-value
+// count and any future Novo-set match run on this form, never the raw string.
+function normalizeType(t: string | null | undefined): string {
+  return (t ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+// Build one analytics row. The patient reference (record id plus initials) is
+// built for everyone through the same serializer board() uses; patient_name is
+// appended only for a viewer holding sees_patient_names, via withName. The raw
+// patient name is never assigned to the row outside that allowlisted path, and
+// the booking Email is never touched here.
+function toAnalyticsRow(
+  booking: BookingRecord,
+  viewer: RequestViewer,
+): AppointmentsAnalyticsRow {
+  const row: AppointmentsAnalyticsRow = {
+    id: booking.id,
+    name: booking.Name ?? '·',
+    patient_ref: patientSerializer.ref(
+      booking.Patient?.id ?? booking.id,
+      booking.Patient?.name,
+    ),
+    doctor: doctorName(booking),
+    status: booking.Status ?? '·',
+    type: booking.Type ?? null,
+    fee_bhd: booking.Rate != null ? booking.Rate : 0,
+    date: booking.From ?? booking.Created_At ?? null,
+  };
+  return patientSerializer.withName(row, booking.Patient?.name, viewer);
+}
+
+// Analytics over the bookings module: period-filtered metrics, the fixed-order
+// stage breakdown, per-doctor activity, and the full filtered row list. Reuses
+// the same cached read, test-booking filter (Rate > 1), and patient gate as
+// board(). Ported from the legacy /api/zoho/appointments route, with the period
+// comparison moved to Bahrain civil time.
+async function analytics(
+  period: AppointmentsPeriod,
+  viewer: RequestViewer,
+  month?: string,
+): Promise<{ data: AppointmentsAnalyticsData; parts: SourceMeta[] }> {
+  const [read, ruleRows, doctorsRead, hospitalsRead] = await Promise.all([
+    getCrmRead().bookings(),
+    getPayoutRulesService()
+      .all()
+      .then((rows) => ({ ok: true as const, rows }))
+      .catch(() => ({ ok: false as const, rows: [] })),
+    getCrmRead()
+      .doctors()
+      .then((r) => ({ ok: true as const, data: r.data }))
+      .catch(() => ({ ok: false as const, data: [] })),
+    getCrmRead()
+      .hospitals()
+      .then((r) => ({ ok: true as const, data: r.data }))
+      .catch(() => ({ ok: false as const, data: [] })),
+  ]);
+  let real = read.data.filter((b) => (b.Rate ?? 0) > 1);
+
+  // A specific calendar month (YYYY-MM) takes precedence over the period
+  // keyword and bounds both ends, so "June" means June only, not June onward.
+  // Otherwise the period keyword sets an open-ended start.
+  const win = month ? monthWindow(month) : null;
+  if (win) {
+    real = real.filter((b) => {
+      const day = bahrainDay(b.From ?? b.Created_At);
+      return day !== '' && day >= win.start && day < win.end;
+    });
+  } else {
+    const startDay = periodStartDay(period);
+    if (startDay) {
+      real = real.filter((b) => {
+        const day = bahrainDay(b.From ?? b.Created_At);
+        return day !== '' && day >= startDay;
+      });
+    }
+  }
+
+  const total = real.length;
+  const doneRows = real.filter((b) => b.Status === 'Done');
+  // Income (gross and Saleem) counts completed AND pending-review appointments,
+  // a wider set than the "completed" volume metric below, per the agreed rule.
+  const incomeRows = real.filter(
+    (b) => b.Status === 'Done' || b.Status === 'Awaiting Review',
+  );
+  const completed = doneRows.length;
+  const revenue = round2(
+    doneRows.reduce((sum, b) => sum + (b.Rate ?? 0), 0),
+  );
+  const completionRate = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+  const stageCounts = new Map<string, number>(STAGE_ORDER.map((s) => [s, 0]));
+  for (const b of real) {
+    const s = b.Status ?? '';
+    if (stageCounts.has(s)) stageCounts.set(s, (stageCounts.get(s) ?? 0) + 1);
+  }
+  const stage_breakdown: AppointmentsStageCount[] = STAGE_ORDER.map((name) => ({
+    name,
+    count: stageCounts.get(name) ?? 0,
+  }));
+
+  const doctorMap = new Map<string, AppointmentsDoctorRow>();
+  for (const b of real) {
+    const name = doctorName(b);
+    let entry = doctorMap.get(name);
+    if (!entry) {
+      entry = { name, count: 0, done: 0, revenue_bhd: 0 };
+      doctorMap.set(name, entry);
+    }
+    entry.count += 1;
+    if (b.Status === 'Done') {
+      entry.done += 1;
+      entry.revenue_bhd = round2(entry.revenue_bhd + (b.Rate ?? 0));
+    }
+  }
+  const by_doctor = [...doctorMap.values()].sort((a, b) => b.done - a.done);
+
+  // Gross income (sum of Rate over Done bookings, equal to revenue_bhd) and
+  // Saleem income (sum of the commission-engine split) over the same Done set
+  // the doctor loop counts. Reuses the shared engine so the figures match the
+  // Payouts tab exactly. If the rules, doctors, or hospitals read failed, the
+  // income fields stay undefined and the rest of the payload still returns.
+  let grossIncome: number | undefined;
+  let saleemIncome: number | undefined;
+  let commissionUnset: number | undefined;
+  if (ruleRows.ok && doctorsRead.ok && hospitalsRead.ok) {
+    const ruleSet = pickRules(ruleRows.rows);
+
+    const docPctMap = new Map<string, number | null>();
+    const docHospitalMap = new Map<string, string | null>();
+    for (const d of doctorsRead.data) {
+      const hosp =
+        d.Parent_Account && typeof d.Parent_Account === 'object'
+          ? d.Parent_Account.id != null
+            ? String(d.Parent_Account.id)
+            : null
+          : null;
+      docPctMap.set(String(d.id), d.Commission_Percentage ?? null);
+      docHospitalMap.set(String(d.id), hosp);
+    }
+
+    const hospPctMap = new Map<string, number | null>();
+    for (const h of hospitalsRead.data) {
+      hospPctMap.set(String(h.id), h.Commission_Percentage ?? null);
+    }
+
+    let gross = 0;
+    let saleem = 0;
+    let unset = 0;
+    for (const b of incomeRows) {
+      const id = doctorId(b);
+      const docPct = id != null ? docPctMap.get(id) ?? null : null;
+      const hospId = id != null ? docHospitalMap.get(id) ?? null : null;
+      const hospPct = hospId != null ? hospPctMap.get(hospId) ?? null : null;
+      const segment = segmentOf(b.Type);
+      const rate = b.Rate ?? 0;
+      gross = round2(gross + rate);
+      const split = computeBookingSplit(
+        segment,
+        rate,
+        docPct,
+        hospPct,
+        ruleSet,
+        id,
+      );
+      saleem = round2(saleem + split.saleemRevenue);
+      const entry = doctorMap.get(doctorName(b));
+      if (entry) {
+        entry.saleem_income_bhd = round2(
+          (entry.saleem_income_bhd ?? 0) + split.saleemRevenue,
+        );
+        // Diagnostic: the commission rate the engine resolved for this doctor,
+        // their own first, then the hospital. Null means neither was set and the
+        // booking used the rule default (often 0), which is where a wrong or
+        // missing per-doctor percentage shows up.
+        entry.commission_pct = docPct ?? hospPct;
+      }
+      // A standard booking with no doctor and no hospital rate fell to the
+      // default. Count these so the page can flag how many bookings defaulted.
+      if (segment === 'scheduled' && docPct == null && hospPct == null) {
+        unset += 1;
+      }
+    }
+    grossIncome = gross;
+    saleemIncome = saleem;
+    commissionUnset = unset;
+  }
+
+  const recent = [...real]
+    .sort((a, b) =>
+      (b.From ?? b.Created_At ?? '').localeCompare(
+        a.From ?? a.Created_At ?? '',
+      ),
+    )
+    .map((b) => toAnalyticsRow(b, viewer));
+
+  // Reconciliation diagnostic (revenue spec, step 1), over the same windowed,
+  // real (Rate > 1) set the metrics use. status_breakdown shows the completed
+  // basis gap (which statuses carry gross); type_distribution surfaces every
+  // raw Type spelling with its normalized form and current track, so the Novo
+  // set can be built from what the data actually contains.
+  const statusAgg = new Map<string, { count: number; gross: number }>();
+  for (const b of real) {
+    const s = b.Status && b.Status.trim() ? b.Status : '(none)';
+    const e = statusAgg.get(s) ?? { count: 0, gross: 0 };
+    e.count += 1;
+    e.gross = round2(e.gross + (b.Rate ?? 0));
+    statusAgg.set(s, e);
+  }
+  const status_breakdown: AppointmentsStatusCount[] = [...statusAgg.entries()]
+    .map(([status, v]) => ({ status, count: v.count, gross_bhd: v.gross }))
+    .sort((a, b) => b.gross_bhd - a.gross_bhd);
+
+  const typeAgg = new Map<string, number>();
+  for (const b of real) {
+    const raw = b.Type && b.Type.trim() ? b.Type : '(none)';
+    typeAgg.set(raw, (typeAgg.get(raw) ?? 0) + 1);
+  }
+  const type_distribution: AppointmentsTypeCount[] = [...typeAgg.entries()]
+    .map(([type_raw, count]) => {
+      const isNone = type_raw === '(none)';
+      const seg = segmentOf(isNone ? null : type_raw);
+      return {
+        type_raw,
+        type_normalized: isNone ? '(none)' : normalizeType(type_raw),
+        count,
+        track: seg === 'novo' ? ('novo' as const) : ('standard' as const),
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+
+  const data: AppointmentsAnalyticsData = {
+    period,
+    metrics: {
+      total,
+      completed,
+      revenue_bhd: revenue,
+      completion_rate_pct: completionRate,
+      gross_income_bhd: grossIncome,
+      saleem_income_bhd: saleemIncome,
+      commission_unset: commissionUnset,
+    },
+    stage_breakdown,
+    by_doctor,
+    status_breakdown,
+    type_distribution,
+    recent,
+  };
+
+  return { data, parts: [read.meta] };
+}
+
 // The appointments service as a plain object, replacing the @Injectable
 // AppointmentsService. The route handler calls board() exactly as the Nest
 // controller called the injected service.
 export const appointmentsService = {
   board,
+  analytics,
 };

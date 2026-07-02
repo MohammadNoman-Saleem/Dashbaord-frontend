@@ -26,11 +26,22 @@ export type EndpointKey =
   | 'providers'
   | 'handoffs'
   | 'appointments'
+  | 'appointments_analytics'
   | 'financials'
   | 'financials_forecast'
   | 'financials_burn'
   | 'financials_receivables'
   | 'crm'
+  | 'crm_metrics'
+  | 'crm_funnel'
+  | 'crm_leads'
+  | 'crm_lead_sources'
+  | 'crm_lead_funnel'
+  | 'crm_pipeline'
+  | 'crm_journey'
+  | 'crm_subtype'
+  | 'crm_deals'
+  | 'crm_segments'
   | 'marketing'
   | 'funnels_general'
   | 'funnels_direct'
@@ -94,11 +105,22 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   providers: 'live',
   handoffs: 'live',
   appointments: 'live',
+  appointments_analytics: 'live',
   financials: 'live',
   financials_forecast: 'live',
   financials_burn: 'live',
   financials_receivables: 'live',
   crm: 'live',
+  crm_metrics: 'live',
+  crm_funnel: 'live',
+  crm_leads: 'live',
+  crm_lead_sources: 'live',
+  crm_lead_funnel: 'live',
+  crm_pipeline: 'live',
+  crm_journey: 'live',
+  crm_subtype: 'live',
+  crm_deals: 'live',
+  crm_segments: 'live',
   marketing: 'live',
   funnels_general: 'live',
   funnels_direct: 'live',
@@ -118,9 +140,10 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   board_assignable_users: 'live',
   social_ga4: 'live',
   social_platforms: 'live',
-  // POST-only seam for raising IT tickets. There is no backing route, so this is
-  // fixture: mutateEnvelope no-ops in fixture mode rather than 404ing a live call.
-  it_support: 'fixture',
+  // POST-only seam for raising IT tickets: creates a Zoho Projects task in the
+  // IT project. Live with the route on this branch; the route still refuses
+  // unless WRITE_GATE_ENABLED is on server-side, so merging enables no write.
+  it_support: 'live',
   brief: 'live',
   payouts_summary: 'live',
   payouts_bookings: 'live',

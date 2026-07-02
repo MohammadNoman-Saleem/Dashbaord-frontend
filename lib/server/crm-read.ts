@@ -281,7 +281,7 @@ export function isOpenDeal(deal: DealRecord): boolean {
 // reads (dealById/leadById) so both always return the same record shape; a drift
 // here would desync a freshly read case from the cached lists.
 const DEAL_FIELDS =
-  'Zoho_ID,Deal_Name,Stage,Amount,Pipeline,Created_Time,Modified_Time,Contact_Name,Next_Follow_up,Owner,Lead_Source,Layout,Prefered_Country_of_Treatment_Consultation,Country,Closing_Date,Probability,Reason_For_Loss__s,Stage_Entry_Date,Last_Patient_Comm_Date,Welcome_Message_Sent_Date,Main_Concern_Reason_for_Consultation,Reason_Not_Qualified,Last_Activity_Time,Intro_Call_Date_Time,Patient_Budget,Treatment_Start_Date,Treatment_End_Date,Patient_Mobile';
+  'Zoho_ID,Deal_Name,Stage,Amount,Pipeline,Created_Time,Modified_Time,Contact_Name,Next_Follow_up,Owner,Lead_Source,Layout,Prefered_Country_of_Treatment_Consultation,Country,Closing_Date,Probability,Reason_For_Loss__s,Stage_Entry_Date,Last_Patient_Comm_Date,Welcome_Message_Sent_Date,Main_Concern_Reason_for_Consultation,Reason_Not_Qualified,Last_Activity_Time,Intro_Call_Date_Time,Patient_Budget,Treatment_Start_Date,Treatment_End_Date,Patient_Mobile,Tag';
 
 const LEAD_FIELDS =
   'Zoho_ID,First_Name,Last_Name,Email,Lead_Source,Lead_Status,Created_Time,Converted__s,Layout,Owner,Last_Activity_Time,Last_Status_Change,Intro_Call_Date_Time,Reason_Not_Qualified,Main_Concern_Reason_for_Consultation,Prefered_Country_of_Treatment_Consultation,Country,Phone,Communication_Language,Next_Follow_up';
@@ -302,9 +302,10 @@ export class CrmReadService {
 
   // Cache key bumped whenever the field list grows so a stale entry can never
   // serve a shape without the new fields (see the legacy version history;
-  // currently v9 for deals, v7 for leads, v2 for bookings).
+  // currently v10 for deals (v10 added Tag for the CRM deals tab), v7 for
+  // leads, v2 for bookings).
   deals(): Promise<CachedRead<DealRecord[]>> {
-    return this.cache.read('zoho_crm:deals_v9', 'zoho_crm', async () => {
+    return this.cache.read('zoho_crm:deals_v10', 'zoho_crm', async () => {
       const records = await this.zoho.getAll(`${CRM}/Deals`, {
         fields: DEAL_FIELDS,
       });
