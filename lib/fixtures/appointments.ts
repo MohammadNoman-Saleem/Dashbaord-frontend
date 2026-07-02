@@ -16,6 +16,7 @@ function meta(): Meta {
 
 const TODAY = [
   {
+    id: 'apt-fx-today-1',
     time: '10:30 AM',
     doctor: 'Dr. Aysha A.',
     patient_ref: { zoho_id: '0427', initials: 'G' },
@@ -24,6 +25,7 @@ const TODAY = [
     fee_state: 'paid',
   },
   {
+    id: 'apt-fx-today-2',
     time: '12:00 PM',
     doctor: 'Dr. S. Kareem',
     patient_ref: { zoho_id: 'C-205', initials: 'K' },
@@ -32,6 +34,7 @@ const TODAY = [
     fee_state: 'hold',
   },
   {
+    id: 'apt-fx-today-3',
     time: '4:30 PM',
     doctor: 'Dr. Layla H.',
     patient_ref: { zoho_id: 'C-206', initials: 'L' },
@@ -43,6 +46,7 @@ const TODAY = [
 
 const RECENT_DONE = [
   {
+    id: 'apt-fx-done-1',
     time: 'Yesterday',
     doctor: 'Dr. R. Almannai',
     patient_ref: { zoho_id: 'C-198', initials: 'M' },

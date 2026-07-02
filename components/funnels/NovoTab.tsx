@@ -99,41 +99,75 @@ export function NovoTab({ query }: { query: UseQueryResult<Envelope<FunnelNovoDa
             className={spans.c3}
             label="BMI checks finished"
             value={data.tiles.bmi_checks.value.toLocaleString()}
-            note="Completed checks this month"
+            note="Completed checks in this period"
             dot="good"
           />
 
-          <div className={spans.c6} data-focus-id="novo-banner">
-            <Card>
-              <CardHeader
-                title="Novo funnels"
-                subtitle="Instant and scheduled."
-                right={flags.unreliable ? <Chip variant="warn">Do not trust yet</Chip> : null}
-              />
-              <div className="px-[18px] pb-4 pt-[13px]">
-                {data.funnel.length === 0 ? (
-                  <p className="py-2 text-[13px] text-ink-2">No Novo funnel data for this month yet.</p>
-                ) : (
-                  <div className={flags.unreliable ? "opacity-55" : undefined}>
-                    <FunnelBars rows={data.funnel.map((s) => ({ label: s.label, value: s.count }))} />
-                    <p className="sr-only">
-                      {data.funnel
-                        .map((s) => `${s.label}: ${s.count.toLocaleString()} (${s.pct_of_first}% of the first step)`)
-                        .join(". ")}
-                    </p>
-                  </div>
-                )}
-                {flags.unreliable ? (
-                  <p className="mt-3 text-xs text-ink-2">
-                    A clean zero here is a measurement artifact, not an operations failure.
-                    {data.tiles.real_consults.value !== null
-                      ? ` ${data.tiles.real_consults.value.toLocaleString()} consults actually happened.`
-                      : " Trust the verified count once it connects."}
-                  </p>
-                ) : null}
-              </div>
-            </Card>
+          <div className={spans.c12} data-focus-id="novo-banner">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="serif text-[15px] text-title">Novo funnels</h3>
+              {flags.unreliable ? <Chip variant="warn">Do not trust yet</Chip> : null}
+            </div>
+            {flags.unreliable ? (
+              <p className="mt-1 text-xs text-ink-2">
+                A clean zero here is a measurement artifact, not an operations failure.
+                {data.tiles.real_consults.value !== null
+                  ? ` ${data.tiles.real_consults.value.toLocaleString()} consults actually happened.`
+                  : " Trust the verified count once it connects."}
+              </p>
+            ) : null}
           </div>
+
+          {data.novo_funnels.map((f) => (
+            <div key={f.key} className={spans.c6}>
+              <Card>
+                <CardHeader title={f.label} subtitle={`${f.end_to_end_pct}% land to paid`} />
+                <div className="px-[18px] pb-4 pt-[13px]">
+                  {f.steps.length === 0 ? (
+                    <p className="py-2 text-[13px] text-ink-2">No data for this funnel yet.</p>
+                  ) : (
+                    <div className={flags.unreliable ? "opacity-55" : undefined}>
+                      <FunnelBars rows={f.steps.map((s) => ({ label: s.label, value: s.count }))} />
+                      <p className="sr-only">
+                        {f.steps
+                          .map((s) => `${s.label}: ${s.count.toLocaleString()} (${s.pct_of_first}% of the first step)`)
+                          .join(". ")}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            </div>
+          ))}
+
+          <div className={spans.c12}>
+            <h3 className="serif text-[15px] text-title">Saleem Direct comparison</h3>
+            <p className="mt-1 text-xs text-ink-2">
+              The Saleem Direct booking funnels, as a benchmark beside Novo.
+            </p>
+          </div>
+
+          {data.direct_benchmarks.map((f) => (
+            <div key={f.key} className={spans.c6}>
+              <Card>
+                <CardHeader title={f.label} subtitle={`${f.end_to_end_pct}% end to end`} />
+                <div className="px-[18px] pb-4 pt-[13px]">
+                  {f.steps.length === 0 ? (
+                    <p className="py-2 text-[13px] text-ink-2">No data for this funnel yet.</p>
+                  ) : (
+                    <>
+                      <FunnelBars rows={f.steps.map((s) => ({ label: s.label, value: s.count }))} />
+                      <p className="sr-only">
+                        {f.steps
+                          .map((s) => `${s.label}: ${s.count.toLocaleString()} (${s.pct_of_first}% of the first step)`)
+                          .join(". ")}
+                      </p>
+                    </>
+                  )}
+                </div>
+              </Card>
+            </div>
+          ))}
 
           <div className={spans.c6} data-focus-id="novo-ctas">
             <Card>
@@ -162,7 +196,7 @@ export function NovoTab({ query }: { query: UseQueryResult<Envelope<FunnelNovoDa
             <Card>
               <CardHeader
                 title="Landing traffic by campaign tag"
-                subtitle="Where Novo visitors came from this month."
+                subtitle="Where Novo visitors came from in this period."
               />
               <div className="px-[18px] pb-2 pt-2">
                 {data.landing_by_campaign.length === 0 ? (

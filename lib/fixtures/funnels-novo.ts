@@ -20,11 +20,75 @@ const NOVO = {
     real_consults: { value: 86, chip: 'verified' },
     bmi_checks: { value: 311 },
   },
-  funnel: [
-    { label: 'Landing', count: 4120, pct_of_first: 100 },
-    { label: 'Path chosen', count: 71, pct_of_first: 1.7 },
-    { label: 'Booked', count: 3, pct_of_first: 0.1 },
-    { label: 'Paid', count: 0, pct_of_first: 0 },
+  novo_funnels: [
+    {
+      key: 'novo_a_instant',
+      label: 'Novo A, instant',
+      end_to_end_pct: 0,
+      steps: [
+        { label: 'Landing', count: 1180, pct_of_first: 100 },
+        { label: 'Path chosen', count: 41, pct_of_first: 3.5 },
+        { label: 'Booked', count: 2, pct_of_first: 0.2 },
+        { label: 'Paid', count: 0, pct_of_first: 0 },
+      ],
+    },
+    {
+      key: 'novo_a_scheduled',
+      label: 'Novo A, scheduled',
+      end_to_end_pct: 0,
+      steps: [
+        { label: 'Landing', count: 940, pct_of_first: 100 },
+        { label: 'Path chosen', count: 18, pct_of_first: 1.9 },
+        { label: 'Booked', count: 1, pct_of_first: 0.1 },
+        { label: 'Paid', count: 0, pct_of_first: 0 },
+      ],
+    },
+    {
+      key: 'novo_b_instant',
+      label: 'Novo B, instant',
+      end_to_end_pct: 0,
+      steps: [
+        { label: 'Landing', count: 1320, pct_of_first: 100 },
+        { label: 'Path chosen', count: 9, pct_of_first: 0.7 },
+        { label: 'Booked', count: 0, pct_of_first: 0 },
+        { label: 'Paid', count: 0, pct_of_first: 0 },
+      ],
+    },
+    {
+      key: 'novo_b_scheduled',
+      label: 'Novo B, scheduled',
+      end_to_end_pct: 0,
+      steps: [
+        { label: 'Landing', count: 680, pct_of_first: 100 },
+        { label: 'Path chosen', count: 3, pct_of_first: 0.4 },
+        { label: 'Booked', count: 0, pct_of_first: 0 },
+        { label: 'Paid', count: 0, pct_of_first: 0 },
+      ],
+    },
+  ],
+  direct_benchmarks: [
+    {
+      key: 'direct_instant',
+      label: 'Direct instant',
+      end_to_end_pct: 4.1,
+      steps: [
+        { label: 'Consult page', count: 820, pct_of_first: 100 },
+        { label: 'Start CTA', count: 210, pct_of_first: 25.6 },
+        { label: 'Payment initiated', count: 60, pct_of_first: 7.3 },
+        { label: 'Payment success', count: 34, pct_of_first: 4.1 },
+      ],
+    },
+    {
+      key: 'direct_scheduled',
+      label: 'Direct scheduled',
+      end_to_end_pct: 5.2,
+      steps: [
+        { label: 'Consult page', count: 540, pct_of_first: 100 },
+        { label: 'Start CTA', count: 150, pct_of_first: 27.8 },
+        { label: 'Payment initiated', count: 41, pct_of_first: 7.6 },
+        { label: 'Payment success', count: 28, pct_of_first: 5.2 },
+      ],
+    },
   ],
   ctas_by_type: [
     { label: 'Book now', count: 312 },

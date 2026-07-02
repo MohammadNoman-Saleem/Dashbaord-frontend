@@ -12,12 +12,14 @@ import { RetentionTab } from "@/components/funnels/RetentionTab";
 import { ScheduledTab } from "@/components/funnels/ScheduledTab";
 import { UiuxTab } from "@/components/funnels/UiuxTab";
 import { Button } from "@/components/ui/Button";
+import { Pills } from "@/components/ui/Pills";
 import { Tabs } from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/Toast";
 import type {
   FunnelDirectData,
   FunnelGeneralData,
   FunnelNovoData,
+  FunnelPeriod,
   FunnelScheduledData,
   FunnelUiuxData,
   GrowthEngagementData,
@@ -51,6 +53,17 @@ const TAB_ITEMS = [
 
 type TabKey = "general" | "direct" | "uiux" | "scheduled" | "novo" | "retention";
 
+// The reporting-period control drives only the saved-funnel tabs; General,
+// UI/UX, and Retention keep their own rolling trend windows.
+const PERIOD_TABS: TabKey[] = ["direct", "scheduled", "novo"];
+const PERIOD_PILLS = [
+  { key: "mtd", label: "MTD" },
+  { key: "qtd", label: "QTD" },
+  { key: "ytd", label: "YTD" },
+  { key: "all", label: "All time" },
+];
+const PERIODS: FunnelPeriod[] = ["mtd", "qtd", "ytd", "all"];
+
 const TAB_SOURCES: Record<TabKey, { endpoint: EndpointKey; path: string }> = {
   general: { endpoint: "funnels_general", path: "/funnels/general" },
   direct: { endpoint: "funnels_direct", path: "/funnels/direct" },
@@ -72,13 +85,27 @@ function FunnelsContent() {
     ? (requested as TabKey)
     : "general";
   const variant = searchParams.get("variant") === "instant" ? "instant" : "full";
+  const requestedPeriod = searchParams.get("period");
+  const period: FunnelPeriod = PERIODS.includes(requestedPeriod as FunnelPeriod)
+    ? (requestedPeriod as FunnelPeriod)
+    : "mtd";
+  const periodAware = PERIOD_TABS.includes(tab);
 
   const source = TAB_SOURCES[tab];
+  // Only the saved-funnel tabs carry variant (Direct) and period; the query key
+  // and request params reflect exactly what the active tab sends.
+  const params: Record<string, string> = {};
+  if (tab === "direct") params.variant = variant;
+  if (periodAware) params.period = period;
   const { query, refresh, refreshing } = useRefreshableEnvelope<unknown>({
-    queryKey: qk.funnels(tab, tab === "direct" ? variant : undefined),
+    queryKey: qk.funnels(
+      tab,
+      tab === "direct" ? variant : undefined,
+      periodAware ? period : undefined,
+    ),
     endpoint: source.endpoint,
     path: source.path,
-    params: tab === "direct" ? { variant } : undefined,
+    params: Object.keys(params).length > 0 ? params : undefined,
   });
   // The General tab's second query: engagement numbers from /growth.
   // Refresh covers both queries while that tab is up.
@@ -90,15 +117,33 @@ function FunnelsContent() {
   });
   const meta = query.data?.meta;
 
-  function navigate(nextTab: TabKey, nextVariant?: string) {
+  // One URL builder for tab, variant, and period changes. The period is carried
+  // across the funnel tabs (dropped from the URL when it is the mtd default, or
+  // when the tab does not use it) so a deep link stays clean.
+  function pushFunnels(
+    nextTab: TabKey,
+    nextVariant: string | undefined,
+    nextPeriod: FunnelPeriod,
+  ) {
     const params = new URLSearchParams();
     params.set("tab", nextTab);
     if (nextTab === "direct" && nextVariant && nextVariant !== "full") {
       params.set("variant", nextVariant);
     }
+    if (PERIOD_TABS.includes(nextTab) && nextPeriod !== "mtd") {
+      params.set("period", nextPeriod);
+    }
     const viewAs = searchParams.get("as");
     if (viewAs) params.set("as", viewAs);
     router.push(`/funnels?${params.toString()}`);
+  }
+
+  function navigate(nextTab: TabKey, nextVariant?: string) {
+    pushFunnels(nextTab, nextVariant, period);
+  }
+
+  function onPeriodChange(next: string) {
+    pushFunnels(tab, variant, next as FunnelPeriod);
   }
 
   async function onRefresh() {
@@ -121,15 +166,25 @@ function FunnelsContent() {
           <h2 className="mb-1 text-[26px] max-[880px]:text-[22px]">{title.title}</h2>
           <p className="text-[13.5px] text-ink-2">{title.sub}</p>
         </div>
-        <span className="inline-flex items-center gap-[9px] rounded-inner" data-focus-id="refresh">
-          {meta ? (
-            <span className="num text-xs text-ink-3">Updated {fmtAgo(meta.updated_at)}</span>
+        <div className="flex flex-wrap items-center gap-3">
+          {periodAware ? (
+            <Pills
+              items={PERIOD_PILLS}
+              value={period}
+              onChange={onPeriodChange}
+              aria-label="Reporting period"
+            />
           ) : null}
-          <Button variant="ghost" size="sm" onClick={() => void onRefresh()} disabled={refreshing}>
-            <RotateCw strokeWidth={1.8} aria-hidden="true" />
-            {refreshing ? "Refreshing" : "Refresh"}
-          </Button>
-        </span>
+          <span className="inline-flex items-center gap-[9px] rounded-inner" data-focus-id="refresh">
+            {meta ? (
+              <span className="num text-xs text-ink-3">Updated {fmtAgo(meta.updated_at)}</span>
+            ) : null}
+            <Button variant="ghost" size="sm" onClick={() => void onRefresh()} disabled={refreshing}>
+              <RotateCw strokeWidth={1.8} aria-hidden="true" />
+              {refreshing ? "Refreshing" : "Refresh"}
+            </Button>
+          </span>
+        </div>
       </div>
 
       <Tabs
