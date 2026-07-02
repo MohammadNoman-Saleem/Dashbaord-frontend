@@ -16,6 +16,7 @@ import {
   type DealRecord,
   type LeadRecord,
 } from '../crm-read';
+import { destinationGroupOf, specialtyGroupOf } from '../classification';
 import { patientSerializer } from '../privacy';
 import type { SourceMeta } from '../envelope';
 import type {
@@ -40,6 +41,9 @@ import type {
   CrmPipelinePeriod,
   CrmPipelineStage,
   CrmPipelineSummary,
+  CrmSegmentBar,
+  CrmSegmentMetric,
+  CrmSegmentsData,
   CrmSubtypeBreakdown,
   CrmSubtypeData,
   CrmSubtypeSummary,
@@ -652,6 +656,49 @@ async function dealsTable(
   };
 }
 
+// Readable labels for the specialty groups the classifier returns.
+const SPECIALTY_LABELS: Record<string, string> = {
+  neuro_spine_rehab: 'Neuro, spine, rehab',
+  orthopedics: 'Orthopedics',
+  gastro: 'Gastro',
+  cosmetic: 'Cosmetic',
+  womens_health: "Women's health",
+  other: 'Other',
+};
+
+// Geographic (destination) and specialty breakdowns over customer deals, using
+// the shared classification helpers. metric count tallies deals, amount tallies
+// the deal value in BHD. Blank destination or concern is not counted, so the
+// bars reflect classified deals only.
+async function segments(
+  metric: CrmSegmentMetric,
+): Promise<{ data: CrmSegmentsData; parts: SourceMeta[] }> {
+  const read = await getCrmRead().deals();
+  const customer = read.data.filter(
+    (d) => d.Pipeline != null && CUSTOMER_PIPELINE_SET.has(d.Pipeline),
+  );
+  const geo = new Map<string, number>();
+  const spec = new Map<string, number>();
+  for (const d of customer) {
+    const amt = metric === 'amount' ? Math.round(d.Amount ?? 0) : 1;
+    const g = destinationGroupOf(d.Prefered_Country_of_Treatment_Consultation);
+    if (g) geo.set(g, (geo.get(g) ?? 0) + amt);
+    const s = specialtyGroupOf(d.Main_Concern_Reason_for_Consultation);
+    if (s) {
+      const label = SPECIALTY_LABELS[s] ?? s;
+      spec.set(label, (spec.get(label) ?? 0) + amt);
+    }
+  }
+  const toBars = (m: Map<string, number>): CrmSegmentBar[] =>
+    [...m.entries()]
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+  return {
+    data: { geographic: toBars(geo), specialty: toBars(spec), metric },
+    parts: [read.meta],
+  };
+}
+
 export const crmAnalytics = {
   metrics,
   funnel,
@@ -662,4 +709,5 @@ export const crmAnalytics = {
   journey,
   subtype,
   dealsTable,
+  segments,
 };

@@ -28,6 +28,7 @@ import { fixture as crmLeadSourcesFixture } from './crm-lead-sources'
 import { fixture as crmLeadsFixture } from './crm-leads'
 import { fixture as crmMetricsFixture } from './crm-metrics'
 import { fixture as crmPipelineFixture } from './crm-pipeline'
+import { fixture as crmSegmentsFixture } from './crm-segments'
 import { fixture as crmSubtypeFixture } from './crm-subtype'
 import { fixture as deliverablesFixture } from './deliverables'
 import { fixture as financialsFixture } from './financials'
@@ -113,6 +114,7 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   crm_journey: crmJourneyFixture,
   crm_subtype: crmSubtypeFixture,
   crm_deals: crmDealsFixture,
+  crm_segments: crmSegmentsFixture,
   marketing: marketingFixture,
   funnels_general: funnelsGeneralFixture,
   funnels_direct: funnelsDirectFixture,

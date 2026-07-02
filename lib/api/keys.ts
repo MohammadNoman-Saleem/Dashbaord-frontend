@@ -38,6 +38,7 @@ export const qk = {
   crmJourney: () => ['crm', 'journey'] as const,
   crmSubtype: () => ['crm', 'subtype'] as const,
   crmDeals: (page: number, pipeline: string) => ['crm', 'deals', page, pipeline] as const,
+  crmSegments: (metric: string) => ['crm', 'segments', metric] as const,
   financials: () => ['financials'] as const,
   financialsForecast: () => ['financials', 'forecast'] as const,
   financialsBurn: () => ['financials', 'burn'] as const,

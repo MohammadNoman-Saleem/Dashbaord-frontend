@@ -645,6 +645,15 @@ export interface CrmDealsData {
   pipelines: string[]
 }
 
+// /api/crm/segments
+export type CrmSegmentMetric = 'count' | 'amount'
+export interface CrmSegmentBar { name: string; value: number }
+export interface CrmSegmentsData {
+  geographic: CrmSegmentBar[]
+  specialty: CrmSegmentBar[]
+  metric: CrmSegmentMetric
+}
+
 // /api/financials
 export interface FinancialsData {
   platform_revenue: {
