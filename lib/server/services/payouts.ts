@@ -280,6 +280,19 @@ export class ManualLedgerService {
     );
     return rows.map(toLedgerRow);
   }
+
+  /** All manual rows, newest first. The appointments tab windows by period
+   *  (mtd, qtd, ytd, all), not a single cycle, so it reads the full set and
+   *  filters by booked_at in Bahrain time to match its booking window. Manual
+   *  rows are the free-appointment ledger, a small set. */
+  async all(): Promise<ManualEntryRow[]> {
+    const { rows } = await this.pool.query<LedgerDbRow>(
+      `select ${LEDGER_ROW_FIELDS} from bookings_ledger
+       where manual = true
+       order by booked_at desc`,
+    );
+    return rows.map(toLedgerRow);
+  }
 }
 
 function toLedgerRow(r: LedgerDbRow): ManualEntryRow {
@@ -488,8 +501,13 @@ export class CommissionService {
     const rows: LedgerBookingRow[] = [];
     let unset = 0;
 
+    // Completed basis per the revenue spec: a consult counts once the call
+    // happened and the fee was deducted, which is Status Done or Awaiting
+    // Review. Awaiting Review means the call finished and the doctor is still
+    // filing notes; the fee is already taken, so it belongs in the cycle. This
+    // matches the Appointments tab income basis so the two tabs reconcile.
     for (const b of bookingsRead.data) {
-      if (b.Status !== 'Done') continue;
+      if (b.Status !== 'Done' && b.Status !== 'Awaiting Review') continue;
       const rate = num(b.Rate);
       if (rate <= 1) continue;
       if (bahrainCycle(b.From ?? b.Created_At) !== cycle) continue;
@@ -563,9 +581,27 @@ export class CommissionService {
   }
 }
 
+// Flat-fee doctors: a fixed Saleem amount per consult whatever the Rate, with no
+// service charge and no commission, the same treatment as Novo. Kept as a
+// constant here (like NOVO_TYPES) because a per-doctor payout_rules override is
+// not seedable from this repo. A real byDoctor rule, if one is ever added, still
+// wins over this, so it is a safe bridge; move these into a per-doctor payout
+// rule once that table takes overrides. Keyed by Zoho doctor id.
+const FLAT_FEE_DOCTORS = new Map<string, number>([
+  // Dr. Hasan Abdul jabbar: flat BHD 3, confirmed with the team 2026-07-04.
+  ['7064208000002820122', 3],
+]);
+
+// The commission rate for a standard consult that resolves no doctor and no
+// hospital percent (both blank or zero) and has no positive payout_rules
+// default. The team's confirmed floor is 15 percent. A positive payout_rules
+// default still wins over this; it is only the final fallback.
+const DEFAULT_COMMISSION_PCT = 15;
+
 /** Gross/revenue/payout split for one booking. A per-doctor flat-rate override
- *  wins when one exists for the booking's doctor; otherwise the segment's rule
- *  applies (novo flat commission, or scheduled doctor-first percent). */
+ *  wins when one exists for the booking's doctor, then a flat-fee doctor, then
+ *  the segment's rule applies (novo flat commission, or scheduled doctor-first
+ *  percent). */
 export function computeBookingSplit(
   segment: 'scheduled' | 'novo',
   rate: number,
@@ -592,6 +628,17 @@ export function computeBookingSplit(
         commissionSet: true,
       };
     }
+    // Flat-fee doctor: fixed Saleem amount, no service charge, no commission.
+    const flat = FLAT_FEE_DOCTORS.get(doctorId);
+    if (flat != null) {
+      const saleemRevenue = round2(flat);
+      return {
+        saleemRevenue,
+        providerPayout: round2(rate - saleemRevenue),
+        ruleLabel: 'Flat fee',
+        commissionSet: true,
+      };
+    }
   }
 
   if (segment === 'novo') {
@@ -610,12 +657,22 @@ export function computeBookingSplit(
   // scheduled
   const rule = rules.scheduled;
   const service = num(rule?.params?.service_charge_bhd);
-  let pct = doctorPct;
-  if (pct == null) pct = hospitalPct;
-  const commissionSet = pct != null;
-  const effPct = commissionSet
-    ? Number(pct)
-    : num(rule?.params?.commission_pct);
+  // Commission rate cascade: the doctor's own percent, then the hospital's, then
+  // the payout_rules default, then the 15 percent floor. A zero is treated the
+  // same as blank at each step and cascades on, so an unset or zeroed rate never
+  // silently zeroes Saleem's commission. commissionSet is true only when the
+  // doctor or hospital carried a real (positive) percent, so the page can still
+  // flag how many bookings fell through to the default.
+  const docRate =
+    doctorPct != null && Number(doctorPct) > 0 ? Number(doctorPct) : null;
+  const hospRate =
+    hospitalPct != null && Number(hospitalPct) > 0 ? Number(hospitalPct) : null;
+  const ruleDefault = num(rule?.params?.commission_pct);
+  const commissionSet = docRate != null || hospRate != null;
+  const effPct =
+    docRate ??
+    hospRate ??
+    (ruleDefault > 0 ? ruleDefault : DEFAULT_COMMISSION_PCT);
   // Commission is taken on the fee after the service charge, not the full fee.
   const commissionBase = Math.max(0, round2(rate - service));
   const commission = round2((commissionBase * effPct) / 100);

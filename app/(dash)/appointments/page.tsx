@@ -80,6 +80,19 @@ function feeCell(n: number): string {
   return n > 0 ? fmtBHD(n) : "-";
 }
 
+/* Consult-scale amounts keep one decimal under BHD 100, whole dinars above, so
+   a BHD 9.5 Saleem cut is not rounded to 10. Mirrors the Commission tab. */
+function fmtAmount(n: number): string {
+  return n >= 100 ? fmtBHD(n) : `BHD ${n.toFixed(1)}`;
+}
+
+/* Saleem cut and provider payout per consult, from the same commission engine
+   the Commission tab uses. Present only on completed consults (Done or Awaiting
+   Review); anything else reads as a calm dash. */
+function splitCell(n: number | undefined): string {
+  return n == null ? "-" : fmtAmount(n);
+}
+
 /* Date text. A null date reads as a calm dash rather than "NaN". */
 function dateCell(date: string | null): string {
   return date ? fmtDate(date) : "-";
@@ -107,7 +120,18 @@ function csvField(value: string): string {
 /* Build a CSV from the visible rows and download it through a transient
    anchor. The patient column carries only the reference, never the name. */
 function downloadRecentCsv(rows: AppointmentsAnalyticsRow[]): void {
-  const header = ["Appointment", "Patient (ref)", "Doctor", "Type", "Status", "Fee BHD", "Date"];
+  const header = [
+    "Appointment",
+    "Patient (ref)",
+    "Doctor",
+    "Type",
+    "Status",
+    "Fee BHD",
+    "Saleem BHD",
+    "Provider BHD",
+    "Rule",
+    "Date",
+  ];
   const lines = rows.map((row) =>
     [
       row.name,
@@ -116,6 +140,9 @@ function downloadRecentCsv(rows: AppointmentsAnalyticsRow[]): void {
       row.type ?? "",
       row.status,
       row.fee_bhd > 0 ? String(Math.round(row.fee_bhd)) : "",
+      row.saleem_bhd != null ? String(row.saleem_bhd) : "",
+      row.provider_payout_bhd != null ? String(row.provider_payout_bhd) : "",
+      row.rule_label ?? "",
       row.date ? fmtDate(row.date) : "",
     ]
       .map(csvField)
@@ -149,6 +176,28 @@ const RECENT_COLUMNS: DataTableColumn<AppointmentsAnalyticsRow>[] = [
     render: (row) => <Chip variant={statusVariant(row.status)}>{row.status}</Chip>,
   },
   { key: "fee", label: "Fee BHD", numeric: true, render: (row) => feeCell(row.fee_bhd) },
+  {
+    key: "saleem",
+    label: "Saleem BHD",
+    numeric: true,
+    render: (row) => splitCell(row.saleem_bhd),
+  },
+  {
+    key: "provider",
+    label: "Provider BHD",
+    numeric: true,
+    render: (row) => splitCell(row.provider_payout_bhd),
+  },
+  {
+    key: "rule",
+    label: "Rule",
+    render: (row) =>
+      row.rule_label ? (
+        <Chip variant="info">{row.rule_label}</Chip>
+      ) : (
+        <span className="text-ink-2">-</span>
+      ),
+  },
   { key: "date", label: "Date", numeric: true, render: (row) => dateCell(row.date) },
 ];
 
@@ -335,7 +384,7 @@ function AppointmentsContent() {
                 label="Completed"
                 value={m.completed.toLocaleString()}
                 bar={{ value: m.completion_rate_pct, fill: "good" }}
-                note="Marked done"
+                note="Done or awaiting review"
               />
               <KpiCard
                 className={spans.c3}
@@ -354,7 +403,7 @@ function AppointmentsContent() {
                 className={spans.c3}
                 label="Saleem income"
                 value={fmtBHD(m.saleem_income_bhd ?? 0)}
-                note="Saleem share after the provider payout"
+                note="Saleem share after the provider payout, free appointments included"
               />
 
               <div className={spans.c6} data-focus-id="appointments-stages">
@@ -461,7 +510,7 @@ function AppointmentsContent() {
                     )}
                   </div>
                   <CardFooter
-                    note="Patient names stay with the name-seers; everyone else reads the reference."
+                    note="Saleem cut and provider payout show on completed consults. Patient names stay with the name-seers; everyone else reads the reference."
                     right={
                       <Button
                         variant="ghost"

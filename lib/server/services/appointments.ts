@@ -23,6 +23,7 @@
 import { getCrmRead, type BookingRecord } from '../crm-read';
 import {
   computeBookingSplit,
+  getManualLedgerService,
   getPayoutRulesService,
   pickRules,
   segmentOf,
@@ -267,52 +268,55 @@ async function analytics(
   viewer: RequestViewer,
   month?: string,
 ): Promise<{ data: AppointmentsAnalyticsData; parts: SourceMeta[] }> {
-  const [read, ruleRows, doctorsRead, hospitalsRead] = await Promise.all([
-    getCrmRead().bookings(),
-    getPayoutRulesService()
-      .all()
-      .then((rows) => ({ ok: true as const, rows }))
-      .catch(() => ({ ok: false as const, rows: [] })),
-    getCrmRead()
-      .doctors()
-      .then((r) => ({ ok: true as const, data: r.data }))
-      .catch(() => ({ ok: false as const, data: [] })),
-    getCrmRead()
-      .hospitals()
-      .then((r) => ({ ok: true as const, data: r.data }))
-      .catch(() => ({ ok: false as const, data: [] })),
-  ]);
+  const [read, ruleRows, doctorsRead, hospitalsRead, manualRead] =
+    await Promise.all([
+      getCrmRead().bookings(),
+      getPayoutRulesService()
+        .all()
+        .then((rows) => ({ ok: true as const, rows }))
+        .catch(() => ({ ok: false as const, rows: [] })),
+      getCrmRead()
+        .doctors()
+        .then((r) => ({ ok: true as const, data: r.data }))
+        .catch(() => ({ ok: false as const, data: [] })),
+      getCrmRead()
+        .hospitals()
+        .then((r) => ({ ok: true as const, data: r.data }))
+        .catch(() => ({ ok: false as const, data: [] })),
+      getManualLedgerService()
+        .all()
+        .then((rows) => ({ ok: true as const, rows }))
+        .catch(() => ({ ok: false as const, rows: [] })),
+    ]);
   let real = read.data.filter((b) => (b.Rate ?? 0) > 1);
 
-  // A specific calendar month (YYYY-MM) takes precedence over the period
-  // keyword and bounds both ends, so "June" means June only, not June onward.
-  // Otherwise the period keyword sets an open-ended start.
+  // The reporting window as Bahrain-day bounds, [start, end). A specific month
+  // (YYYY-MM) takes precedence and bounds both ends, so "June" means June only.
+  // Otherwise the period keyword sets an open-ended start (end null); "all" has
+  // neither bound. One inWindow test then covers bookings and manual rows alike.
   const win = month ? monthWindow(month) : null;
-  if (win) {
-    real = real.filter((b) => {
-      const day = bahrainDay(b.From ?? b.Created_At);
-      return day !== '' && day >= win.start && day < win.end;
-    });
-  } else {
-    const startDay = periodStartDay(period);
-    if (startDay) {
-      real = real.filter((b) => {
-        const day = bahrainDay(b.From ?? b.Created_At);
-        return day !== '' && day >= startDay;
-      });
-    }
-  }
+  const windowStart = win ? win.start : periodStartDay(period);
+  const windowEnd = win ? win.end : null;
+  const inWindow = (iso: string | null): boolean => {
+    const day = bahrainDay(iso);
+    if (day === '') return false;
+    if (windowStart && day < windowStart) return false;
+    if (windowEnd && day >= windowEnd) return false;
+    return true;
+  };
+  real = real.filter((b) => inWindow(b.From ?? b.Created_At));
 
   const total = real.length;
-  const doneRows = real.filter((b) => b.Status === 'Done');
-  // Income (gross and Saleem) counts completed AND pending-review appointments,
-  // a wider set than the "completed" volume metric below, per the agreed rule.
-  const incomeRows = real.filter(
+  // Completed basis per the revenue spec: Done or Awaiting Review. Awaiting
+  // Review means the call finished and the fee is already deducted, so it
+  // counts. This one set drives the completed volume, gross, and Saleem income,
+  // and matches the Commission tab so the two reconcile.
+  const completedRows = real.filter(
     (b) => b.Status === 'Done' || b.Status === 'Awaiting Review',
   );
-  const completed = doneRows.length;
+  const completed = completedRows.length;
   const revenue = round2(
-    doneRows.reduce((sum, b) => sum + (b.Rate ?? 0), 0),
+    completedRows.reduce((sum, b) => sum + (b.Rate ?? 0), 0),
   );
   const completionRate = total === 0 ? 0 : Math.round((completed / total) * 100);
 
@@ -335,18 +339,26 @@ async function analytics(
       doctorMap.set(name, entry);
     }
     entry.count += 1;
-    if (b.Status === 'Done') {
+    if (b.Status === 'Done' || b.Status === 'Awaiting Review') {
       entry.done += 1;
       entry.revenue_bhd = round2(entry.revenue_bhd + (b.Rate ?? 0));
     }
   }
   const by_doctor = [...doctorMap.values()].sort((a, b) => b.done - a.done);
 
-  // Gross income (sum of Rate over Done bookings, equal to revenue_bhd) and
-  // Saleem income (sum of the commission-engine split) over the same Done set
-  // the doctor loop counts. Reuses the shared engine so the figures match the
-  // Payouts tab exactly. If the rules, doctors, or hospitals read failed, the
-  // income fields stay undefined and the rest of the payload still returns.
+  // Gross income (sum of Rate over completed consults plus any free-appointment
+  // patient payments) and Saleem income (the commission-engine split plus the
+  // free-appointment shares) over the completed set the doctor loop counts.
+  // Reuses the shared engine and folds in the manual ledger so the figures match
+  // the Commission tab, which uses the same Done or Awaiting Review basis and
+  // counts free appointments too. splitByBooking carries each completed
+  // consult's split out to its recent-table row. If the rules, doctors, or
+  // hospitals read failed, the income fields stay undefined and the rest of the
+  // payload still returns.
+  const splitByBooking = new Map<
+    string,
+    { saleem_bhd: number; provider_payout_bhd: number; rule_label: string }
+  >();
   let grossIncome: number | undefined;
   let saleemIncome: number | undefined;
   let commissionUnset: number | undefined;
@@ -374,7 +386,7 @@ async function analytics(
     let gross = 0;
     let saleem = 0;
     let unset = 0;
-    for (const b of incomeRows) {
+    for (const b of completedRows) {
       const id = doctorId(b);
       const docPct = id != null ? docPctMap.get(id) ?? null : null;
       const hospId = id != null ? docHospitalMap.get(id) ?? null : null;
@@ -391,6 +403,11 @@ async function analytics(
         id,
       );
       saleem = round2(saleem + split.saleemRevenue);
+      splitByBooking.set(b.id, {
+        saleem_bhd: split.saleemRevenue,
+        provider_payout_bhd: split.providerPayout,
+        rule_label: split.ruleLabel,
+      });
       const entry = doctorMap.get(doctorName(b));
       if (entry) {
         entry.saleem_income_bhd = round2(
@@ -402,10 +419,24 @@ async function analytics(
         // missing per-doctor percentage shows up.
         entry.commission_pct = docPct ?? hospPct;
       }
-      // A standard booking with no doctor and no hospital rate fell to the
-      // default. Count these so the page can flag how many bookings defaulted.
-      if (segment === 'scheduled' && docPct == null && hospPct == null) {
+      // A standard booking that resolved no doctor or hospital percent fell to
+      // the default. commissionSet is false exactly in that case (a zero
+      // cascades like a blank), so reuse it rather than re-testing the inputs.
+      if (!split.commissionSet) {
         unset += 1;
+      }
+    }
+    // Fold in free-appointment (manual ledger) entries within the same window so
+    // the totals reconcile with the Commission tab. Patient payments add to
+    // gross (usually zero for free appointments); a positive Saleem share adds
+    // to Saleem income, a negative share is a cost Saleem covers and adds
+    // nothing here. These rows are not tied to a Zoho doctor, so they stay out
+    // of the per-doctor breakdown.
+    if (manualRead.ok) {
+      for (const m of manualRead.rows) {
+        if (!inWindow(m.booked_at)) continue;
+        gross = round2(gross + m.patient_paid);
+        if (m.saleem_share > 0) saleem = round2(saleem + m.saleem_share);
       }
     }
     grossIncome = gross;
@@ -419,7 +450,16 @@ async function analytics(
         a.From ?? a.Created_At ?? '',
       ),
     )
-    .map((b) => toAnalyticsRow(b, viewer));
+    .map((b) => {
+      const row = toAnalyticsRow(b, viewer);
+      const split = splitByBooking.get(b.id);
+      if (split) {
+        row.saleem_bhd = split.saleem_bhd;
+        row.provider_payout_bhd = split.provider_payout_bhd;
+        row.rule_label = split.rule_label;
+      }
+      return row;
+    });
 
   // Reconciliation diagnostic (revenue spec, step 1), over the same windowed,
   // real (Rate > 1) set the metrics use. status_breakdown shows the completed

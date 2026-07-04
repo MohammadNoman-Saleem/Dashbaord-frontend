@@ -461,6 +461,13 @@ export interface AppointmentsAnalyticsRow {
   type: string | null
   fee_bhd: number
   date: string | null
+  // Per-consult commission split, mirroring the Commission tab ledger. Present
+  // only on completed consults (Done or Awaiting Review) that resolved a split;
+  // absent on not-yet-completed rows, which read as a dash. Never summed into
+  // fee_bhd, which stays the gross the patient paid.
+  saleem_bhd?: number
+  provider_payout_bhd?: number
+  rule_label?: string
 }
 export interface AppointmentsStageCount { name: string; count: number }
 export interface AppointmentsDoctorRow { name: string; count: number; done: number; revenue_bhd: number; saleem_income_bhd?: number; commission_pct?: number | null }
