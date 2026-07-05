@@ -42,3 +42,6 @@ next-env.d.ts
 
 # smoke-test compile output (scripts/smoke-fixtures.mjs)
 /.smoke-fixtures/
+
+# local dev screenshot helper, carries a login credential; never commit
+/shot.mjs

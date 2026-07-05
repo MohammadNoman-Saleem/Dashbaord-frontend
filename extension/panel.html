@@ -118,6 +118,22 @@
     </div>
 
     <div id="patient" class="hidden">
+      <div class="card hidden" id="needsAction" style="border-color: var(--accent); border-width: 1.5px">
+        <h2 style="color: var(--accent-text)">Needs action</h2>
+        <div id="needsSnippet" class="hint" style="color: var(--ink)"></div>
+        <div id="needsMeta" class="hint" style="margin-top: 4px"></div>
+        <div id="needsSuggest" class="hidden" style="margin-top: 8px; padding: 7px; border-radius: var(--r-sm); background: var(--surface-2)">
+          <div id="needsSuggestLabel" class="hint" style="color: var(--ink)"></div>
+          <button id="needsConfirm" style="margin-top: 6px">Confirm</button>
+          <div id="needsModal" class="hidden" style="margin-top: 8px; padding: 7px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface)">
+            <div id="needsModalText" class="hint" style="color: var(--ink)"></div>
+            <button id="needsModalOk">Confirm this change</button>
+            <button id="needsModalCancel" style="background: var(--surface-2); color: var(--ink)">Cancel</button>
+          </div>
+        </div>
+        <button id="needsHandled">Mark handled</button>
+      </div>
+
       <div class="card">
         <h2>Patient</h2>
         <div class="name" id="pName">-</div>

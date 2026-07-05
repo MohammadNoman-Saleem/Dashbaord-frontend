@@ -8,9 +8,17 @@
   window.addEventListener('message', (e) => {
     if (e.source !== window) return;
     const d = e.data;
-    if (!d || d.__saleem !== 'chat') return;
+    if (!d) return;
     try {
-      chrome.runtime.sendMessage({ type: 'wa_active_chat', phone: d.phone || null });
+      if (d.__saleem === 'chat') {
+        chrome.runtime.sendMessage({ type: 'wa_active_chat', phone: d.phone || null });
+      } else if (d.__saleem === 'messages') {
+        chrome.runtime.sendMessage({
+          type: 'wa_messages',
+          phone: d.phone || null,
+          messages: d.messages || [],
+        });
+      }
     } catch {
       /* service worker asleep or context gone; next post retries */
     }

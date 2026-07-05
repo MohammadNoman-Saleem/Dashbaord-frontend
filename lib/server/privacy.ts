@@ -96,6 +96,10 @@ export const PATIENT_PII_KEYS: ReadonlySet<string> = new Set([
   'patient_name',
   'patient_phone',
   'whatsapp_message',
+  // A reactive-inbox event snippet is raw patient message text; the per-field
+  // gate in the channel-events service sets it only for name-seers, this is the
+  // sweep backstop.
+  'message_snippet',
 ]);
 
 /** Recursively delete any patient-PII key in place, counting removals. The

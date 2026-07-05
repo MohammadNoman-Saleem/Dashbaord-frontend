@@ -66,6 +66,11 @@ export type EndpointKey =
   | 'documents_quotation'
   | 'documents_referral_draft'
   | 'documents_referral_build'
+  | 'events_inbox'
+  | 'events_resolve'
+  | 'ai_costs'
+  | 'cockpit_today'
+  | 'cockpit_summaries_refresh'
 
 export type EndpointMode = 'fixture' | 'live'
 
@@ -180,4 +185,17 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   // rather than 404ing a live call.
   documents_referral_draft: 'fixture',
   documents_referral_build: 'fixture',
+  // Reactive inbox (channel_events, Supabase-backed). GET the grouped "needs
+  // action" inbox (any signed-in viewer; per-field patient gates server-side).
+  // POST resolve is a person-only write through mutateEnvelope (no fixture read).
+  // Live with the backend on this branch; the GET fixture stub serves dev smoke.
+  events_inbox: 'live',
+  events_resolve: 'live',
+  // AI costs (GET). Leadership-gated exact Nova spend from self-metered usage.
+  ai_costs: 'live',
+  // The unified "Today" list (GET): SLA clocks + messages merged, the cockpit home.
+  cockpit_today: 'live',
+  // Manual proactive-summary refresh (POST). Person + name-seer gated write to
+  // our own case_summaries table; mutateEnvelope resolves null in fixture mode.
+  cockpit_summaries_refresh: 'live',
 }
