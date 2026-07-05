@@ -3,7 +3,7 @@
   "name": "Saleem WhatsApp panel",
   "version": "0.1.0",
   "description": "Identifies the active WhatsApp Web chat against Zoho and shows the patient case beside the conversation, with one-click write-back. Never sends messages.",
-  "permissions": ["storage", "sidePanel"],
+  "permissions": ["storage", "sidePanel", "clipboardWrite"],
   "host_permissions": [
     "https://web.whatsapp.com/*",
     "http://localhost:3000/*"
