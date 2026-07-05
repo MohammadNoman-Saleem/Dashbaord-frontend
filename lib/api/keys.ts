@@ -63,6 +63,7 @@ export const qk = {
   payoutsRules: () => ['payouts', 'rules'] as const,
   cockpitQueue: (person: string) => ['cockpit', 'queue', person] as const,
   cockpitCase: (id: string) => ['cockpit', 'case', id] as const,
+  cockpitCaseProviders: (id: string) => ['cockpit', 'case', id, 'providers'] as const,
   cockpitParked: (person: string, bucket: string, page: number, pageSize: number) =>
     ['cockpit', 'parked', person, bucket, page, pageSize] as const,
   cockpitSlaPolicy: () => ['cockpit', 'sla-policy'] as const,

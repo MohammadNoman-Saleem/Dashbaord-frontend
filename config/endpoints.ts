@@ -69,6 +69,7 @@ export type EndpointKey =
   | 'cockpit_parked'
   | 'cockpit_sla_policy'
   | 'cockpit_case_write'
+  | 'cockpit_case_providers'
   | 'cockpit_search'
   | 'provider_board'
   | 'write_gate_stage_options'
@@ -168,6 +169,11 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   // refuses unless WRITE_GATE_ENABLED is on server-side, so merging this does
   // not enable any write.
   cockpit_case_write: 'live',
+  // Case file Hospitals section (GET). The hospitals a patient has been sent to
+  // (from provider_referrals) plus the pickable hospital list. Live with the
+  // route on this branch; gated to name-seers server-side, so going live exposes
+  // nothing new. Adds and removes reuse the provider_board seam below.
+  cockpit_case_providers: 'live',
   // Smart patient search (POST). One box matching patient name, phone, or Zoho
   // record id over the cached CRM reads. POST-only seam (the term rides in the
   // body, never the URL, so names/phones stay out of access logs and history);
