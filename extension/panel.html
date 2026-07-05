@@ -5,112 +5,296 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Saleem panel</title>
     <style>
-      /* Saleem light theme (values mirror styles/tokens.css). Forced light so the
-         panel does not follow the OS dark mode. */
+      /* ============ Saleem design tokens ============
+         Exact mirror of styles/tokens.css from the dashboard. The extension is
+         loaded unpacked and has no build step, so the tokens are inlined here and
+         kept in sync by hand. If tokens.css changes, update this block and the
+         matching one in options.html. Colours may live inline in .html because CI
+         (scripts/check-red.mjs) scans .ts/.tsx/.css only; a separate extension
+         .css file would fail that gate. */
       :root {
-        color-scheme: light;
+        color-scheme: light dark;
         --bg: #f2f1f0;
         --surface: #ffffff;
         --surface-2: #f7f7f6;
-        --ink: #0b2530;
-        --muted: rgba(7, 58, 79, 0.62);
+        --ink: #000000;
+        --ink-2: rgba(7, 58, 79, 0.66);
+        --ink-3: rgba(7, 58, 79, 0.45);
         --title: #073a4f;
         --accent: #588be4;
         --accent-text: #3667c5;
+        --digital: #64a9d6;
+        --accessible: #aed6e4;
+        --accessible-soft: rgba(174, 214, 228, 0.32);
+        --recovery: #2e7d67;
+        --recovery-soft: rgba(46, 125, 103, 0.12);
+        --balance: #bcc99e;
+        --optimism: #f7de9f;
+        --optimism-soft: rgba(247, 222, 159, 0.55);
+        --line: rgba(7, 58, 79, 0.12);
+        --line-soft: rgba(7, 58, 79, 0.07);
+        --pulse-line: rgba(7, 58, 79, 0.30);
+        --shadow: 0 1px 2px rgba(7, 58, 79, 0.04), 0 10px 28px -18px rgba(7, 58, 79, 0.22);
+        --shadow-pop: 0 16px 48px -16px rgba(7, 58, 79, 0.32);
+        --r: 16px;
+        --r-sm: 10px;
         --on-accent: #ffffff;
-        --green: #2e7d67;
-        --line: rgba(7, 58, 79, 0.14);
-        --r: 12px;
-        --r-sm: 9px;
+        --trust-ink: #073a4f;
       }
+
+      /* Follow the operating system theme, using the dashboard dark palette. */
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #061f2a;
+          --surface: #0a2a39;
+          --surface-2: #0d3142;
+          --ink: #f2f1f0;
+          --ink-2: rgba(208, 228, 238, 0.72);
+          --ink-3: rgba(208, 228, 238, 0.48);
+          --title: #eaf3f7;
+          --accent: #6f9eea;
+          --accent-text: #9dbdf2;
+          --digital: #7cb8de;
+          --accessible: #aed6e4;
+          --accessible-soft: rgba(174, 214, 228, 0.14);
+          --recovery: #5fb393;
+          --recovery-soft: rgba(95, 179, 147, 0.16);
+          --optimism: #f7de9f;
+          --optimism-soft: rgba(247, 222, 159, 0.16);
+          --line: rgba(174, 214, 228, 0.16);
+          --line-soft: rgba(174, 214, 228, 0.09);
+          --pulse-line: rgba(174, 214, 228, 0.42);
+          --shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 12px 30px -18px rgba(0, 0, 0, 0.55);
+          --shadow-pop: 0 18px 52px -16px rgba(0, 0, 0, 0.6);
+        }
+      }
+
+      /* ============ Fonts (bundled, latin subset, offline) ============
+         Inter is a variable file so one face covers every weight; the dashboard
+         sets headings in Libre Baskerville at weight 400 (see app/globals.css). */
+      @font-face {
+        font-family: 'Inter';
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: swap;
+        src: url('fonts/inter.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Libre Baskerville';
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url('fonts/libre-baskerville.woff2') format('woff2');
+      }
+
+      /* ============ Base ============ */
       * { box-sizing: border-box; }
+      html, body { margin: 0; }
       body {
-        font: 13px/1.45 system-ui, sans-serif;
-        margin: 0;
-        padding: 12px;
+        font: 400 13px/1.5 'Inter', system-ui, sans-serif;
         background: var(--bg);
         color: var(--ink);
+        -webkit-font-smoothing: antialiased;
       }
-      .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
-      .brand .mark {
-        width: 22px; height: 22px; border-radius: 6px; background: var(--accent);
-        color: var(--on-accent); font-weight: 700; display: grid; place-items: center; font-size: 13px;
+      h1, h2, .serif, summary.title {
+        font-family: 'Libre Baskerville', Georgia, serif;
+        font-weight: 400;
+        color: var(--title);
+        margin: 0;
       }
-      h1 { font-size: 14px; margin: 0; color: var(--title); }
-      .sub { color: var(--muted); font-size: 11px; margin: 2px 0 10px; }
-      .status { font-size: 11px; color: var(--accent-text); min-height: 14px; margin-bottom: 8px; }
+      a { color: var(--accent-text); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .num { font-variant-numeric: tabular-nums; }
+      .hidden { display: none !important; }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 6px;
+      }
+      ::selection { background: var(--accessible); color: var(--trust-ink); }
+
+      /* Thin grey scrollbar, matching .scroll-thin in app/globals.css. */
+      body { scrollbar-width: thin; scrollbar-color: var(--ink-3) transparent; }
+      body::-webkit-scrollbar { width: 8px; height: 8px; }
+      body::-webkit-scrollbar-track { background: transparent; }
+      body::-webkit-scrollbar-thumb { background: var(--ink-3); border-radius: 9999px; }
+      body::-webkit-scrollbar-button { display: none; }
+
+      /* ============ Top brand strip (scrolls away) ============ */
+      .brandbar { display: flex; align-items: center; gap: 9px; padding: 12px 14px 4px; }
+      .brandbar .mark {
+        width: 24px; height: 24px; border-radius: 7px; background: var(--accent);
+        color: var(--on-accent); font-weight: 700; font-size: 13px;
+        display: grid; place-items: center; flex: none;
+      }
+      .brandbar h1 { font-size: 15px; line-height: 1.1; }
+      .brandbar .sub { color: var(--ink-2); font-size: 11px; margin-top: 1px; }
+      .status { padding: 4px 14px 8px; font-size: 11px; color: var(--accent-text); min-height: 12px; }
+
+      /* ============ Cards ============ */
       .card {
         background: var(--surface);
         border: 1px solid var(--line);
         border-radius: var(--r);
-        padding: 11px;
+        box-shadow: var(--shadow);
+        padding: 13px 14px;
+        margin: 10px 14px;
+      }
+      .card > h2 {
+        font-size: 13px;
         margin-bottom: 10px;
       }
-      .card h2 { font-size: 11px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-      .row { display: flex; justify-content: space-between; gap: 10px; margin: 4px 0; }
-      .row .k { color: var(--muted); }
+      .state { color: var(--ink-2); }
+      .state .hint { color: var(--ink-2); font-size: 12px; margin: 0; }
+
+      .row { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0; align-items: baseline; }
+      .row .k { color: var(--ink-2); font-size: 12px; flex: none; }
       .row .v { text-align: right; font-weight: 500; color: var(--ink); }
-      .name { font-size: 16px; font-weight: 700; color: var(--title); margin-bottom: 6px; }
-      .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+
+      /* ============ Sticky patient header ============ */
+      .phead {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: var(--bg);
+        padding: 10px 14px 9px;
+        border-bottom: 1px solid var(--line);
+        box-shadow: 0 6px 12px -12px var(--pulse-line);
+      }
+      .phead-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .phead .name {
+        font-size: 18px; line-height: 1.15; flex: 1; min-width: 0;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .phead .ref { display: inline-block; margin-top: 4px; font-size: 11px; color: var(--ink-2); }
+      .pill {
+        flex: none; max-width: 52%; display: inline-flex; align-items: center;
+        padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 500;
+        background: var(--accessible-soft); color: var(--title);
+        border: 1px solid var(--line);
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+
+      /* ============ Tags ============ */
+      .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
       .tag {
         display: inline-flex; align-items: center; gap: 5px;
         background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px;
-        padding: 2px 9px; font-size: 11px; color: var(--muted);
+        padding: 2px 4px 2px 10px; font-size: 11px; color: var(--ink-2);
       }
-      .tag .x { cursor: pointer; font-weight: 700; color: var(--muted); }
-      .tag .x:hover { color: var(--title); }
-      .hist { margin: 6px 0; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
-      .hist:last-child { border-bottom: 0; }
-      .hist .t { font-weight: 600; }
-      .hist .d { color: var(--muted); font-size: 12px; }
-      label { display: block; font-size: 11px; color: var(--muted); margin: 9px 0 3px; }
+      .tag .x {
+        cursor: pointer; font-weight: 700; color: var(--ink-3); line-height: 1;
+        width: 15px; height: 15px; display: grid; place-items: center; border-radius: 999px;
+      }
+      .tag .x:hover { color: var(--title); background: var(--line); }
+      .addtag { display: flex; gap: 6px; align-items: center; margin-top: 10px; }
+      .addtag input { flex: 1; }
+
+      /* ============ History (collapsible) ============ */
+      details.card { padding: 0; }
+      details.card > summary {
+        list-style: none; cursor: pointer; padding: 13px 14px;
+        display: flex; align-items: center; justify-content: space-between;
+      }
+      details.card > summary::-webkit-details-marker { display: none; }
+      details.card > summary::after {
+        content: ''; width: 8px; height: 8px; flex: none;
+        border-right: 1.5px solid var(--ink-3); border-bottom: 1.5px solid var(--ink-3);
+        transform: rotate(45deg); transition: transform .15s ease; margin-right: 2px;
+      }
+      details.card[open] > summary::after { transform: rotate(225deg); }
+      details.card > .body { padding: 0 14px 12px; }
+      .hist { margin: 8px 0; padding-bottom: 8px; border-bottom: 1px solid var(--line-soft); }
+      .hist:last-child { border-bottom: 0; padding-bottom: 0; }
+      .hist .t { font-weight: 600; font-size: 12px; }
+      .hist .d { color: var(--ink-2); font-size: 12px; margin-top: 1px; }
+
+      /* ============ Form controls ============ */
+      label { display: block; font-size: 11px; color: var(--ink-2); margin: 11px 0 4px; font-weight: 500; }
+      label:first-child { margin-top: 0; }
       select, textarea, input {
-        width: 100%; padding: 7px; border: 1px solid var(--line); border-radius: var(--r-sm);
+        width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-sm);
         font: inherit; background: var(--surface); color: var(--ink);
       }
-      textarea { min-height: 54px; resize: vertical; }
-      button {
-        width: 100%; margin-top: 7px; padding: 8px; border: 0; border-radius: var(--r-sm);
-        background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 600; cursor: pointer;
+      select:hover, textarea:hover, input:hover { border-color: var(--ink-3); }
+      textarea { min-height: 56px; resize: vertical; }
+
+      /* ============ Buttons ============ */
+      .btn {
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        width: 100%; margin-top: 8px; padding: 9px 12px; border: 0; border-radius: var(--r-sm);
+        background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 600;
+        cursor: pointer; box-shadow: var(--shadow); transition: filter .12s ease;
       }
-      button:hover { filter: brightness(1.05); }
-      button:disabled { opacity: .5; cursor: default; }
-      .addtag { display: flex; gap: 6px; align-items: center; }
-      .addtag input { flex: 1; }
-      .addtag button { width: auto; margin: 0; padding: 7px 12px; }
-      .hint { font-size: 11px; color: var(--muted); }
-      .hidden { display: none; }
-      a { color: var(--accent-text); }
-      .divider { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
-      .loading-row { display: flex; align-items: center; gap: 9px; color: var(--muted); }
+      .btn:hover { filter: brightness(1.04); }
+      .btn:active { filter: brightness(0.97); }
+      .btn:disabled { opacity: .5; cursor: default; box-shadow: none; }
+      .btn-ghost {
+        background: transparent; color: var(--accent-text);
+        border: 1px solid var(--line); box-shadow: none; font-weight: 500;
+      }
+      .btn-ghost:hover { background: var(--surface-2); filter: none; }
+      .btn-inline { width: auto; margin: 0; padding: 8px 14px; }
+
+      /* ============ Developer tools (collapsed) ============ */
+      details.dev { margin: 12px 14px 18px; }
+      details.dev > summary {
+        list-style: none; cursor: pointer; font-size: 11px; color: var(--ink-2);
+        display: inline-flex; align-items: center; gap: 6px;
+      }
+      details.dev > summary::-webkit-details-marker { display: none; }
+      details.dev > summary::before {
+        content: ''; width: 6px; height: 6px; flex: none;
+        border-right: 1.5px solid var(--ink-3); border-bottom: 1.5px solid var(--ink-3);
+        transform: rotate(-45deg); transition: transform .15s ease;
+      }
+      details.dev[open] > summary::before { transform: rotate(45deg); }
+      details.dev .body { margin-top: 8px; }
+      details.dev label { margin-top: 0; }
+
+      /* ============ Loading state ============ */
+      .loading-row { display: flex; align-items: center; gap: 9px; color: var(--ink-2); }
       .spinner {
         width: 18px; height: 18px; border: 2px solid var(--line);
         border-top-color: var(--accent); border-radius: 50%;
         animation: spin .7s linear infinite; flex: none;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
-      .skeleton { height: 11px; border-radius: 6px; margin: 8px 0; background:
-        linear-gradient(90deg, var(--surface-2) 25%, var(--line) 37%, var(--surface-2) 63%);
-        background-size: 400% 100%; animation: shimmer 1.3s ease-in-out infinite; }
-      .skeleton.w60 { width: 60%; } .skeleton.w40 { width: 40%; } .skeleton.w80 { width: 80%; }
+      .skeleton {
+        height: 11px; border-radius: 6px; margin: 9px 0;
+        background: linear-gradient(90deg, var(--surface-2) 25%, var(--line) 37%, var(--surface-2) 63%);
+        background-size: 400% 100%; animation: shimmer 1.3s ease-in-out infinite;
+      }
+      .skeleton.w60 { width: 60%; }
+      .skeleton.w40 { width: 40%; }
+      .skeleton.w80 { width: 80%; }
       @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation: none !important; transition: none !important; }
+      }
     </style>
   </head>
   <body>
-    <div class="brand"><span class="mark">S</span><h1>Saleem panel</h1></div>
-    <div class="sub">Zoho case for the open WhatsApp chat</div>
+    <div class="brandbar">
+      <span class="mark">S</span>
+      <div>
+        <h1>Saleem panel</h1>
+        <div class="sub">Zoho case for the open WhatsApp chat</div>
+      </div>
+    </div>
     <div class="status" id="status"></div>
 
-    <div id="notConfigured" class="card hidden">
+    <div id="notConfigured" class="card state hidden">
       <h2>Set up</h2>
       <p class="hint">Sign in first: open the extension <a href="#" id="openOptions">options</a>, enter the backend URL and your dashboard username and password.</p>
     </div>
 
-    <div id="empty" class="card hidden">
+    <div id="empty" class="card state hidden">
       <p class="hint" id="emptyText">Open a WhatsApp chat to see the patient's case.</p>
     </div>
 
-    <div id="loading" class="card hidden">
+    <div id="loading" class="card state hidden">
       <div class="loading-row"><span class="spinner"></span><span id="loadingText">Looking up...</span></div>
       <div class="skeleton w60"></div>
       <div class="skeleton w80"></div>
@@ -118,71 +302,80 @@
     </div>
 
     <div id="patient" class="hidden">
-      <div class="card">
-        <h2>Patient</h2>
-        <div class="name" id="pName">-</div>
-        <div class="row"><span class="k">Reference</span><span class="v" id="pRef">-</span></div>
-        <div class="row"><span class="k">Stage</span><span class="v" id="pStage">-</span></div>
+      <div class="phead">
+        <div class="phead-top">
+          <div class="name serif" id="pName">-</div>
+          <span class="pill" id="pStage">-</span>
+        </div>
+        <span class="ref num" id="pRef">-</span>
+      </div>
+
+      <section class="card">
+        <h2>Case</h2>
         <div class="row"><span class="k">Pipeline</span><span class="v" id="pPipeline">-</span></div>
         <div class="row"><span class="k">Owner</span><span class="v" id="pOwner">-</span></div>
         <div class="row"><span class="k">Next action</span><span class="v" id="pNext">-</span></div>
         <div class="row"><span class="k">Follow up</span><span class="v" id="pFollow">-</span></div>
         <div class="tags" id="pTags"></div>
-        <div class="addtag" style="margin-top: 8px">
+        <div class="addtag">
           <input type="text" id="tagInput" list="tagOptions" placeholder="Add a tag" />
           <datalist id="tagOptions"></datalist>
-          <button id="tagBtn">Add</button>
+          <button id="tagBtn" class="btn btn-ghost btn-inline">Add</button>
         </div>
-      </div>
+      </section>
 
-      <div class="card" id="detailsCard">
+      <section class="card" id="detailsCard">
         <h2>Case details</h2>
 
         <div id="leadDetails" class="hidden">
           <label for="statusSelect">Status</label>
           <select id="statusSelect"></select>
-          <button id="statusBtn">Update status</button>
+          <button id="statusBtn" class="btn">Update status</button>
         </div>
 
         <div id="dealDetails" class="hidden">
           <label for="budgetInput">Patient budget (BHD)</label>
-          <input type="number" id="budgetInput" min="0" step="1" placeholder="e.g. 4180" />
+          <input type="number" id="budgetInput" class="num" min="0" step="1" placeholder="e.g. 4180" />
           <label for="startInput">Treatment start</label>
           <input type="date" id="startInput" />
           <label for="endInput">Treatment end</label>
           <input type="date" id="endInput" />
-          <button id="detailsBtn">Save details</button>
+          <button id="detailsBtn" class="btn">Save details</button>
         </div>
-      </div>
+      </section>
 
-      <div class="card hidden" id="historyCard">
-        <h2>History</h2>
-        <div id="history"></div>
-      </div>
-
-      <div class="card">
+      <section class="card">
         <h2>Actions</h2>
 
         <div id="advanceWrap">
           <label for="stageSelect">Advance stage</label>
           <select id="stageSelect"></select>
-          <button id="advanceBtn">Advance stage</button>
+          <button id="advanceBtn" class="btn">Advance stage</button>
         </div>
 
         <label for="noteText">Log a note</label>
         <textarea id="noteText" placeholder="Interaction note (saved to Zoho)"></textarea>
-        <button id="noteBtn">Save note</button>
+        <button id="noteBtn" class="btn">Save note</button>
 
         <label for="followDate">Set follow up</label>
         <input type="date" id="followDate" />
-        <button id="followBtn">Set follow up</button>
-      </div>
+        <button id="followBtn" class="btn">Set follow up</button>
+      </section>
+
+      <details class="card" id="historyCard">
+        <summary class="title">History</summary>
+        <div class="body" id="history"></div>
+      </details>
     </div>
 
-    <hr class="divider" />
-    <label for="manualPhone">Test lookup (type a phone in Zoho)</label>
-    <input type="text" id="manualPhone" placeholder="e.g. 97312345678" />
-    <button id="manualBtn">Look up</button>
+    <details class="dev">
+      <summary>Developer tools</summary>
+      <div class="body">
+        <label for="manualPhone">Test lookup (type a phone in Zoho)</label>
+        <input type="text" id="manualPhone" class="num" placeholder="e.g. 97312345678" />
+        <button id="manualBtn" class="btn btn-ghost">Look up</button>
+      </div>
+    </details>
 
     <script src="panel.js"></script>
   </body>

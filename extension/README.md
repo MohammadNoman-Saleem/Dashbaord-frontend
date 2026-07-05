@@ -39,6 +39,20 @@ panel.html/.js  <-----------------  panel_update broadcast
 4. Open https://web.whatsapp.com, click the toolbar icon to open the side panel,
    open a chat whose number exists in Zoho.
 
+## Styling and theme
+
+The panel and the options page follow the dashboard design system. Because the
+extension is unpacked and has no build step, the design tokens are inlined in each
+HTML file's `<style>` block as an exact mirror of `styles/tokens.css`. If those
+tokens change, update the block in `panel.html` and `options.html` too. Colours may
+live inline in `.html` because the CI colour gate (`scripts/check-red.mjs`) scans
+`.ts/.tsx/.css` only; do not move them into an `extension/*.css` file, which would
+be scanned and fail.
+
+Fonts (Inter and Libre Baskerville, latin subset) are bundled in `fonts/` so the
+panel matches the dashboard offline. The theme follows the operating system via
+`prefers-color-scheme`, using the dashboard dark palette.
+
 ## Test the fragile part offline
 
 ```

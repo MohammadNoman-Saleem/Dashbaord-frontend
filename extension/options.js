@@ -7,7 +7,8 @@ const $ = (id) => document.getElementById(id);
 function setStatus(text, ok) {
   const el = $('status');
   el.textContent = text;
-  el.style.color = ok ? '#0b6b5f' : '#667085';
+  // Use the design tokens defined in options.html rather than raw colours.
+  el.style.color = ok ? 'var(--recovery)' : 'var(--ink-2)';
 }
 
 // Restore the saved backend URL and show current sign-in state.
