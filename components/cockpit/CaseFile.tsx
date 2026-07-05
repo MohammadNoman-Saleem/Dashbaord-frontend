@@ -44,6 +44,7 @@ import { StageMove } from "@/components/cockpit/StageMove";
 // import { SendFirstContact } from "@/components/cockpit/SendFirstContact";
 import { WhatsAppMessage } from "@/components/cockpit/WhatsAppMessage";
 import { CaseTags } from "@/components/cockpit/CaseTags";
+import { CaseProviders } from "@/components/cockpit/CaseProviders";
 import { EditCaseDetails } from "@/components/cockpit/EditCaseDetails";
 import { BuildQuotation } from "@/components/cockpit/BuildQuotation";
 import { DraftReferral } from "@/components/cockpit/DraftReferral";
@@ -186,6 +187,19 @@ function CaseBody({
             flat
           />
         </div>
+
+        {/* Hospitals the patient has been sent to (the provider-board referrals),
+            added and removed right beside the tags. Patient health data, so
+            name-seers only; the server enforces the same gate. Works for deals
+            and leads. */}
+        {seesNames ? (
+          <div className="mt-4">
+            <CaseProviders
+              caseId={data.lead_ref.zoho_id}
+              recordKind={data.record_type}
+            />
+          </div>
+        ) : null}
       </div>
 
       {data.record_type === "deal" ? (

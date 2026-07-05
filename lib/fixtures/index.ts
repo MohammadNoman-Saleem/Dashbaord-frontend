@@ -168,6 +168,12 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
     data: { matches: [] },
     meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
   }),
+  // Case file Hospitals section GET stub for dev smoke (the live route gates to
+  // name-seers). The add/remove reuse the provider_board seam via mutateEnvelope.
+  cockpit_case_providers: () => ({
+    data: { linked: [], available: [] },
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
   // Provider board GET stub for dev smoke (the live route gates to name-seers).
   // The add/remove writes go through mutateEnvelope and never read a fixture.
   provider_board: () => ({

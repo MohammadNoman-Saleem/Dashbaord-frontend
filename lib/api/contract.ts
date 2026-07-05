@@ -1408,6 +1408,22 @@ export interface CockpitCaseData {
   activity: CockpitActivity[]
 }
 
+/** One hospital a patient has been sent to (a provider_referrals row), shown as a
+ *  removable chip in the case file's Hospitals section. referral_id is the row id
+ *  used to remove the link. The same referral appears on the provider board. */
+export interface CaseProviderLink {
+  referral_id: string
+  hospital_id: string
+  hospital_name: string
+}
+/** The case file's Hospitals sub-resource: the patient's active hospital links and
+ *  the pickable hospital list (Zoho Hospitals directory plus board custom
+ *  hospitals). Name-seers only, on the client and server. */
+export interface CaseProvidersData {
+  linked: CaseProviderLink[]
+  available: Array<{ id: string; name: string; country: string }>
+}
+
 // Cockpit write gate (Saleem Cockpit Implementation Plan, Phase 1). Two-step:
 // POST /api/write-gate/prepare returns a plain-language change list and a
 // short-lived change_id; POST /api/write-gate/commit applies it after the case
