@@ -161,6 +161,9 @@ function renderNeedsAction(data) {
   show('needsAction', true);
   const latest = events[0];
   const summary = events.map((e) => e.triage && e.triage.summary).find(Boolean);
+  // Label the band honestly: the AI one-line read when we have it, else the raw
+  // message text (or nothing yet), so it never mislabels a snippet as AI output.
+  $('needsKind').textContent = summary ? 'AI summary' : 'Latest message';
   $('needsSnippet').textContent = summary || latest.message_snippet || 'New message waiting';
   const urgency = latest.triage && latest.triage.urgency ? latest.triage.urgency : 'new';
   $('needsMeta').textContent =
