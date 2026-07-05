@@ -164,6 +164,12 @@
         background: var(--surface); border: 1px solid var(--accent-line);
         border-radius: var(--r); padding: 11px 12px;
       }
+      /* The standing (proactive) AI summary at the top of the Patient card,
+         tinted so it reads as the case's AI read when there is no live message. */
+      .ai-band-standing {
+        margin-bottom: 12px;
+        background: linear-gradient(180deg, var(--accent-soft), transparent 60%), var(--surface);
+      }
       .ai-glyph {
         flex: none; width: 26px; height: 26px; border-radius: 8px;
         background: linear-gradient(150deg, var(--accent), var(--accent-2));
@@ -248,6 +254,18 @@
 
       <div class="card">
         <h2>Patient</h2>
+        <div class="ai-band ai-band-standing hidden" id="patientAi">
+          <span class="ai-glyph" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z" />
+              <path d="M19 14l.7 1.8L21.5 16.5l-1.8.7L19 19l-.7-1.8L16.5 16.5l1.8-.7L19 14z" />
+            </svg>
+          </span>
+          <div class="ai-body">
+            <span class="ai-label">AI summary</span>
+            <div id="patientAiText" class="ai-text"></div>
+          </div>
+        </div>
         <div class="name" id="pName">-</div>
         <div class="row"><span class="k">Reference</span><span class="v" id="pRef">-</span></div>
         <div class="row"><span class="k">Stage</span><span class="v" id="pStage">-</span></div>

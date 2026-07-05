@@ -260,6 +260,19 @@ function render(phone, result) {
   show('empty', false);
   show('patient', true);
 
+  // Standing AI summary (the proactive case read) at the top of the Patient
+  // card, so a matched patient always shows a clear AI line, mirroring the
+  // cockpit case file. When the chat has a live unanswered message, the "Needs
+  // action" hero shows that fresher message read instead, so hide this one to
+  // avoid two bands.
+  const hasLiveEvents = Array.isArray(data.open_events) && data.open_events.length > 0;
+  if (c.ai_summary && !hasLiveEvents) {
+    $('patientAiText').textContent = c.ai_summary;
+    show('patientAi', true);
+  } else {
+    show('patientAi', false);
+  }
+
   $('pName').textContent = fmt(
     match.patient_name || (match.patient_ref && match.patient_ref.initials),
   );
