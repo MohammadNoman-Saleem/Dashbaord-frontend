@@ -159,36 +159,26 @@
         background: var(--surface); border: 1px solid var(--accent-line);
         border-radius: 999px; padding: 3px 9px; white-space: nowrap; text-transform: capitalize;
       }
+      /* The read: a case's one-line brief. Editorial, not a badge. A thin accent
+         rule on the left, a quiet label, and the sentence itself carrying the
+         weight. Used for the standing (proactive) read and the live-message read. */
       .ai-band {
-        display: flex; gap: 10px; align-items: flex-start;
-        background: var(--surface); border: 1px solid var(--accent-line);
-        border-radius: var(--r); padding: 11px 12px;
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--accent);
+        border-radius: var(--r);
+        padding: 10px 14px;
+        background: var(--surface);
       }
-      /* The standing (proactive) AI summary at the top of the Patient card,
-         tinted so it reads as the case's AI read when there is no live message. */
       .ai-band-standing {
-        margin-bottom: 12px;
-        background: linear-gradient(180deg, var(--accent-soft), transparent 60%), var(--surface);
+        margin-bottom: 13px;
+        background: linear-gradient(180deg, var(--accent-soft), transparent 78%), var(--surface);
       }
-      .ai-glyph {
-        flex: none; width: 26px; height: 26px; border-radius: 8px;
-        background: linear-gradient(150deg, var(--accent), var(--accent-2));
-        color: var(--on-accent); display: grid; place-items: center;
-        box-shadow: var(--shadow-accent);
-        position: relative;
-      }
-      .ai-glyph::after {
-        content: ""; position: absolute; inset: -3px; border-radius: 11px;
-        border: 2px solid var(--accent-soft); animation: pulse 2.4s ease-in-out infinite;
-      }
-      @keyframes pulse { 0%, 100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 0; transform: scale(1.12); } }
-      .ai-glyph svg { width: 15px; height: 15px; }
       .ai-body { min-width: 0; }
       .ai-label {
-        display: block; font-size: 9.5px; font-weight: 800; text-transform: uppercase;
-        letter-spacing: 0.09em; color: var(--accent-text); margin-bottom: 3px;
+        display: block; font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.14em; color: var(--accent-text); margin-bottom: 5px;
       }
-      .ai-text { font-size: 13.5px; line-height: 1.42; color: var(--ink); font-weight: 500; }
+      .ai-text { font-size: 14px; line-height: 1.48; color: var(--ink); font-weight: 550; }
       .suggest {
         margin-top: 11px; padding: 11px 12px; border-radius: var(--r);
         background: var(--surface-2); border: 1px solid var(--line);
@@ -229,12 +219,6 @@
           <span class="pill" id="needsMeta"></span>
         </div>
         <div class="ai-band">
-          <span class="ai-glyph" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z" />
-              <path d="M19 14l.7 1.8L21.5 16.5l-1.8.7L19 19l-.7-1.8L16.5 16.5l1.8-.7L19 14z" />
-            </svg>
-          </span>
           <div class="ai-body">
             <span class="ai-label" id="needsKind">AI summary</span>
             <div id="needsSnippet" class="ai-text"></div>
@@ -255,12 +239,6 @@
       <div class="card">
         <h2>Patient</h2>
         <div class="ai-band ai-band-standing hidden" id="patientAi">
-          <span class="ai-glyph" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z" />
-              <path d="M19 14l.7 1.8L21.5 16.5l-1.8.7L19 19l-.7-1.8L16.5 16.5l1.8-.7L19 14z" />
-            </svg>
-          </span>
           <div class="ai-body">
             <span class="ai-label">AI summary</span>
             <div id="patientAiText" class="ai-text"></div>

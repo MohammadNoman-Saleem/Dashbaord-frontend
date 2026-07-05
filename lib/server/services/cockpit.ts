@@ -29,7 +29,7 @@
 // SERVER ONLY. Node runtime (it reaches pg/Zoho through getCrmRead()).
 import { getCrmRead } from '../crm-read';
 import type { DealRecord, LeadRecord } from '../crm-read';
-import { getSummaries } from './case-summary';
+import { getOrComputeSummary } from './case-summary';
 import { patientSerializer, type PatientRef } from '../privacy';
 import {
   destinationGroupOf,
@@ -696,12 +696,14 @@ async function caseFile(
     .then((read) => read.data)
     .catch(() => [] as string[]);
 
-  // Proactive one-line summary from our own store (the manual "Refresh
-  // summaries" run writes it). Name-seer gated, same as patient data. Best
-  // effort: a summary-store hiccup must never fail the whole case file.
+  // One-line AI summary, name-seer gated. Computed on demand: return the stored
+  // line when the case's state is unchanged, else generate + store one now, so a
+  // case the bulk refresh never covered (e.g. a lead outside the active
+  // population) still shows a real summary the moment it is opened. Best effort:
+  // a model or store hiccup must never fail the whole case file.
   const aiSummary = viewer.sees_patient_names
-    ? await getSummaries([id])
-        .then((m) => m.get(id)?.summary ?? null)
+    ? await getOrComputeSummary(found)
+        .then((s) => s?.summary ?? null)
         .catch(() => null)
     : null;
 

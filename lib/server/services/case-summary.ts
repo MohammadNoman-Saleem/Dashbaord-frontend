@@ -34,12 +34,17 @@ export interface StoredSummary {
   stage_at: string | null;
 }
 
+// Bump when the summary prompt or shape changes: it is part of the fingerprint,
+// so every stored summary recomputes once on next view or refresh rather than
+// serving an old-prompt line forever.
+const SUMMARY_VERSION = 'v2';
+
 /** The state that, if it changes, warrants a fresh read. Only the stage/step -
  *  NOT the SLA clock kind, which ticks over time (due_today -> due_now) and would
  *  churn re-summaries without changing what the summary says (the clock is shown
- *  separately as the due chip). */
+ *  separately as the due chip). The version tag invalidates all on a prompt change. */
 function fingerprint(ctx: TriageContext): string {
-  return `${ctx.stage_or_status ?? ''}|${ctx.step ?? ''}`;
+  return `${ctx.stage_or_status ?? ''}|${ctx.step ?? ''}|${SUMMARY_VERSION}`;
 }
 
 /** Build the de-identified triage context + days-in-stage for a case. */
@@ -63,10 +68,14 @@ function contextOf(c: NormalizedCase): { ctx: TriageContext; daysInStage: number
 }
 
 const SYSTEM = [
-  'You summarise a medical-travel case for a case manager from its STATUS only.',
-  'There is no new patient message. You are given the case status, how many days',
-  'it has sat in its current status, and the SLA clock. Output STRICT JSON:',
-  '{"summary":"<one short line, at most 120 chars, plainly stating where this case stands and why it needs attention>",',
+  'You brief a medical-travel case manager on where one case stands, from its',
+  'STATUS only (no patient message). You get the status, how many days it has sat',
+  'there, and the SLA clock. Write the summary as ONE plain, specific sentence a',
+  'busy manager can act on: name the concrete situation and the single most useful',
+  'next move. Do NOT open with the stage name, do NOT pad with "needs follow-up"',
+  'or "requires attention"; say the actual move (call, re-quote, chase the partner,',
+  'confirm dates, close it out). Output STRICT JSON:',
+  '{"summary":"<one specific sentence, at most 120 chars>",',
   '"suggested_change": null OR one of',
   'for a deal: {"kind":"set_follow_up","date":"YYYY-MM-DD"},{"kind":"move_stage","to_stage":"<one of case.allowed.move_stage_targets>"},',
   'for a lead: {"kind":"set_lead_follow_up","date":"YYYY-MM-DD"},{"kind":"set_lead_status","status":"<one of case.allowed.lead_statuses>"},{"kind":"park_lead","reason":"<short>"},{"kind":"convert_lead","pipeline":"Treatment|Telemedicine","stage":"<one of case.allowed.convert_stages>"},',
@@ -122,6 +131,67 @@ async function runPool<T>(items: T[], n: number, fn: (item: T) => Promise<void>)
   await Promise.all(workers);
 }
 
+/** Upsert one case's computed summary + state fingerprint (one row per case). */
+async function upsertSummary(
+  zohoId: string,
+  fp: string,
+  stageAt: string | null,
+  summary: string | null,
+  suggested: SuggestedChange | null,
+): Promise<void> {
+  await getPool().query(
+    `insert into case_summaries (zoho_id, summary, suggested_change, stage_at, state_fingerprint, model, updated_at)
+     values ($1, $2, $3, $4, $5, $6, now())
+     on conflict (zoho_id) do update set
+       summary = excluded.summary, suggested_change = excluded.suggested_change,
+       stage_at = excluded.stage_at, state_fingerprint = excluded.state_fingerprint,
+       model = excluded.model, updated_at = now()`,
+    [
+      zohoId,
+      summary,
+      suggested ? JSON.stringify(suggested) : null,
+      stageAt,
+      fp,
+      getEnv().BEDROCK_MODEL_ID,
+    ],
+  );
+}
+
+/** The summary for one case on demand: return the stored line when its state
+ *  fingerprint still matches, else compute one now, store it, and return it.
+ *  This is what makes the case file and the extension panel always show a real
+ *  summary, even for a case the bulk refresh never covered (e.g. a lead outside
+ *  the active cockpit population). Returns null when AI is off; throws on a model
+ *  failure so the caller can fall back to no summary. */
+export async function getOrComputeSummary(
+  c: NormalizedCase,
+): Promise<StoredSummary | null> {
+  if (!getEnv().TRIAGE_AI_ENABLED) return null;
+  const { ctx, daysInStage } = contextOf(c);
+  const fp = fingerprint(ctx);
+  const { rows } = await getPool().query<{
+    summary: string | null;
+    suggested_change: SuggestedChange | null;
+    stage_at: string | null;
+    state_fingerprint: string | null;
+  }>(
+    `select summary, suggested_change, stage_at, state_fingerprint
+     from case_summaries where zoho_id = $1`,
+    [c.zoho_id],
+  );
+  const row = rows[0];
+  if (row && row.state_fingerprint === fp && row.summary) {
+    return {
+      summary: row.summary,
+      suggested_change: row.suggested_change,
+      stage_at: row.stage_at,
+    };
+  }
+  const { summary, suggested_change } = await summarizeCase(ctx, daysInStage);
+  await upsertSummary(c.zoho_id, fp, ctx.stage_or_status, summary, suggested_change);
+  return { summary, suggested_change, stage_at: ctx.stage_or_status };
+}
+
 async function readFingerprints(ids: string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map();
   const { rows } = await getPool().query<{ zoho_id: string; state_fingerprint: string | null }>(
@@ -154,29 +224,12 @@ export async function refreshSummaries(
 
   const remaining = Math.max(0, work.length - cap);
   const batch = work.slice(0, cap);
-  const model = getEnv().BEDROCK_MODEL_ID;
-  const pool = getPool();
   let refreshed = 0;
 
   await runPool(batch, concurrency, async (w) => {
     try {
       const { summary, suggested_change } = await summarizeCase(w.ctx, w.daysInStage);
-      await pool.query(
-        `insert into case_summaries (zoho_id, summary, suggested_change, stage_at, state_fingerprint, model, updated_at)
-         values ($1, $2, $3, $4, $5, $6, now())
-         on conflict (zoho_id) do update set
-           summary = excluded.summary, suggested_change = excluded.suggested_change,
-           stage_at = excluded.stage_at, state_fingerprint = excluded.state_fingerprint,
-           model = excluded.model, updated_at = now()`,
-        [
-          w.c.zoho_id,
-          summary,
-          suggested_change ? JSON.stringify(suggested_change) : null,
-          w.ctx.stage_or_status,
-          w.fp,
-          model,
-        ],
-      );
+      await upsertSummary(w.c.zoho_id, w.fp, w.ctx.stage_or_status, summary, suggested_change);
       refreshed += 1;
     } catch {
       // Leave this case for the next refresh; a transient model error should not
