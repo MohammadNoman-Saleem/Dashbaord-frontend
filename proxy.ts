@@ -71,7 +71,7 @@ function redirectToLogin(request: NextRequest, requestId: string) {
    Origin header and pass straight through. The per-route requireViewer is still
    the real auth check; this only adds the response headers a browser needs to
    let the extension read the reply. */
-const CORS_METHODS = "GET, POST, OPTIONS";
+const CORS_METHODS = "GET, POST, DELETE, OPTIONS";
 const CORS_HEADERS = "authorization, content-type, x-request-id, x-mcp-key";
 
 function corsAllowlist(): string[] {
