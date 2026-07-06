@@ -1089,14 +1089,17 @@ export interface TasksData {
 
 // /api/tasks/mine
 // The signed-in person's own open Zoho Projects tasks, for the p-my-tasks home
-// panel. Server resolves the person from the session, filters by their Zoho
-// user id, and sorts overdue first then soonest due. tab and project_id let a
-// row deep link to the board and open the task detail panel. Counts are over
-// the full assigned-open set so the urgency line stays accurate when rows cap.
+// panel. Server resolves the person from the session and filters by their Zoho
+// user id across every project, then splits into two groups for the panel's
+// tabs: "mine" is their work outside Cross-Department, "cross" is their
+// Cross-Department tasks. tab and project_id let a row deep link to the board
+// and open the task detail panel. Group counts are over the full set so the
+// urgency line stays accurate when the rows cap.
 export interface MyTaskRow {
   id: string
   project_id: string
-  tab: 'cross' | 'it'
+  /** The board tab the task's project sits under, for the row's deep link. */
+  tab: 'cross' | 'it' | 'other'
   title: string
   /** "Jul 9", or "No due date" when the task has no end date. */
   due_display: string
@@ -1107,12 +1110,18 @@ export interface MyTaskRow {
   priority: string | null
   status: string
 }
-export interface MyTasksData {
+export interface MyTasksGroup {
   rows: MyTaskRow[]
   overdue_count: number
   due_today_count: number
-  /** Full count of open tasks assigned to the person; rows may be a capped slice. */
+  /** Full count of open tasks in the group; rows may be a capped slice. */
   total: number
+}
+export interface MyTasksData {
+  /** Open tasks assigned to the person outside the Cross-Department project. */
+  mine: MyTasksGroup
+  /** Open tasks assigned to the person in the Cross-Department project. */
+  cross: MyTasksGroup
 }
 
 // /api/brief/latest

@@ -767,7 +767,8 @@ function tasksOwnerOf(task: ZohoProjectTask): string {
 export interface MyTaskRowData {
   id: string;
   project_id: string;
-  tab: 'cross' | 'it';
+  // The board tab the task's project sits under, for the row's deep link.
+  tab: 'cross' | 'it' | 'other';
   title: string;
   due_display: string;
   due_state: 'overdue' | 'today' | 'upcoming' | 'none';
@@ -776,11 +777,19 @@ export interface MyTaskRowData {
   status: string;
 }
 
-export interface MyTasksPayload {
+export interface MyTasksGroupData {
   rows: MyTaskRowData[];
   overdue_count: number;
   due_today_count: number;
   total: number;
+}
+
+// Two groups for the panel's two tabs: "mine" is every open task assigned to
+// the person outside the Cross-Department project (their own work, wherever it
+// lives in Zoho); "cross" is their open tasks in the Cross-Department project.
+export interface MyTasksPayload {
+  mine: MyTasksGroupData;
+  cross: MyTasksGroupData;
 }
 
 // The open task with the fields the my-tasks slice needs before it is shaped
@@ -788,7 +797,7 @@ export interface MyTasksPayload {
 interface MyTaskRaw {
   id: string;
   project_id: string;
-  tab: 'cross' | 'it';
+  tab: 'cross' | 'it' | 'other';
   title: string;
   status: string;
   priority: string | null;
@@ -798,12 +807,13 @@ interface MyTaskRaw {
 
 const MY_TASKS_ROWS_SHOWN = 7;
 
-// The two tracked projects paired with their board tab, so a my-tasks row deep
-// links to the right tab. Sourced from the canonical project constants.
-const MY_TASK_PROJECTS: Array<{ id: string; tab: 'cross' | 'it' }> = [
-  { id: IT_PROJECT.id, tab: 'it' },
-  { id: CROSS_PROJECT.id, tab: 'cross' },
-];
+// A project id to its board tab: the two fixed projects map to their own tab,
+// every other project falls under Other. Drives each my-tasks row's deep link.
+function boardTabForProject(projectId: string): 'cross' | 'it' | 'other' {
+  if (projectId === CROSS_PROJECT.id) return 'cross';
+  if (projectId === IT_PROJECT.id) return 'it';
+  return 'other';
+}
 
 /** Today as the Bahrain civil calendar day (yyyy-mm-dd). A task's due day is
  *  compared against this, so "overdue" and "today" read in Bahrain time, never
@@ -829,6 +839,48 @@ function myTaskDueState(
   if (dueIso < today) return 'overdue';
   if (dueIso === today) return 'today';
   return 'upcoming';
+}
+
+/** Shape one raw open task into a display row against today's Bahrain day. */
+function toMyTaskRow(raw: MyTaskRaw, today: string): MyTaskRowData {
+  const dueState = myTaskDueState(raw.due_iso, today);
+  return {
+    id: raw.id,
+    project_id: raw.project_id,
+    tab: raw.tab,
+    title: raw.title,
+    due_display: raw.due_iso ? tasksDueDisplay(raw.due_iso) : 'No due date',
+    due_state: dueState,
+    overdue_days:
+      dueState === 'overdue' && raw.due_iso
+        ? daysBetweenIso(raw.due_iso, today)
+        : 0,
+    priority: raw.priority,
+    status: raw.status,
+  };
+}
+
+/** Build a tab group from a person's raw tasks: overdue and due-today counts
+ *  over the whole set, then the rows sorted overdue first, soonest due next,
+ *  undated last, capped for the panel. */
+function buildMyTasksGroup(raws: MyTaskRaw[], today: string): MyTasksGroupData {
+  let overdueCount = 0;
+  let dueTodayCount = 0;
+  for (const t of raws) {
+    const state = myTaskDueState(t.due_iso, today);
+    if (state === 'overdue') overdueCount += 1;
+    else if (state === 'today') dueTodayCount += 1;
+  }
+  const rows = [...raws]
+    .sort((a, b) => (a.due_iso ?? '9999').localeCompare(b.due_iso ?? '9999'))
+    .slice(0, MY_TASKS_ROWS_SHOWN)
+    .map((t) => toMyTaskRow(t, today));
+  return {
+    rows,
+    overdue_count: overdueCount,
+    due_today_count: dueTodayCount,
+    total: raws.length,
+  };
 }
 
 export class TasksService {
@@ -875,21 +927,26 @@ export class TasksService {
     );
   }
 
-  /** The signed-in person's own open tasks across the tracked projects, sorted
-   *  overdue first then soonest due. Reuses the same cached Zoho reads as
-   *  board(): the flattened open set is cached once for all assignees and
-   *  filtered per person here, so a per-person cache does not multiply. An empty
-   *  zpuid (a person with no Zoho user) returns an empty payload, not an error. */
+  /** The signed-in person's own open tasks, split into two groups for the
+   *  panel's tabs: "mine" is everything assigned to them outside the
+   *  Cross-Department project (their own work, wherever it lives in Zoho), and
+   *  "cross" is their Cross-Department tasks. Each group is sorted overdue first
+   *  then soonest due. The flattened open set across all projects is cached once
+   *  for all assignees and filtered per person here, so a per-person cache does
+   *  not multiply. An empty zpuid (a person with no Zoho user) returns empty
+   *  groups, not an error. */
   async mine(
     zpuid: string,
   ): Promise<{ data: MyTasksPayload; parts: SourceMeta[] }> {
-    const empty: MyTasksPayload = {
+    const emptyGroup: MyTasksGroupData = {
       rows: [],
       overdue_count: 0,
       due_today_count: 0,
       total: 0,
     };
-    if (!zpuid) return { data: empty, parts: [] };
+    if (!zpuid) {
+      return { data: { mine: emptyGroup, cross: emptyGroup }, parts: [] };
+    }
 
     const read = await this.cache.read(
       'zoho_projects:my-tasks',
@@ -897,75 +954,51 @@ export class TasksService {
       () => this.fetchAllOpenForMine(),
     );
     const today = bahrainTodayIso();
-    const mineAll = read.data.filter((t) => t.owner_zpuid === zpuid);
-
-    let overdueCount = 0;
-    let dueTodayCount = 0;
-    for (const t of mineAll) {
-      const state = myTaskDueState(t.due_iso, today);
-      if (state === 'overdue') overdueCount += 1;
-      else if (state === 'today') dueTodayCount += 1;
-    }
-
-    const rows: MyTaskRowData[] = [...mineAll]
-      // Due soonest first, so overdue leads; undated tasks sink to the end.
-      .sort((a, b) => (a.due_iso ?? '9999').localeCompare(b.due_iso ?? '9999'))
-      .slice(0, MY_TASKS_ROWS_SHOWN)
-      .map((t) => {
-        const dueState = myTaskDueState(t.due_iso, today);
-        return {
-          id: t.id,
-          project_id: t.project_id,
-          tab: t.tab,
-          title: t.title,
-          due_display: t.due_iso ? tasksDueDisplay(t.due_iso) : 'No due date',
-          due_state: dueState,
-          overdue_days:
-            dueState === 'overdue' && t.due_iso
-              ? daysBetweenIso(t.due_iso, today)
-              : 0,
-          priority: t.priority,
-          status: t.status,
-        };
-      });
+    const assigned = read.data.filter((t) => t.owner_zpuid === zpuid);
 
     return {
       data: {
-        rows,
-        overdue_count: overdueCount,
-        due_today_count: dueTodayCount,
-        total: mineAll.length,
+        mine: buildMyTasksGroup(
+          assigned.filter((t) => t.tab !== 'cross'),
+          today,
+        ),
+        cross: buildMyTasksGroup(
+          assigned.filter((t) => t.tab === 'cross'),
+          today,
+        ),
       },
       parts: [read.meta],
     };
   }
 
-  /** The open tasks across the tracked projects carrying the fields the
-   *  my-tasks panel and its deep link need (task id, project id, board tab,
-   *  assignee zpuid, raw due). Cached as one list for all assignees. */
+  /** Every open task in the portal carrying the fields the my-tasks panel and
+   *  its deep link need (task id, project id, board tab, assignee zpuid, raw
+   *  due), across all projects so a person's own-department work is covered
+   *  wherever it lives. Cached as one list for all assignees; a single project's
+   *  read failing drops only that project rather than blanking the panel. */
   private async fetchAllOpenForMine(): Promise<MyTaskRaw[]> {
+    const projects = await this.projects.projects();
     const perProject = await Promise.all(
-      MY_TASK_PROJECTS.map((project) =>
-        this.projects.tasks(project.id).then((tasks) => ({ project, tasks })),
-      ),
+      projects.map(async (p) => {
+        const id = String(p.id_string ?? p.id ?? '');
+        if (!id) return [] as MyTaskRaw[];
+        const tab = boardTabForProject(id);
+        const tasks = await this.projects.tasks(id).catch(() => []);
+        return tasks.filter(isOpen).map(
+          (t): MyTaskRaw => ({
+            id: String(t.id_string ?? t.id ?? ''),
+            project_id: id,
+            tab,
+            title: t.name ?? 'Untitled task',
+            status: t.status?.name ?? 'Open',
+            priority: t.priority ?? null,
+            due_iso: tasksIsoFromZohoDate(t.end_date),
+            owner_zpuid: ownerZpuidOf(t),
+          }),
+        );
+      }),
     );
-    const out: MyTaskRaw[] = [];
-    for (const { project, tasks } of perProject) {
-      for (const t of tasks) {
-        if (!isOpen(t)) continue;
-        out.push({
-          id: String(t.id_string ?? t.id ?? ''),
-          project_id: project.id,
-          tab: project.tab,
-          title: t.name ?? 'Untitled task',
-          status: t.status?.name ?? 'Open',
-          priority: t.priority ?? null,
-          due_iso: tasksIsoFromZohoDate(t.end_date),
-          owner_zpuid: ownerZpuidOf(t),
-        });
-      }
-    }
-    return out;
+    return perProject.flat();
   }
 }
 
