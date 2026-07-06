@@ -963,13 +963,21 @@ export class TasksService {
       return { data: { mine: emptyGroup, cross: emptyGroup }, parts: [] };
     }
 
+    // The cache key carries a shape version. Bumped to v2 when the cached raw
+    // task gained owner_zpuids (all owners) in place of owner_zpuid (first
+    // owner only); a new key forces a fresh fetch rather than reading the old
+    // shape out of the persistent L2 cache and crashing on the missing field.
     const read = await this.cache.read(
-      'zoho_projects:my-tasks',
+      'zoho_projects:my-tasks:v2',
       'zoho_projects',
       () => this.fetchAllOpenForMine(),
     );
     const today = bahrainTodayIso();
-    const assigned = read.data.filter((t) => t.owner_zpuids.includes(zpuid));
+    // Defensive against any legacy-shaped cache entry: a missing owner list
+    // reads as no owners rather than throwing.
+    const assigned = read.data.filter((t) =>
+      (t.owner_zpuids ?? []).includes(zpuid),
+    );
 
     return {
       data: {
