@@ -1,8 +1,8 @@
 // Today's consultations plus recently completed ones, from the
-// Appointment_Bookings custom module. Times render in Asia/Bahrain. Fee
-// state mapping follows the booking Status vocabulary: payment pending is
-// a hold, a confirmed or in-session consult is paid, Done is done. Test
-// bookings (Rate <= 1) are excluded, matching the legacy routes.
+// Appointment_Bookings custom module. Times render in Asia/Bahrain. Each row
+// carries the raw booking Status; the client styles it with
+// appointmentStatusVariant to match the appointments page. Test bookings
+// (Rate <= 1) are excluded, matching the legacy routes.
 //
 // Ported from the NestJS backend src/appointments/appointments.service.ts. The
 // @Injectable AppointmentsService with its CrmReadService and PatientSerializer
@@ -49,7 +49,7 @@ export interface AppointmentRowData {
   patient_name?: string;
   product: string;
   fee_bhd: number;
-  fee_state: 'paid' | 'hold' | 'done';
+  status: string;
 }
 
 export interface AppointmentsPayload {
@@ -72,18 +72,6 @@ function bahrainTime(iso: string | null): string {
     hour: 'numeric',
     minute: '2-digit',
   });
-}
-
-function feeState(status: string | null): 'paid' | 'hold' | 'done' {
-  if (status === 'Done') return 'done';
-  if (
-    status === 'Confirmed' ||
-    status === 'Session Started' ||
-    status === 'Awaiting Review'
-  ) {
-    return 'paid';
-  }
-  return 'hold';
 }
 
 function doctorName(booking: BookingRecord): string {
@@ -136,7 +124,7 @@ function toRow(
     ),
     product: booking.Type ?? 'Consult',
     fee_bhd: booking.Rate ?? 0,
-    fee_state: feeState(booking.Status),
+    status: booking.Status ?? '·',
   };
   return patientSerializer.withName(row, booking.Patient?.name, viewer);
 }

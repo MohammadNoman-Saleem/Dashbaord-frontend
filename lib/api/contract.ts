@@ -442,7 +442,7 @@ export interface AppointmentRow {
   patient_name?: string
   product: string
   fee_bhd: number
-  fee_state: 'paid' | 'hold' | 'done'
+  status: string
 }
 export interface AppointmentsData {
   today: AppointmentRow[]

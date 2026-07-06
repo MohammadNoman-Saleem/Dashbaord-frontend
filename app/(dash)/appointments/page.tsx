@@ -9,7 +9,7 @@ import { MiniBars } from "@/components/charts/MiniBars";
 import { Grid, spans } from "@/components/shell/Grid";
 import { Button } from "@/components/ui/Button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
-import { Chip, type ChipVariant } from "@/components/ui/Chip";
+import { Chip } from "@/components/ui/Chip";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PatientRef } from "@/components/ui/PatientRef";
@@ -27,6 +27,7 @@ import type {
 } from "@/lib/api/contract";
 import { fetchEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
+import { appointmentStatusVariant } from "@/lib/appointmentStatus";
 import { useFocusFlash } from "@/lib/deepLink";
 import { fmtBHD } from "@/lib/format/bhd";
 import { fmtDate } from "@/lib/format/datetime";
@@ -63,16 +64,6 @@ function recentMonths(count: number): { value: string; label: string }[] {
     out.push({ value, label });
   }
   return out;
-}
-
-/* Status to Chip variant. Done reads as good; the in-flight stages read as
-   neutral information; everything else stays muted. There is no red. */
-function statusVariant(status: string): ChipVariant {
-  if (status === "Done") return "good";
-  if (status === "Confirmed" || status === "Session Started" || status === "Awaiting Review") {
-    return "info";
-  }
-  return "mut";
 }
 
 /* Fee text. A zero or negative fee reads as a calm dash, not "BHD 0". */
@@ -173,7 +164,7 @@ const RECENT_COLUMNS: DataTableColumn<AppointmentsAnalyticsRow>[] = [
   {
     key: "status",
     label: "Status",
-    render: (row) => <Chip variant={statusVariant(row.status)}>{row.status}</Chip>,
+    render: (row) => <Chip variant={appointmentStatusVariant(row.status)}>{row.status}</Chip>,
   },
   { key: "fee", label: "Fee BHD", numeric: true, render: (row) => feeCell(row.fee_bhd) },
   {

@@ -1,7 +1,7 @@
 // Fixture for GET /api/appointments. Today's rows plus the most recent done
-// row from the approved mockup's appointments list. Fee states: paid, hold,
-// done. The mockup's "Tomorrow 09:00" row is omitted because the contract
-// shape carries only today and recent_done.
+// row from the approved mockup's appointments list. Each row carries a raw Zoho
+// booking status. The mockup's "Tomorrow 09:00" row is omitted because the
+// contract shape carries only today and recent_done.
 //
 // Privacy: fictional patient names appear only when params.viewer simulates a
 // Fatima or Razan session; the default variant carries the reference only.
@@ -22,7 +22,7 @@ const TODAY = [
     patient_ref: { zoho_id: '0427', initials: 'G' },
     product: 'Novo track, family medicine',
     fee_bhd: 5.0,
-    fee_state: 'paid',
+    status: 'Confirmed',
   },
   {
     id: 'apt-fx-today-2',
@@ -31,7 +31,7 @@ const TODAY = [
     patient_ref: { zoho_id: 'C-205', initials: 'K' },
     product: 'Scheduled, endocrinology',
     fee_bhd: 18.0,
-    fee_state: 'hold',
+    status: 'Pending Payment',
   },
   {
     id: 'apt-fx-today-3',
@@ -40,7 +40,7 @@ const TODAY = [
     patient_ref: { zoho_id: 'C-206', initials: 'L' },
     product: 'Consult Now, dermatology',
     fee_bhd: 9.9,
-    fee_state: 'hold',
+    status: 'Pending',
   },
 ] satisfies AppointmentRow[]
 
@@ -52,7 +52,7 @@ const RECENT_DONE = [
     patient_ref: { zoho_id: 'C-198', initials: 'M' },
     product: 'Scheduled, cardiology',
     fee_bhd: 26.0,
-    fee_state: 'done',
+    status: 'Done',
   },
 ] satisfies AppointmentRow[]
 

@@ -6,34 +6,24 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
-import { Chip, type ChipVariant } from "@/components/ui/Chip";
+import { Chip } from "@/components/ui/Chip";
 import { ListRow } from "@/components/ui/ListRow";
 import { QueryPanel } from "@/components/ui/QueryPanel";
 import { Skeleton } from "@/components/ui/Skeleton";
-import type { AppointmentRow, AppointmentsData } from "@/lib/api/contract";
+import type { AppointmentsData } from "@/lib/api/contract";
 import { fetchEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
+import { appointmentStatusVariant } from "@/lib/appointmentStatus";
 import { buildDeepLink } from "@/lib/deepLink";
 
 /* Home panel p-appointments (spec 02 section 8.1). Today's consultations
-   plus the most recent completed one. Fee state chips: Paid, Hold, Done. */
-
-const FEE_CHIP: Record<AppointmentRow["fee_state"], { label: string; variant: ChipVariant }> = {
-  paid: { label: "Paid", variant: "good" },
-  hold: { label: "Hold", variant: "info" },
-  done: { label: "Done", variant: "good" },
-};
+   plus the most recent completed one. The chip shows the live Zoho booking
+   status, styled by appointmentStatusVariant to match the appointments page. */
 
 /* Consult fees keep one decimal ("BHD 9.9"), matching the mockup list rows.
    Whole-dinar totals elsewhere go through fmtBHD. */
 function fmtFee(n: number): string {
   return `BHD ${n.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
-}
-
-function feePhrase(row: AppointmentRow): string {
-  if (row.fee_state === "paid") return `${fmtFee(row.fee_bhd)} paid`;
-  if (row.fee_state === "hold") return `${fmtFee(row.fee_bhd)} on hold`;
-  return "Completed, fee collected";
 }
 
 function AppointmentsSkeleton() {
@@ -71,8 +61,8 @@ export function AppointmentsPanel({
           variant === "cases"
             ? "Upcoming and just finished."
             : booked != null
-              ? `${booked} booked. Fees hold until both sides join.`
-              : "Fees hold until both sides join."
+              ? `${booked} booked today.`
+              : "Today's bookings."
         }
       />
       <div className="px-[18px] pt-2 pb-4">
@@ -92,13 +82,13 @@ export function AppointmentsPanel({
                 {rows.map((row) => (
                   <ListRow
                     key={row.id}
-                    icon={row.fee_state === "done" ? Check : Calendar}
-                    variant={row.fee_state === "done" ? "good" : "info"}
+                    icon={row.status === "Done" ? Check : Calendar}
+                    variant={row.status === "Done" ? "good" : "info"}
                     title={`${row.time} · ${row.doctor}`}
-                    subtitle={`${row.product} · ${feePhrase(row)}`}
+                    subtitle={`${row.product} · ${fmtFee(row.fee_bhd)}`}
                     right={
-                      <Chip variant={FEE_CHIP[row.fee_state].variant}>
-                        {FEE_CHIP[row.fee_state].label}
+                      <Chip variant={appointmentStatusVariant(row.status)}>
+                        {row.status}
                       </Chip>
                     }
                   />
