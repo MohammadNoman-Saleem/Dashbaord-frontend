@@ -205,6 +205,21 @@ function ownerZpuidOf(task: ZohoProjectTask): string | null {
   return z === undefined || z === null ? null : String(z) || null;
 }
 
+// Every owner's zpuid on a task, as strings. A task can carry several owners;
+// the my-tasks filter matches when the person is any of them, not only the
+// first. Null and blank ids are dropped.
+function ownerZpuidsOf(task: ZohoProjectTask): string[] {
+  const owners = task.details?.owners ?? [];
+  const ids: string[] = [];
+  for (const owner of owners) {
+    const z = owner?.zpuid;
+    if (z === undefined || z === null) continue;
+    const s = String(z);
+    if (s) ids.push(s);
+  }
+  return ids;
+}
+
 function ownerOf(task: ZohoProjectTask): string {
   const owner = task.details?.owners?.[0];
   return owner?.full_name ?? owner?.name ?? 'Unassigned';
@@ -802,7 +817,7 @@ interface MyTaskRaw {
   status: string;
   priority: string | null;
   due_iso: string | null;
-  owner_zpuid: string | null;
+  owner_zpuids: string[];
 }
 
 const MY_TASKS_ROWS_SHOWN = 7;
@@ -954,7 +969,7 @@ export class TasksService {
       () => this.fetchAllOpenForMine(),
     );
     const today = bahrainTodayIso();
-    const assigned = read.data.filter((t) => t.owner_zpuid === zpuid);
+    const assigned = read.data.filter((t) => t.owner_zpuids.includes(zpuid));
 
     return {
       data: {
@@ -993,7 +1008,7 @@ export class TasksService {
             status: t.status?.name ?? 'Open',
             priority: t.priority ?? null,
             due_iso: tasksIsoFromZohoDate(t.end_date),
-            owner_zpuid: ownerZpuidOf(t),
+            owner_zpuids: ownerZpuidsOf(t),
           }),
         );
       }),
