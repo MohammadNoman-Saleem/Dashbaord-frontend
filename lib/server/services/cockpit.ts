@@ -693,6 +693,23 @@ async function caseFile(
 
   const now = new Date();
   const clock = governingClock(found.clockInputs, now);
+  if (process.env.SLA_DEBUG === '1') {
+    // Opt-in diagnostic (SLA_DEBUG=1): what the LIVE, uncached case-file read
+    // resolved for this record and the SLA it computed. The anchor is the
+    // status-change time the clock runs from (a deal's Stage_Entry_Date or a
+    // lead's Last_Status_Change). Compare this line, taken right after a status
+    // write, against the value before the write: if the anchor did not advance,
+    // Zoho had not yet stamped the new status-change time when we read (the
+    // workflow lag hypothesis). No patient values are logged.
+    console.warn(
+      `[sla-debug] caseFile id=${id} type=${found.recordType} ` +
+        `leadStatus=${found.leadStatus ?? '-'} stage=${found.stage ?? '-'} ` +
+        `pipeline=${found.pipeline ?? '-'} step=${found.step} ` +
+        `anchor=${found.clockInputs.statusChange ?? '-'} ` +
+        `created=${found.createdTime ?? '-'} ` +
+        `due="${clock.due_label}" kind=${clock.kind} approx=${clock.approx}`,
+    );
+  }
   const inFunnelDays = found.createdTime
     ? Math.max(
         0,
