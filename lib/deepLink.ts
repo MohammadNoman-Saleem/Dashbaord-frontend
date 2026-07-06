@@ -50,6 +50,26 @@ export function cockpitCaseHref(caseId: string, currentAs?: string): string {
   return `/cockpit?${search.toString()}`
 }
 
+/**
+ * Href that opens a task on the Board view with its detail panel already open.
+ * Sets ?tab= to the board tab, ?project= to the owning project, and ?task= to
+ * the task id, so the board seeds that tab and project and opens the task
+ * detail. Carries the view-as override when given.
+ */
+export function boardTaskHref(
+  tab: string,
+  projectId: string,
+  taskId: string,
+  currentAs?: string,
+): string {
+  const search = new URLSearchParams()
+  search.set('tab', tab)
+  search.set('project', projectId)
+  search.set('task', taskId)
+  if (currentAs) search.set('as', currentAs)
+  return `/board?${search.toString()}`
+}
+
 /* Flash duration matches the .flash animation in app/globals.css (1.6s). */
 const FLASH_MS = 1600
 /* Panels load async (fixture delay today, network later), so the target

@@ -1087,6 +1087,34 @@ export interface TasksData {
   rows: Array<{ title: string; owner: string; status: string; due_display: string }>
 }
 
+// /api/tasks/mine
+// The signed-in person's own open Zoho Projects tasks, for the p-my-tasks home
+// panel. Server resolves the person from the session, filters by their Zoho
+// user id, and sorts overdue first then soonest due. tab and project_id let a
+// row deep link to the board and open the task detail panel. Counts are over
+// the full assigned-open set so the urgency line stays accurate when rows cap.
+export interface MyTaskRow {
+  id: string
+  project_id: string
+  tab: 'cross' | 'it'
+  title: string
+  /** "Jul 9", or "No due date" when the task has no end date. */
+  due_display: string
+  due_state: 'overdue' | 'today' | 'upcoming' | 'none'
+  /** Whole days past due; 0 unless due_state is overdue. */
+  overdue_days: number
+  /** Zoho priority (High/Medium/Low/None) or null when unset. */
+  priority: string | null
+  status: string
+}
+export interface MyTasksData {
+  rows: MyTaskRow[]
+  overdue_count: number
+  due_today_count: number
+  /** Full count of open tasks assigned to the person; rows may be a capped slice. */
+  total: number
+}
+
 // /api/brief/latest
 export interface BriefData {
   compiled_at: string

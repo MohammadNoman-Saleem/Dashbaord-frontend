@@ -7,5 +7,5 @@ export const alsaeed: PersonHomeConfig = {
   name: 'Al Saeed',
   greeting: 'Good morning, Mohammed',
   subtitle: () => 'Platform and agents, current state.',
-  panels: ['p-agents-mini', 'p-tasks', 'p-handoffs'],
+  panels: ['p-agents-mini', 'p-tasks', 'p-handoffs', 'p-my-tasks'],
 }

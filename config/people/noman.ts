@@ -6,5 +6,5 @@ export const noman: PersonHomeConfig = {
   name: 'Noman',
   greeting: 'Good morning, Noman',
   subtitle: () => 'Data health first, then the funnels.',
-  panels: ['p-funnel-mini', 'p-agents-mini', 'p-tasks'],
+  panels: ['p-funnel-mini', 'p-agents-mini', 'p-tasks', 'p-my-tasks'],
 }

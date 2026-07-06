@@ -9,5 +9,5 @@ export const fatima: PersonHomeConfig = {
   // but no endpoint serves that count yet (open backend question; 03 defines
   // no source for it). Static mockup copy until the backend answers it.
   subtitle: () => 'Your morning, sorted. 5 people are waiting to hear from you.',
-  panels: ['p-priorities', 'p-mtl', 'p-appointments', 'p-late'],
+  panels: ['p-priorities', 'p-mtl', 'p-appointments', 'p-late', 'p-my-tasks'],
 }

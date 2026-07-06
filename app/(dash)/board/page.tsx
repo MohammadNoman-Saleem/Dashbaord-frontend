@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import { BoardView } from "@/components/board/BoardView";
@@ -35,9 +36,16 @@ import { useFocusFlash } from "@/lib/deepLink";
 
 export default function BoardPage() {
   useFocusFlash();
-  const [tab, setTab] = useState("cross");
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  /* Seed the tab and project from the URL once, so a deep link (from the My
+     tasks panel) lands on the right board and can open a task. The derived
+     selection below still corrects a project that is not under the seeded tab. */
+  const [tab, setTab] = useState(searchParams.get("tab") ?? "cross");
+  const [projectId, setProjectId] = useState<string | null>(
+    searchParams.get("project"),
+  );
   const [tasklistId, setTasklistId] = useState<string | null>(null);
+  const initialTaskId = searchParams.get("task");
 
   const catalogQuery = useQuery({
     queryKey: qk.boardCatalog(),
@@ -134,6 +142,7 @@ export default function BoardPage() {
           tab={tab}
           projectId={activeProject.id}
           tasklistId={activeTasklistId}
+          initialOpenTaskId={initialTaskId}
         />
       ) : null}
     </div>

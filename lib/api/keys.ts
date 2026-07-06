@@ -50,6 +50,7 @@ export const qk = {
   growth: (section: string) => ['growth', section] as const,
   agents: () => ['agents'] as const,
   tasks: () => ['tasks'] as const,
+  myTasks: (person: string) => ['tasks', 'mine', person] as const,
   board: (tab: string, project: string, tasklist: string) =>
     ['board', tab, project, tasklist] as const,
   boardCatalog: () => ['board', 'catalog'] as const,

@@ -29,6 +29,7 @@ export type PanelId =
   | 'p-funnel-mini'
   | 'p-agents-mini'
   | 'p-tasks'
+  | 'p-my-tasks'
   | 'p-providers'
   | 'p-handoffs'
   | 'p-fin-mini'

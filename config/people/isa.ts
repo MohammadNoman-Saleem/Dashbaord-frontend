@@ -6,5 +6,5 @@ export const isa: PersonHomeConfig = {
   name: 'Isa',
   greeting: 'Good morning, Isa',
   subtitle: () => 'Money in, money owed, and what to chase.',
-  panels: ['p-fin-mini', 'p-revenue', 'p-deliverables-mini'],
+  panels: ['p-fin-mini', 'p-revenue', 'p-deliverables-mini', 'p-my-tasks'],
 }

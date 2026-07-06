@@ -19,5 +19,6 @@ export const khalid: PersonHomeConfig = {
     'p-urgent-mini',
     'p-deliverables-mini',
     'p-late',
+    'p-my-tasks',
   ],
 }

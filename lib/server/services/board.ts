@@ -764,6 +764,73 @@ function tasksOwnerOf(task: ZohoProjectTask): string {
   return fullName ? fullName.split(/\s+/)[0] : 'Unassigned';
 }
 
+export interface MyTaskRowData {
+  id: string;
+  project_id: string;
+  tab: 'cross' | 'it';
+  title: string;
+  due_display: string;
+  due_state: 'overdue' | 'today' | 'upcoming' | 'none';
+  overdue_days: number;
+  priority: string | null;
+  status: string;
+}
+
+export interface MyTasksPayload {
+  rows: MyTaskRowData[];
+  overdue_count: number;
+  due_today_count: number;
+  total: number;
+}
+
+// The open task with the fields the my-tasks slice needs before it is shaped
+// into a row. Internal to the flattened, cached list.
+interface MyTaskRaw {
+  id: string;
+  project_id: string;
+  tab: 'cross' | 'it';
+  title: string;
+  status: string;
+  priority: string | null;
+  due_iso: string | null;
+  owner_zpuid: string | null;
+}
+
+const MY_TASKS_ROWS_SHOWN = 7;
+
+// The two tracked projects paired with their board tab, so a my-tasks row deep
+// links to the right tab. Sourced from the canonical project constants.
+const MY_TASK_PROJECTS: Array<{ id: string; tab: 'cross' | 'it' }> = [
+  { id: IT_PROJECT.id, tab: 'it' },
+  { id: CROSS_PROJECT.id, tab: 'cross' },
+];
+
+/** Today as the Bahrain civil calendar day (yyyy-mm-dd). A task's due day is
+ *  compared against this, so "overdue" and "today" read in Bahrain time, never
+ *  the server's. */
+function bahrainTodayIso(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bahrain' });
+}
+
+/** Whole days from one yyyy-mm-dd calendar day to another, measured at UTC
+ *  midnight so neither the server timezone nor DST shifts the count. */
+function daysBetweenIso(fromIso: string, toIso: string): number {
+  const from = Date.parse(`${fromIso}T00:00:00Z`);
+  const to = Date.parse(`${toIso}T00:00:00Z`);
+  if (Number.isNaN(from) || Number.isNaN(to)) return 0;
+  return Math.round((to - from) / 86_400_000);
+}
+
+function myTaskDueState(
+  dueIso: string | null,
+  today: string,
+): 'overdue' | 'today' | 'upcoming' | 'none' {
+  if (!dueIso) return 'none';
+  if (dueIso < today) return 'overdue';
+  if (dueIso === today) return 'today';
+  return 'upcoming';
+}
+
 export class TasksService {
   constructor(
     private readonly cache: CacheService,
@@ -806,6 +873,99 @@ export class TasksService {
           due_display: tasksDueDisplay(due),
         }))
     );
+  }
+
+  /** The signed-in person's own open tasks across the tracked projects, sorted
+   *  overdue first then soonest due. Reuses the same cached Zoho reads as
+   *  board(): the flattened open set is cached once for all assignees and
+   *  filtered per person here, so a per-person cache does not multiply. An empty
+   *  zpuid (a person with no Zoho user) returns an empty payload, not an error. */
+  async mine(
+    zpuid: string,
+  ): Promise<{ data: MyTasksPayload; parts: SourceMeta[] }> {
+    const empty: MyTasksPayload = {
+      rows: [],
+      overdue_count: 0,
+      due_today_count: 0,
+      total: 0,
+    };
+    if (!zpuid) return { data: empty, parts: [] };
+
+    const read = await this.cache.read(
+      'zoho_projects:my-tasks',
+      'zoho_projects',
+      () => this.fetchAllOpenForMine(),
+    );
+    const today = bahrainTodayIso();
+    const mineAll = read.data.filter((t) => t.owner_zpuid === zpuid);
+
+    let overdueCount = 0;
+    let dueTodayCount = 0;
+    for (const t of mineAll) {
+      const state = myTaskDueState(t.due_iso, today);
+      if (state === 'overdue') overdueCount += 1;
+      else if (state === 'today') dueTodayCount += 1;
+    }
+
+    const rows: MyTaskRowData[] = [...mineAll]
+      // Due soonest first, so overdue leads; undated tasks sink to the end.
+      .sort((a, b) => (a.due_iso ?? '9999').localeCompare(b.due_iso ?? '9999'))
+      .slice(0, MY_TASKS_ROWS_SHOWN)
+      .map((t) => {
+        const dueState = myTaskDueState(t.due_iso, today);
+        return {
+          id: t.id,
+          project_id: t.project_id,
+          tab: t.tab,
+          title: t.title,
+          due_display: t.due_iso ? tasksDueDisplay(t.due_iso) : 'No due date',
+          due_state: dueState,
+          overdue_days:
+            dueState === 'overdue' && t.due_iso
+              ? daysBetweenIso(t.due_iso, today)
+              : 0,
+          priority: t.priority,
+          status: t.status,
+        };
+      });
+
+    return {
+      data: {
+        rows,
+        overdue_count: overdueCount,
+        due_today_count: dueTodayCount,
+        total: mineAll.length,
+      },
+      parts: [read.meta],
+    };
+  }
+
+  /** The open tasks across the tracked projects carrying the fields the
+   *  my-tasks panel and its deep link need (task id, project id, board tab,
+   *  assignee zpuid, raw due). Cached as one list for all assignees. */
+  private async fetchAllOpenForMine(): Promise<MyTaskRaw[]> {
+    const perProject = await Promise.all(
+      MY_TASK_PROJECTS.map((project) =>
+        this.projects.tasks(project.id).then((tasks) => ({ project, tasks })),
+      ),
+    );
+    const out: MyTaskRaw[] = [];
+    for (const { project, tasks } of perProject) {
+      for (const t of tasks) {
+        if (!isOpen(t)) continue;
+        out.push({
+          id: String(t.id_string ?? t.id ?? ''),
+          project_id: project.id,
+          tab: project.tab,
+          title: t.name ?? 'Untitled task',
+          status: t.status?.name ?? 'Open',
+          priority: t.priority ?? null,
+          due_iso: tasksIsoFromZohoDate(t.end_date),
+          owner_zpuid: ownerZpuidOf(t),
+        });
+      }
+    }
+    return out;
   }
 }
 

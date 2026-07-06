@@ -23,6 +23,7 @@ import { FunnelMiniPanel } from '@/components/panels/FunnelMini'
 import { HandoffsPanel } from '@/components/panels/Handoffs'
 import { LatePanel } from '@/components/panels/Late'
 import { MtlMiniPanel } from '@/components/panels/MtlMini'
+import { MyTasksPanel } from '@/components/panels/MyTasks'
 import { PrioritiesPanel } from '@/components/panels/Priorities'
 import { ProvidersPanel } from '@/components/panels/Providers'
 import { RevenuePanel } from '@/components/panels/Revenue'
@@ -50,6 +51,7 @@ export const PANEL_REGISTRY: Record<PanelId, PanelRegistration> = {
   'p-funnel-mini': { Component: FunnelMiniPanel, span: 'c6' },
   'p-agents-mini': { Component: AgentsMiniPanel, span: 'c6' },
   'p-tasks': { Component: TasksPanel, span: 'c6' },
+  'p-my-tasks': { Component: MyTasksPanel, span: 'c6' },
   'p-providers': { Component: ProvidersPanel, span: 'c6' },
   'p-handoffs': { Component: HandoffsPanel, span: 'c6' },
   'p-fin-mini': { Component: FinMiniPanel, span: 'c6' },

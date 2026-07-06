@@ -52,6 +52,7 @@ export type EndpointKey =
   | 'growth_retention'
   | 'agents'
   | 'tasks'
+  | 'my_tasks'
   | 'board'
   | 'board_task_detail'
   | 'board_assignable_users'
@@ -132,6 +133,9 @@ export const ENDPOINT_MODES: Record<EndpointKey, EndpointMode> = {
   growth_retention: 'live',
   agents: 'live',
   tasks: 'live',
+  // The signed-in person's own open tasks (p-my-tasks panel). Live with the
+  // route on this branch; the fixture serves dev smoke until the API is up.
+  my_tasks: 'live',
   board: 'live',
   // The two new board GET keys go live with the backend on this branch. The
   // fixtures stay type-aligned and serve dev smoke until the API is up. The

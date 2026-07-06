@@ -59,15 +59,24 @@ type BoardViewProps = {
   tab: string;
   projectId: string;
   tasklistId: string | null;
+  /** When set (from a deep link), open this task's detail panel on mount. */
+  initialOpenTaskId?: string | null;
 };
 
-export function BoardView({ tab, projectId, tasklistId }: BoardViewProps) {
+export function BoardView({
+  tab,
+  projectId,
+  tasklistId,
+  initialOpenTaskId,
+}: BoardViewProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
 
   const [assigneeFilter, setAssigneeFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
-  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(
+    initialOpenTaskId ?? null,
+  );
   const [addOpen, setAddOpen] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
 

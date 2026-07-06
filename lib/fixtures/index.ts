@@ -49,6 +49,7 @@ import { fixture as kpiTeamSummaryFixture } from './kpi-team-summary'
 import { fixture as leadsMedicalTravelFixture } from './leads-medical-travel'
 import { fixture as marketingFixture } from './marketing'
 import { fixture as meFixture } from './me'
+import { fixture as myTasksFixture } from './my-tasks'
 import { summaryFixture, bookingsFixture, rulesFixture } from './payouts'
 import { fixture as pipelineHealthFixture } from './pipeline-health'
 import { fixture as pipelineLossesFixture } from './pipeline-losses'
@@ -125,6 +126,7 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
   growth_retention: growthRetentionFixture,
   agents: agentsFixture,
   tasks: tasksFixture,
+  my_tasks: myTasksFixture,
   board: boardFixture,
   board_task_detail: boardTaskDetailFixture,
   board_assignable_users: boardAssignableUsersFixture,

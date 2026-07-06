@@ -6,5 +6,5 @@ export const afaf: PersonHomeConfig = {
   name: 'Afaf',
   greeting: 'Good morning, Afaf',
   subtitle: () => 'Your channels this week, and what needs a decision.',
-  panels: ['p-channels', 'p-mtl', 'p-deliverables-mini', 'p-late'],
+  panels: ['p-channels', 'p-mtl', 'p-deliverables-mini', 'p-late', 'p-my-tasks'],
 }

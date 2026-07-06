@@ -6,5 +6,5 @@ export const aziz: PersonHomeConfig = {
   name: 'Aziz',
   greeting: 'Good morning, Aziz',
   subtitle: () => 'Handoffs, SLAs, and what is slipping.',
-  panels: ['p-blockers', 'p-handoffs', 'p-urgent-mini', 'p-brief'],
+  panels: ['p-blockers', 'p-handoffs', 'p-urgent-mini', 'p-brief', 'p-my-tasks'],
 }

@@ -6,5 +6,5 @@ export const razan: PersonHomeConfig = {
   name: 'Dr. Razan',
   greeting: 'Good morning, Razan',
   subtitle: () => "Today's clinic view: consults, providers, and follow-ups.",
-  panels: ['p-providers', 'p-mtl', 'p-appointments', 'p-late'],
+  panels: ['p-providers', 'p-mtl', 'p-appointments', 'p-late', 'p-my-tasks'],
 }
