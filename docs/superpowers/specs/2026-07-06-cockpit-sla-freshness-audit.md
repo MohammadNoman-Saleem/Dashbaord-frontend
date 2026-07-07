@@ -1,8 +1,10 @@
 # Cockpit stale-after-write audit (SLA / next action reverts on refresh)
 
-Date: 2026-07-06
+Date: 2026-07-06 (resolved 2026-07-07)
 Branch: `debug/cockpit-sla-freshness`
-Status: investigating (root cause not yet confirmed; no fix applied)
+Status: RESOLVED. Two separate causes confirmed and fixed, plus a related cache
+race. See "Resolution (2026-07-07)" at the end. The original ranked hypotheses
+below are kept for the record; note the correction to item 3 under "Confirmed".
 
 ## Symptom
 
@@ -39,8 +41,12 @@ anchor or the OLD status.
    from the cached anchor.
 3. Every cockpit write handler writes to Zoho and then calls
    `getCrmRead().invalidate()` (`lib/server/services/cockpit-write.ts`, six
-   sites). There is no missing-invalidation bug, and the cockpit adds no cache
-   layer of its own.
+   sites). CORRECTION (2026-07-07): the call is made, but it busted the WRONG
+   key. `deals()` reads under `zoho_crm:deals_v10` while `invalidate()` deleted
+   `zoho_crm:deals_v9` (the pre-bump key), and `cache.invalidate` matches by
+   exact key, so deal writes never cleared the deals list. That is a real
+   missing-invalidation bug for deals; this original claim was wrong. Leads were
+   consistent (`leads_v7` both sides).
 4. The cache is two-tier (`lib/server/cache.ts`): a per-instance in-memory L1
    and a shared L2 in Postgres (`cache_entries`). `invalidate()` clears the
    writing instance's L1 and deletes the shared L2 row, but cannot reach any
@@ -120,3 +126,55 @@ at cause 2 (or a failing L2 delete).
 
 No fix is applied on this branch. This is the audit and the validation
 harness only.
+
+## Resolution (2026-07-07)
+
+The reported symptom was two different problems reported as one, and only one of
+them was a cache issue.
+
+1. Deal status changes looked stale on refresh: a real cache-invalidation bug.
+   `deals()` reads/writes `zoho_crm:deals_v10` but `invalidate()` deleted
+   `zoho_crm:deals_v9` (the read key was bumped v9 to v10 per the
+   2026-06-29 design spec; the invalidate call was not). Since `cache.invalidate`
+   matches by exact key, no deal write ever busted the deals list, so
+   `queue()` / `parked()` served the pre-write deals (and their SLA) for up to
+   the 10-minute `zoho_crm` TTL, on a single instance and on Vercel. This is
+   distinct from, and larger than, the cross-instance L1 hypothesis (cause 1),
+   because it fails even locally. Fix: the invalidate now busts `deals_v10` (and
+   `leads_v8`), and a comment ties the keys together. The single-case file was
+   never affected: it reads live via `dealById` / `leadById`.
+
+2. Setting a follow-up date still showed "due now": NOT a cache issue at all.
+   `governingClock` never read `Next_Follow_up`, so the follow-up date had no
+   effect on the SLA "due" and a case past its step threshold stayed "due now"
+   regardless of the follow-up saved. Product decision (Mohammad, 2026-07-07):
+   a set follow-up date OVERRIDES the status clock for any active case and
+   becomes the single "when to act next" indicator (flowing through the label,
+   the due-now / due-today tiles, and the queue sort). Format: passed = "Due
+   now"; under 24h = hours ("In 7h"); else short date ("Jul 12"). The follow-up
+   is a calendar date, so its time of day is taken from the record's
+   `Modified_Time` (when the follow-up was saved), read in Bahrain; `Leads` did
+   not carry that field in the cached read, so it was added (leads key v7 to v8).
+   Parked cases ignore the follow-up. Behavior implication accepted by the team:
+   a future follow-up pulls a case off the due-now list (an intentional snooze).
+
+3. Related cache race, fixed defensively. Even with a correct key, `read()`
+   serves a stale hit and fires a background revalidation whose upstream snapshot
+   can predate a concurrent write, then writes it back AFTER that write's
+   `invalidate()` cleared the entry, resurrecting the stale value for a full TTL.
+   Fix: a per-key generation counter in `CacheService`; `invalidate()` bumps it,
+   and both fetch-then-write paths (cold miss and background revalidation) refuse
+   to persist a snapshot whose generation changed while they were fetching.
+
+Not changed (secondary, still true): a lead's live case-file SLA can be briefly
+wrong right after a status change because its anchor (`Last_Status_Change`) is
+stamped by an async Zoho workflow, not by our write; and on Vercel other warm
+instances still serve their own L1 list until the TTL (cause 1). Neither was the
+primary reported symptom; both are noted for follow-up if they surface.
+
+Verification: `scripts/verify-followup-sla.mjs` compiles the pure `sla.ts` and
+asserts the follow-up override end to end against the real engine (10 checks).
+`scripts/validate-cache-cross-instance.mjs` updated to the live `deals_v10` key.
+`npm run ci` passes (dash / red / hype / patient checks, typecheck, lint). The
+cache generation guard is covered by review and typecheck (CacheService is not
+standalone-compilable and its timing is not easily driven without a harness).

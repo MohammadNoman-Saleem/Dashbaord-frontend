@@ -36,6 +36,11 @@ export interface CachedRead<T> {
 export class CacheService {
   private readonly l1 = new Map<string, L1Entry>();
   private readonly inflight = new Map<string, Promise<void>>();
+  // Per-key generation counter. invalidate() bumps it; a fetch (cold miss or
+  // background revalidation) captures it before fetching and refuses to write
+  // its result back if it changed meanwhile, so a snapshot that predates a
+  // write cannot repopulate the cache after that write's invalidate cleared it.
+  private readonly generation = new Map<string, number>();
 
   constructor(private readonly pool: Pool) {}
 
@@ -69,9 +74,15 @@ export class CacheService {
     }
 
     // Cold miss: nothing to serve, block on the upstream once.
+    const generation = this.generation.get(key) ?? 0;
     const data = await fetcher();
     const fetchedAt = new Date();
-    await this.write(key, source, data, fetchedAt);
+    // If an invalidate ran while this fetch was in flight, the snapshot may
+    // predate the write that triggered it; return it to this caller but do not
+    // persist it. The next read cold-misses again and refetches fresh.
+    if ((this.generation.get(key) ?? 0) === generation) {
+      await this.write(key, source, data, fetchedAt);
+    }
     return this.hit<T>(data, fetchedAt, false);
   }
 
@@ -111,6 +122,9 @@ export class CacheService {
    *  instead of serving the pre-write payload for a full TTL. */
   async invalidate(key: string): Promise<void> {
     this.l1.delete(key);
+    // Bump the generation so any fetch that started before this invalidate
+    // cannot write its now-stale snapshot back after we clear both tiers.
+    this.generation.set(key, (this.generation.get(key) ?? 0) + 1);
     try {
       await this.pool.query('delete from cache_entries where key = $1', [key]);
     } catch (err) {
@@ -178,11 +192,16 @@ export class CacheService {
     fetcher: () => Promise<unknown>,
   ): void {
     if (this.inflight.has(key)) return;
+    const generation = this.generation.get(key) ?? 0;
     const job = (async () => {
       try {
         const data = await fetcher();
         const source = this.sourceOf(key);
-        if (source) await this.write(key, source, data);
+        // Drop the write if an invalidate ran during the fetch: the snapshot may
+        // predate the write, and writing it would resurrect the stale value.
+        if (source && (this.generation.get(key) ?? 0) === generation) {
+          await this.write(key, source, data);
+        }
       } catch (err) {
         console.warn(
           `revalidation failed for ${key}, keeping stale entry: ${err instanceof Error ? err.message : String(err)}`,

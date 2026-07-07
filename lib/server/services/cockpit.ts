@@ -370,6 +370,10 @@ function fromDeal(d: DealRecord): NormalizedCase {
       // A deal's status-change time is Zoho's Stage_Entry_Date.
       statusChange: d.Stage_Entry_Date,
       createdTime: d.Created_Time,
+      // A set follow-up date overrides the status clock; its time of day comes
+      // from Modified_Time (when the follow-up was saved).
+      nextFollowUp: d.Next_Follow_up,
+      modifiedTime: d.Modified_Time,
     },
   };
 }
@@ -415,6 +419,10 @@ function fromLead(l: LeadRecord): NormalizedCase {
       // the Zoho workflow); null on older leads, where the clock uses created.
       statusChange: l.Last_Status_Change,
       createdTime: l.Created_Time,
+      // A set follow-up date overrides the status clock; its time of day comes
+      // from Modified_Time (when the follow-up was saved).
+      nextFollowUp: l.Next_Follow_up,
+      modifiedTime: l.Modified_Time,
     },
   };
 }
@@ -843,6 +851,8 @@ function nextActionLine(step: CockpitStep): string {
 function slaRuleText(slaKey: string): string {
   // Treatment has no active SLA clock; say so plainly rather than show a rule.
   if (slaKey === 'in_treatment') return 'In treatment, no active SLA clock';
+  // A manually set follow-up date governs, not one of the policy rules.
+  if (slaKey === 'follow_up') return 'Follow-up date set for this case';
   const all = [...SLA_POLICY.patient, ...SLA_POLICY.provider];
   const row = all.find((r) => r.key === slaKey);
   return row ? `${row.rule}, ${row.threshold_label}` : 'No SLA rule';

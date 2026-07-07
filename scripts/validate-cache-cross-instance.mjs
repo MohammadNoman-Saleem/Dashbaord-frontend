@@ -49,7 +49,7 @@ class Instance {
   }
 }
 
-const KEY = 'zoho_crm:deals_v9';
+const KEY = 'zoho_crm:deals_v10'; // the live deals read/invalidate key
 const TTL = 10 * 60 * 1000; // zoho_crm TTL, 10 minutes, from sources.ts.
 const t0 = 0;
 const failures = [];

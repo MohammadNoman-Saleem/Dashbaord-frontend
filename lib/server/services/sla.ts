@@ -65,7 +65,10 @@ export type SlaKey =
   | 'not_qualified'
   | 'in_treatment'
   | 'provider_quote_followup'
-  | 'provider_more_time_followup';
+  | 'provider_more_time_followup'
+  // A manually set next-follow-up date governing the clock instead of the
+  // status-based rule. Not a policy row: it is the case manager's own date.
+  | 'follow_up';
 
 export type ClockTone = 'warn' | 'info' | 'good' | 'mut';
 export type ClockKind = 'due_now' | 'due_today' | 'soon' | 'on_track';
@@ -422,6 +425,16 @@ export interface ClockInputs {
   /** Created time, the only fallback when statusChange is absent (older records
    *  from before the status-change field was populated). */
   createdTime: string | null;
+  /** A manually set next-follow-up date (Next_Follow_up, a calendar date
+   *  YYYY-MM-DD), or null. When present on an ACTIVE case it OVERRIDES the
+   *  status clock: it is the case manager's stated next-action time, so it
+   *  becomes the one "when to act next" indicator (and flows through the queue
+   *  sort and the due-now / due-today tiles). Parked cases ignore it. */
+  nextFollowUp: string | null;
+  /** The record's Modified_Time (ISO), used ONLY as the time of day for a
+   *  follow-up date, since Next_Follow_up carries no time. It is the moment the
+   *  follow-up was saved; read in Bahrain. Null falls back to 09:00 Bahrain. */
+  modifiedTime: string | null;
 }
 
 function parse(value: string | null): Date | null {
@@ -470,11 +483,86 @@ function classify(
   return { kind: 'on_track', tone: 'good', due_label: aheadLabel(remaining) };
 }
 
+// Combine a follow-up calendar date (YYYY-MM-DD) with the Bahrain-local time of
+// day the follow-up was saved (the record's Modified_Time), into a single
+// instant. Next_Follow_up carries no time, so the modified time supplies the
+// hour, which lets a follow-up under 24 hours away be shown in hours. Bahrain is
+// UTC+3 with no daylight saving. Returns null on an unparseable date. When no
+// modified time is available the follow-up is anchored at 09:00 Bahrain (the
+// start of the working day) rather than midnight.
+function followUpInstant(dateStr: string, modifiedIso: string | null): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr.trim());
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  let hour = 9;
+  let minute = 0;
+  let second = 0;
+  const mod = modifiedIso ? new Date(modifiedIso) : null;
+  if (mod && !Number.isNaN(mod.getTime())) {
+    const bahrain = new Date(mod.getTime() + BAHRAIN_OFFSET_MS);
+    hour = bahrain.getUTCHours();
+    minute = bahrain.getUTCMinutes();
+    second = bahrain.getUTCSeconds();
+  }
+  // Bahrain-local (year-month-day hour:minute:second) to a UTC instant: subtract
+  // the +3 offset. Date.UTC normalizes a negative hour by rolling the day back.
+  return new Date(Date.UTC(year, month - 1, day, hour - 3, minute, second));
+}
+
+// The follow-up date rendered as a short "Jul 12" (month and day in Bahrain),
+// matching the cockpit date format. Used for a follow-up more than a day out.
+function followUpDateLabel(instant: Date): string {
+  return instant.toLocaleDateString('en-US', {
+    timeZone: 'Asia/Bahrain',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+// The clock when a manual follow-up governs. Kind and tone come from the shared
+// classify() (so it sorts and tiles exactly like a status clock), and only the
+// label is tailored: "Due now" once past, hours when under a day out, else the
+// short date. approx is false; this is an exact date the case manager set.
+function followUpClock(instant: Date, now: Date): ClockResult {
+  const c = classify(instant, now);
+  const remaining = instant.getTime() - now.getTime();
+  let due_label: string;
+  if (remaining <= 0) {
+    due_label = 'Due now';
+  } else if (remaining < DAY_MS) {
+    // Under 24 hours: reuse classify's hour label ("Within the hour" / "In Nh").
+    due_label = c.due_label;
+  } else {
+    due_label = followUpDateLabel(instant);
+  }
+  return {
+    sla_key: 'follow_up',
+    due_label,
+    tone: c.tone,
+    kind: c.kind,
+    approx: false,
+    reason: null,
+  };
+}
+
 /** Compute the governing clock for a row from its step and the time it entered
  *  its current status/stage. Every active step runs from one anchor: the
  *  statusChange time, with the created time as the only fallback (marked approx
- *  when used). No manual event stamps are read. */
+ *  when used). No manual event stamps are read.
+ *
+ *  Exception: a manually set next-follow-up date OVERRIDES the status clock for
+ *  any active (non-parked) case. It is the case manager's stated next-action
+ *  time, so it becomes the single "when to act next" indicator and drives the
+ *  queue sort and the due-now / due-today tiles the same way a status clock
+ *  would. Parked cases keep their parked state. */
 export function governingClock(inputs: ClockInputs, now: Date): ClockResult {
+  if (inputs.step !== 'parked' && inputs.nextFollowUp) {
+    const instant = followUpInstant(inputs.nextFollowUp, inputs.modifiedTime);
+    if (instant) return followUpClock(instant, now);
+  }
+
   const t = SLA_POLICY.thresholds;
   const precise = parse(inputs.statusChange);
   const created = parse(inputs.createdTime);
