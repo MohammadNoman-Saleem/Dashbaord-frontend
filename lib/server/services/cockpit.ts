@@ -375,6 +375,10 @@ function fromDeal(d: DealRecord): NormalizedCase {
       // A deal's status-change time is Zoho's Stage_Entry_Date.
       statusChange: d.Stage_Entry_Date,
       createdTime: d.Created_Time,
+      // A set follow-up date overrides the status clock; its time of day comes
+      // from Modified_Time (when the follow-up was saved).
+      nextFollowUp: d.Next_Follow_up,
+      modifiedTime: d.Modified_Time,
     },
   };
 }
@@ -420,6 +424,10 @@ function fromLead(l: LeadRecord): NormalizedCase {
       // the Zoho workflow); null on older leads, where the clock uses created.
       statusChange: l.Last_Status_Change,
       createdTime: l.Created_Time,
+      // A set follow-up date overrides the status clock; its time of day comes
+      // from Modified_Time (when the follow-up was saved).
+      nextFollowUp: l.Next_Follow_up,
+      modifiedTime: l.Modified_Time,
     },
   };
 }
@@ -709,6 +717,23 @@ async function caseFile(
 
   const now = new Date();
   const clock = governingClock(found.clockInputs, now);
+  if (process.env.SLA_DEBUG === '1') {
+    // Opt-in diagnostic (SLA_DEBUG=1): what the LIVE, uncached case-file read
+    // resolved for this record and the SLA it computed. The anchor is the
+    // status-change time the clock runs from (a deal's Stage_Entry_Date or a
+    // lead's Last_Status_Change). Compare this line, taken right after a status
+    // write, against the value before the write: if the anchor did not advance,
+    // Zoho had not yet stamped the new status-change time when we read (the
+    // workflow lag hypothesis). No patient values are logged.
+    console.warn(
+      `[sla-debug] caseFile id=${id} type=${found.recordType} ` +
+        `leadStatus=${found.leadStatus ?? '-'} stage=${found.stage ?? '-'} ` +
+        `pipeline=${found.pipeline ?? '-'} step=${found.step} ` +
+        `anchor=${found.clockInputs.statusChange ?? '-'} ` +
+        `created=${found.createdTime ?? '-'} ` +
+        `due="${clock.due_label}" kind=${clock.kind} approx=${clock.approx}`,
+    );
+  }
   const inFunnelDays = found.createdTime
     ? Math.max(
         0,
@@ -843,6 +868,8 @@ function nextActionLine(step: CockpitStep): string {
 function slaRuleText(slaKey: string): string {
   // Treatment has no active SLA clock; say so plainly rather than show a rule.
   if (slaKey === 'in_treatment') return 'In treatment, no active SLA clock';
+  // A manually set follow-up date governs, not one of the policy rules.
+  if (slaKey === 'follow_up') return 'Follow-up date set for this case';
   const all = [...SLA_POLICY.patient, ...SLA_POLICY.provider];
   const row = all.find((r) => r.key === slaKey);
   return row ? `${row.rule}, ${row.threshold_label}` : 'No SLA rule';

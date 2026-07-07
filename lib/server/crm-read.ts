@@ -96,6 +96,10 @@ export interface LeadRecord {
   Lead_Source: string | null;
   Lead_Status: string | null;
   Created_Time: string | null;
+  /** Last modified time. Used only as the time of day for a Next_Follow_up date
+   *  (which carries no time), so the cockpit follow-up clock can show a
+   *  same-day follow-up in hours. Deals already carried Modified_Time. */
+  Modified_Time: string | null;
   /** Whether the lead has been converted to a deal. The live Leads module
    *  carries this as api_name Converted__s (label "Is Converted"); the bare
    *  "Converted" name does not exist, so the read requests Converted__s and this
@@ -284,7 +288,7 @@ const DEAL_FIELDS =
   'Zoho_ID,Deal_Name,Stage,Amount,Pipeline,Created_Time,Modified_Time,Contact_Name,Next_Follow_up,Owner,Lead_Source,Layout,Prefered_Country_of_Treatment_Consultation,Country,Closing_Date,Probability,Reason_For_Loss__s,Stage_Entry_Date,Last_Patient_Comm_Date,Welcome_Message_Sent_Date,Main_Concern_Reason_for_Consultation,Reason_Not_Qualified,Last_Activity_Time,Intro_Call_Date_Time,Patient_Budget,Treatment_Start_Date,Treatment_End_Date,Patient_Mobile,Tag';
 
 const LEAD_FIELDS =
-  'Zoho_ID,First_Name,Last_Name,Email,Lead_Source,Lead_Status,Created_Time,Converted__s,Layout,Owner,Last_Activity_Time,Last_Status_Change,Intro_Call_Date_Time,Reason_Not_Qualified,Main_Concern_Reason_for_Consultation,Prefered_Country_of_Treatment_Consultation,Country,Phone,Communication_Language,Next_Follow_up';
+  'Zoho_ID,First_Name,Last_Name,Email,Lead_Source,Lead_Status,Created_Time,Modified_Time,Converted__s,Layout,Owner,Last_Activity_Time,Last_Status_Change,Intro_Call_Date_Time,Reason_Not_Qualified,Main_Concern_Reason_for_Consultation,Prefered_Country_of_Treatment_Consultation,Country,Phone,Communication_Language,Next_Follow_up';
 
 // True when a Zoho GET by id came back as "no such record". A missing single
 // record answers 204 (the client returns an empty body for it, so data is just
@@ -314,10 +318,10 @@ export class CrmReadService {
   }
 
   leads(): Promise<CachedRead<LeadRecord[]>> {
-    // Key bumped to v7 when Next_Follow_up was added, so a warm v6 entry
-    // (without the field) can never be served against the new shape. (v6 added
-    // Last_Status_Change.)
-    return this.cache.read('zoho_crm:leads_v7', 'zoho_crm', async () => {
+    // Key bumped to v8 when Modified_Time was added (the follow-up clock's time
+    // of day), so a warm v7 entry (without the field) can never be served
+    // against the new shape. (v7 added Next_Follow_up; v6 Last_Status_Change.)
+    return this.cache.read('zoho_crm:leads_v8', 'zoho_crm', async () => {
       const records = await this.zoho.getAll(`${CRM}/Leads`, {
         fields: LEAD_FIELDS,
       });
@@ -392,9 +396,13 @@ export class CrmReadService {
    *  Zoho so the next read serves live Zoho data, not the pre-write cache that
    *  would otherwise be served until the TTL expires. */
   async invalidate(): Promise<void> {
+    // These MUST match the live read keys above (deals_v10, leads_v8). They
+    // drifted once: the deals read was bumped v9 -> v10 but this invalidate was
+    // left at v9, so deal writes silently stopped busting the deals list and the
+    // queue served pre-write data for a full TTL. Keep them in lockstep.
     await Promise.all([
-      this.cache.invalidate('zoho_crm:deals_v9'),
-      this.cache.invalidate('zoho_crm:leads_v7'),
+      this.cache.invalidate('zoho_crm:deals_v10'),
+      this.cache.invalidate('zoho_crm:leads_v8'),
     ]);
   }
 
