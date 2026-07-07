@@ -40,6 +40,7 @@ import {
   NOVO_CTA_KNOWN_VALUES,
   NOVO_CTA_PROPERTY,
   NOVO_GROUP_FUNNELS,
+  NOVO_DIRECT_BENCHMARKS,
   NOVO_LANDING_EVENT,
   NOVO_UTM_PROPERTY,
   PAGE_VIEW_EVENTS,
@@ -51,10 +52,23 @@ import {
 
 // -- Payload shapes (mirrored by saleem-web lib/api/contract.ts) --
 
+/** The reporting-period presets the funnel tabs switch between; each resolves
+ *  to a Mixpanel from/to window. Mirrored by lib/api/contract.ts. */
+export type FunnelPeriod = 'mtd' | 'qtd' | 'ytd' | 'all';
+
 export interface FunnelStepData {
   label: string;
   count: number;
   pct_of_first: number;
+}
+
+/** A saved funnel rendered with a name, for the Novo tab's Novo and Direct
+ *  comparison grids. */
+export interface NamedFunnelPayload {
+  key: string;
+  label: string;
+  steps: FunnelStepData[];
+  end_to_end_pct: number;
 }
 
 export interface FunnelGeneralPayload {
@@ -97,7 +111,8 @@ export interface FunnelNovoPayload {
     real_consults: { value: number | null; chip: 'verified' };
     bmi_checks: { value: number };
   };
-  funnel: FunnelStepData[];
+  novo_funnels: NamedFunnelPayload[];
+  direct_benchmarks: NamedFunnelPayload[];
   ctas_by_type: Array<{
     label: string;
     count: number;
@@ -191,6 +206,12 @@ const REAL_CONSULTS_PENDING_REASON: ReasonDto = {
 
 // -- Date helpers --
 
+const BAHRAIN_TZ = 'Asia/Bahrain';
+
+// The analytics floor for "all time": a day before any Saleem Mixpanel data
+// exists, so an all-time window spans everything the project has recorded.
+const ALL_TIME_FLOOR = '2023-01-01';
+
 function toYmd(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
@@ -201,10 +222,45 @@ function daysAgo(n: number): Date {
   return d;
 }
 
-function monthToDate(): { from_date: string; to_date: string } {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { from_date: toYmd(start), to_date: toYmd(now) };
+// Today's Bahrain calendar day as YYYY-MM-DD, split into its year and month
+// parts. The period boundaries are computed from the Bahrain day so the
+// reporting window matches the Appointments page, never the server's clock.
+function bahrainToday(): { year: number; month: number; day: string } {
+  const day = new Date().toLocaleDateString('en-CA', { timeZone: BAHRAIN_TZ });
+  const [year, month] = day.split('-').map((n) => Number(n));
+  return { year, month, day };
+}
+
+// The Mixpanel from/to window for a reporting period, all in Bahrain time. mtd
+// is the first of the current month, qtd the first of the current quarter, ytd
+// January 1, all the analytics floor. to_date is always today.
+function resolvePeriod(period: FunnelPeriod): {
+  from_date: string;
+  to_date: string;
+} {
+  const { year, month, day } = bahrainToday();
+  if (period === 'all') return { from_date: ALL_TIME_FLOOR, to_date: day };
+  if (period === 'ytd') return { from_date: `${year}-01-01`, to_date: day };
+  if (period === 'qtd') {
+    const quarterMonth = Math.floor((month - 1) / 3) * 3 + 1;
+    return {
+      from_date: `${year}-${String(quarterMonth).padStart(2, '0')}-01`,
+      to_date: day,
+    };
+  }
+  // mtd
+  return {
+    from_date: `${year}-${String(month).padStart(2, '0')}-01`,
+    to_date: day,
+  };
+}
+
+// Parse the ?period= query value, falling back to mtd for anything unknown so a
+// bad or missing param lands on the same default the page shows.
+export function parseFunnelPeriod(
+  raw: string | null | undefined,
+): FunnelPeriod {
+  return raw === 'qtd' || raw === 'ytd' || raw === 'all' ? raw : 'mtd';
 }
 
 function lastDays(n: number): { from_date: string; to_date: string } {
@@ -333,13 +389,14 @@ export class FunnelsService {
 
   async direct(
     variant: 'full' | 'instant',
+    period: FunnelPeriod,
     bypass: boolean,
   ): Promise<FunnelResult<FunnelDirectPayload>> {
     const cfg = DIRECT_FUNNELS[variant];
     try {
       const { steps: agg, meta } = await this.savedFunnelSteps(
         cfg.funnelId,
-        monthToDate(),
+        resolvePeriod(period),
         bypass,
       );
       const steps = this.toSteps(agg, cfg.stepLabels);
@@ -368,7 +425,7 @@ export class FunnelsService {
     if (steps.length < 2 || (steps[0]?.count ?? 0) === 0) {
       return {
         biggest_drop:
-          'Not enough funnel entries this month to point at a drop yet.',
+          'Not enough funnel entries in this period to point at a drop yet.',
         healthy_step: 'Readings appear once bookings start flowing.',
         owner,
       };
@@ -457,12 +514,13 @@ export class FunnelsService {
   // -- Scheduled tab --
 
   async scheduled(
+    period: FunnelPeriod,
     bypass: boolean,
   ): Promise<FunnelResult<FunnelScheduledPayload>> {
     try {
       const { steps: agg, meta } = await this.savedFunnelSteps(
         SCHEDULED_FUNNEL_ID,
-        monthToDate(),
+        resolvePeriod(period),
         bypass,
       );
       return {
@@ -481,13 +539,21 @@ export class FunnelsService {
 
   // -- Novo tab --
 
-  async novo(bypass: boolean): Promise<FunnelResult<FunnelNovoPayload>> {
+  async novo(
+    period: FunnelPeriod,
+    bypass: boolean,
+  ): Promise<FunnelResult<FunnelNovoPayload>> {
     const opts: MixpanelQueryOptions = { bypassTtl: bypass };
-    const window = monthToDate();
+    const window = resolvePeriod(period);
     try {
-      const [funnelReads, landing, ctas, bmi, utm, flag] = await Promise.all([
+      const [funnelReads, directReads, landing, ctas, bmi, utm, flag] = await Promise.all([
         Promise.all(
           NOVO_GROUP_FUNNELS.map((f) =>
+            this.savedFunnelSteps(f.id, window, bypass),
+          ),
+        ),
+        Promise.all(
+          NOVO_DIRECT_BENCHMARKS.map((f) =>
             this.savedFunnelSteps(f.id, window, bypass),
           ),
         ),
@@ -543,6 +609,23 @@ export class FunnelsService {
         return sum + (last?.count ?? 0);
       }, 0);
 
+      const buildNamed = (
+        defs: ReadonlyArray<{ key: string; label: string }>,
+        reads: ReadonlyArray<{ steps: AggStep[] }>,
+      ): NamedFunnelPayload[] =>
+        defs.map((d, i) => {
+          const steps = this.toSteps(reads[i]?.steps ?? []);
+          return {
+            key: d.key,
+            label: d.label,
+            steps,
+            end_to_end_pct:
+              steps.length > 0 ? steps[steps.length - 1].pct_of_first : 0,
+          };
+        });
+      const novoFunnels = buildNamed(NOVO_GROUP_FUNNELS, funnelReads);
+      const directBenchmarks = buildNamed(NOVO_DIRECT_BENCHMARKS, directReads);
+
       const ctaRows = this.segmentRows(ctas).map((row) => ({
         label: humanize(row.label),
         count: row.count,
@@ -567,6 +650,7 @@ export class FunnelsService {
       if (flag) parts.push(flag);
       parts.push(
         ...funnelReads.map((r) => r.meta),
+        ...directReads.map((r) => r.meta),
         landing.meta,
         ctas.meta,
         bmi.meta,
@@ -594,7 +678,8 @@ export class FunnelsService {
             real_consults: { value: null, chip: 'verified' },
             bmi_checks: { value: bmiChecks },
           },
-          funnel: this.toSteps(funnelReads[0]?.steps ?? []),
+          novo_funnels: novoFunnels,
+          direct_benchmarks: directBenchmarks,
           ctas_by_type: ctaRows,
           bmi_categories: bmiRows.map((r) => ({
             label: humanize(r.label),

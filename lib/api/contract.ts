@@ -23,7 +23,7 @@ export interface PatientRefData {
 }
 
 export interface DeepLink {
-  view: 'home' | 'cockpit' | 'cases' | 'board' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'social'
+  view: 'home' | 'cockpit' | 'cases' | 'board' | 'funnels' | 'marketing' | 'financials' | 'kpis' | 'agents' | 'social' | 'appointments' | 'crm'
   tab?: string
   focus?: string
 }
@@ -435,6 +435,7 @@ export interface HandoffsData {
 
 // /api/appointments
 export interface AppointmentRow {
+  id: string
   time: string
   doctor: string
   patient_ref: PatientRefData
@@ -446,6 +447,219 @@ export interface AppointmentRow {
 export interface AppointmentsData {
   today: AppointmentRow[]
   recent_done: AppointmentRow[]
+}
+
+// /api/appointments/analytics
+export type AppointmentsPeriod = 'mtd' | 'qtd' | 'ytd' | 'all'
+export interface AppointmentsAnalyticsRow {
+  id: string
+  name: string
+  patient_ref: PatientRefData
+  patient_name?: string
+  doctor: string
+  status: string
+  type: string | null
+  fee_bhd: number
+  date: string | null
+  // Per-consult commission split, mirroring the Commission tab ledger. Present
+  // only on completed consults (Done or Awaiting Review) that resolved a split;
+  // absent on not-yet-completed rows, which read as a dash. Never summed into
+  // fee_bhd, which stays the gross the patient paid.
+  saleem_bhd?: number
+  provider_payout_bhd?: number
+  rule_label?: string
+}
+export interface AppointmentsStageCount { name: string; count: number }
+export interface AppointmentsDoctorRow { name: string; count: number; done: number; revenue_bhd: number; saleem_income_bhd?: number; commission_pct?: number | null }
+export interface AppointmentsAnalyticsMetrics { total: number; completed: number; revenue_bhd: number; completion_rate_pct: number; gross_income_bhd?: number; saleem_income_bhd?: number; commission_unset?: number }
+// Reconciliation diagnostic (revenue spec, step 1). status_breakdown is every
+// Status present in the window with its count and gross, so the completed-basis
+// gap is visible. type_distribution is every distinct raw Type with its
+// normalized form, count, and the track the engine currently assigns, so the
+// Novo set can be completed from real spellings.
+export interface AppointmentsStatusCount { status: string; count: number; gross_bhd: number }
+export interface AppointmentsTypeCount { type_raw: string; type_normalized: string; count: number; track: 'novo' | 'standard' }
+export interface AppointmentsAnalyticsData {
+  period: AppointmentsPeriod
+  metrics: AppointmentsAnalyticsMetrics
+  stage_breakdown: AppointmentsStageCount[]
+  by_doctor: AppointmentsDoctorRow[]
+  status_breakdown: AppointmentsStatusCount[]
+  type_distribution: AppointmentsTypeCount[]
+  recent: AppointmentsAnalyticsRow[]
+}
+
+// /api/crm/metrics
+export interface CrmPipelineMetric {
+  total: number
+  this_month: number
+  last_month: number
+  change_pct: number
+  won: number
+  lost: number
+  open: number
+  value_bhd: number
+  win_rate_pct: number
+  loss_rate_pct: number
+}
+export interface CrmMetricsData {
+  total_leads: number
+  total_deals: number
+  total_leads_this_month: number
+  total_leads_last_month: number
+  leads_change_pct: number
+  total_deals_this_month: number
+  total_deals_last_month: number
+  deals_change_pct: number
+  total_deals_open: number
+  total_won: number
+  pipeline_value_bhd: number
+  by_pipeline: Record<string, CrmPipelineMetric>
+}
+
+// /api/crm/funnel
+export type CrmFunnelPeriod = 'mtd' | 'ytd' | 'all'
+export type CrmFunnelSegment = 'Customers' | 'Providers'
+export interface CrmFunnelMonthPoint { month: string; leads: number; deals: number; won: number }
+export interface CrmFunnelSummary { total_leads: number; total_deals: number; total_won: number; leads_to_deals_pct: number; deals_to_won_pct: number }
+export interface CrmFunnelData {
+  funnels: Record<CrmFunnelSegment, CrmFunnelMonthPoint[]>
+  summary: Record<CrmFunnelSegment, CrmFunnelSummary>
+  period: CrmFunnelPeriod
+}
+
+// /api/crm/lead-sources
+export interface CrmLeadSource { name: string; count: number }
+export interface CrmLeadSourcesData { sources: CrmLeadSource[] }
+
+// /api/crm/lead-funnel
+export type CrmLeadFunnelPeriod = 'all' | 'ytd' | 'mtd'
+export interface CrmLeadFunnelStage {
+  total: number
+  contacted: number
+  call_done: number
+  deal_ready: number
+  converted: number
+  not_qualified: number
+  contacted_rate: number
+  call_done_rate: number
+  deal_ready_rate: number
+  converted_rate: number
+  not_qualified_rate: number
+  new_to_contacted: number
+  contacted_to_call_done: number
+  call_done_to_deal_ready: number
+  deal_ready_to_converted: number
+}
+export interface CrmLeadFunnelData {
+  overall: CrmLeadFunnelStage
+  by_segment: Record<CrmFunnelSegment, CrmLeadFunnelStage>
+  period: CrmLeadFunnelPeriod
+}
+
+// /api/crm/leads
+export interface CrmLeadRow {
+  id: string
+  ref: string
+  initials: string
+  segment: string
+  lead_source: string
+  lead_status: string
+  created: string | null
+}
+export interface CrmLeadsData {
+  rows: CrmLeadRow[]
+  page: number
+  pages: number
+  total: number
+  statuses: string[]
+}
+
+// /api/crm/pipeline
+export type CrmPipelinePeriod = 'all' | 'mtd' | 'ytd'
+export interface CrmPipelineStage { name: string; count: number; value_bhd: number }
+export interface CrmLossReason { reason: string; count: number }
+export interface CrmPipelineSummary {
+  stages: CrmPipelineStage[]
+  total: number
+  won: number
+  lost: number
+  open: number
+  value_bhd: number
+  win_rate_pct: number
+  loss_rate_pct: number
+  loss_reasons: CrmLossReason[]
+}
+export interface CrmPipelineData {
+  pipelines: Record<string, CrmPipelineSummary>
+  period: CrmPipelinePeriod
+}
+
+// /api/crm/journey
+export interface CrmJourneyBreakdown {
+  total: number
+  won: number
+  lost: number
+  open: number
+  value_bhd: number
+  win_rate_pct: number
+  loss_rate_pct: number
+  stages: Array<{ name: string; count: number }>
+  avg_days_to_completion: number | null
+  stage_avg_days: Record<string, number | null>
+}
+export interface CrmJourneyData {
+  total: number
+  by_tag: Record<string, CrmJourneyBreakdown>
+  tags: string[]
+}
+
+// /api/crm/subtype
+export interface CrmSubtypeBreakdown {
+  total: number
+  won: number
+  lost: number
+  open: number
+  value_bhd: number
+  win_rate_pct: number
+  loss_rate_pct: number
+}
+export interface CrmSubtypeSummary extends CrmSubtypeBreakdown {
+  by_pipeline: Record<string, CrmSubtypeBreakdown>
+}
+export interface CrmSubtypeData {
+  total: number
+  by_subtype: Record<string, CrmSubtypeSummary>
+  subtypes: string[]
+}
+
+// /api/crm/deals
+export interface CrmDealRow {
+  id: string
+  record: string
+  owner: string
+  pipeline: string
+  stage: string
+  outcome: 'won' | 'lost' | 'open'
+  amount_bhd: number
+  lead_source: string
+  created: string | null
+}
+export interface CrmDealsData {
+  rows: CrmDealRow[]
+  page: number
+  pages: number
+  total: number
+  pipelines: string[]
+}
+
+// /api/crm/segments
+export type CrmSegmentMetric = 'count' | 'amount'
+export interface CrmSegmentBar { name: string; value: number }
+export interface CrmSegmentsData {
+  geographic: CrmSegmentBar[]
+  specialty: CrmSegmentBar[]
+  metric: CrmSegmentMetric
 }
 
 // /api/financials
@@ -554,10 +768,22 @@ export interface MarketingData {
 }
 
 // /api/funnels/:tab
+/** Reporting-period presets the Direct, Scheduled, and Novo tabs switch
+ *  between; passed to those routes as ?period=. Mirrors the service's
+ *  FunnelPeriod. */
+export type FunnelPeriod = 'mtd' | 'qtd' | 'ytd' | 'all'
 export interface FunnelStep {
   label: string
   count: number
   pct_of_first: number
+}
+/** A saved funnel rendered with a name, for the Novo tab's Novo and Direct
+ *  comparison grids. end_to_end_pct is the last step as a percent of the first. */
+export interface NamedFunnel {
+  key: string
+  label: string
+  steps: FunnelStep[]
+  end_to_end_pct: number
 }
 export interface FunnelGeneralData {
   tiles: {
@@ -595,7 +821,8 @@ export interface FunnelNovoData {
     real_consults: { value: number | null; chip: 'verified' }
     bmi_checks: { value: number }
   }
-  funnel: FunnelStep[]
+  novo_funnels: NamedFunnel[]
+  direct_benchmarks: NamedFunnel[]
   ctas_by_type: Array<{ label: string; count: number; not_instrumented?: boolean }>
   bmi_categories: Array<{ label: string; count: number }>
   landing_by_campaign: Array<{ label: string; views: number }>
@@ -847,6 +1074,12 @@ export interface BoardCreateTaskResult {
 export interface ItSupportTicketData {
   /** Zoho task id of the new ticket; null only if Zoho answered without one. */
   ticket_id: string | null
+  /** Assignee names the ticket was routed to, from the priority routing. */
+  assigned_to: string[]
+  /** Resolution due date (ISO), set from the priority SLA. */
+  due_at: string
+  /** Assignee names that did not resolve to a Zoho user, and so were skipped. */
+  unresolved_owners: string[]
 }
 
 // /api/tasks
@@ -1176,6 +1409,22 @@ export interface CockpitCaseData {
   partners: CockpitPartner[]
   documents: CockpitDocument[]
   activity: CockpitActivity[]
+}
+
+/** One hospital a patient has been sent to (a provider_referrals row), shown as a
+ *  removable chip in the case file's Hospitals section. referral_id is the row id
+ *  used to remove the link. The same referral appears on the provider board. */
+export interface CaseProviderLink {
+  referral_id: string
+  hospital_id: string
+  hospital_name: string
+}
+/** The case file's Hospitals sub-resource: the patient's active hospital links and
+ *  the pickable hospital list (Zoho Hospitals directory plus board custom
+ *  hospitals). Name-seers only, on the client and server. */
+export interface CaseProvidersData {
+  linked: CaseProviderLink[]
+  available: Array<{ id: string; name: string; country: string }>
 }
 
 // Cockpit write gate (Saleem Cockpit Implementation Plan, Phase 1). Two-step:

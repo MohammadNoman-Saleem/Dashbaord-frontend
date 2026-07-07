@@ -152,46 +152,13 @@ export class ProviderBoardService {
         this.activeCustomHospitals(),
       ]);
 
-    // Build hospital columns from the Hospitals directory, DEDUPED by name so a
-    // duplicate Zoho record (e.g. two "Ibn Al-Nafees Hospital" rows) shows as a
-    // single column. Each name group keeps one representative record (preferring
-    // one that carries a country), and every record id in the group maps to that
-    // representative so a card added against any duplicate lands in the one column.
-    const groups = new Map<string, HospitalRecord[]>();
-    for (const h of hospitalsRead.data) {
-      const name = (h.Name ?? '').trim();
-      if (!name) continue;
-      const key = name.toLowerCase();
-      const arr = groups.get(key);
-      if (arr) arr.push(h);
-      else groups.set(key, [h]);
-    }
-    const hospitals: ProviderBoardHospital[] = [];
-    const repByRecordId = new Map<string, string>();
-    for (const recs of groups.values()) {
-      const rep =
-        recs.find((r) => (r.Country ?? '').trim().length > 0) ?? recs[0];
-      hospitals.push({
-        id: rep.id,
-        name: (rep.Name ?? '').trim(),
-        country: (rep.Country ?? '').trim() || OTHER_COUNTRY,
-      });
-      for (const r of recs) repByRecordId.set(r.id, rep.id);
-    }
-    const columnIds = new Set(hospitals.map((h) => h.id));
-
-    // Board-only custom hospitals appear as their own columns under their chosen
-    // country (they have no Zoho record). Added before the card loop so cards on
-    // them group into their column rather than the synthetic Other bucket.
-    for (const ch of customHospitals) {
-      if (columnIds.has(ch.id)) continue;
-      hospitals.push({
-        id: ch.id,
-        name: ch.name,
-        country: ch.country.trim() || OTHER_COUNTRY,
-      });
-      columnIds.add(ch.id);
-    }
+    // Build the hospital columns (Zoho directory deduped by name, plus board
+    // custom hospitals). Shared with listHospitals so the case-file picker and
+    // the board agree on the hospital set.
+    const { hospitals, repByRecordId, columnIds } = this.buildHospitalColumns(
+      hospitalsRead.data,
+      customHospitals,
+    );
 
     const dealById = new Map(dealsRead.data.map((d) => [d.id, d]));
     const leadById = new Map(leadsRead.data.map((l) => [l.id, l]));
@@ -221,6 +188,99 @@ export class ProviderBoardService {
     hospitals.sort((a, b) => a.name.localeCompare(b.name));
     const countries = orderCountries(hospitals.map((h) => h.country));
     return { countries, hospitals, cardsByHospital };
+  }
+
+  /** The pickable hospital list for the case-file "add to a hospital" control:
+   *  the Zoho directory deduped by name plus board custom hospitals, sorted by
+   *  name. The same set the board renders as columns. */
+  async listHospitals(): Promise<ProviderBoardHospital[]> {
+    const crm = getCrmRead();
+    const [hospitalsRead, customHospitals] = await Promise.all([
+      crm.hospitals(),
+      this.activeCustomHospitals(),
+    ]);
+    const { hospitals } = this.buildHospitalColumns(
+      hospitalsRead.data,
+      customHospitals,
+    );
+    hospitals.sort((a, b) => a.name.localeCompare(b.name));
+    return hospitals;
+  }
+
+  /** The hospitals a patient is currently sent to (active provider_referrals
+   *  rows), for the case-file Hospitals section. referral_id removes the link. */
+  async referralsForPatient(
+    zohoId: string,
+  ): Promise<
+    Array<{ referral_id: string; hospital_id: string; hospital_name: string }>
+  > {
+    const { rows } = await this.pool.query<{
+      id: string;
+      hospital_id: string;
+      hospital_name: string;
+    }>(
+      `select id, hospital_id, hospital_name
+       from provider_referrals
+       where zoho_id = $1 and removed_at is null
+       order by added_at asc`,
+      [zohoId],
+    );
+    return rows.map((r) => ({
+      referral_id: r.id,
+      hospital_id: r.hospital_id,
+      hospital_name: r.hospital_name,
+    }));
+  }
+
+  /** Build the hospital columns shared by the board and the picker: the Zoho
+   *  Hospitals directory deduped by name (one representative record per name,
+   *  preferring one that carries a country), plus board-only custom hospitals.
+   *  Returns the columns, a map from every Zoho record id to its representative
+   *  column id (so a card on a duplicate record lands in the merged column), and
+   *  the set of column ids. */
+  private buildHospitalColumns(
+    hospitalRecords: HospitalRecord[],
+    customHospitals: Array<{ id: string; name: string; country: string }>,
+  ): {
+    hospitals: ProviderBoardHospital[];
+    repByRecordId: Map<string, string>;
+    columnIds: Set<string>;
+  } {
+    const groups = new Map<string, HospitalRecord[]>();
+    for (const h of hospitalRecords) {
+      const name = (h.Name ?? '').trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      const arr = groups.get(key);
+      if (arr) arr.push(h);
+      else groups.set(key, [h]);
+    }
+    const hospitals: ProviderBoardHospital[] = [];
+    const repByRecordId = new Map<string, string>();
+    for (const recs of groups.values()) {
+      const rep =
+        recs.find((r) => (r.Country ?? '').trim().length > 0) ?? recs[0];
+      hospitals.push({
+        id: rep.id,
+        name: (rep.Name ?? '').trim(),
+        country: (rep.Country ?? '').trim() || OTHER_COUNTRY,
+      });
+      for (const r of recs) repByRecordId.set(r.id, rep.id);
+    }
+    const columnIds = new Set(hospitals.map((h) => h.id));
+
+    // Board-only custom hospitals appear as their own columns under their chosen
+    // country (they have no Zoho record).
+    for (const ch of customHospitals) {
+      if (columnIds.has(ch.id)) continue;
+      hospitals.push({
+        id: ch.id,
+        name: ch.name,
+        country: ch.country.trim() || OTHER_COUNTRY,
+      });
+      columnIds.add(ch.id);
+    }
+    return { hospitals, repByRecordId, columnIds };
   }
 
   /** Add a patient to a hospital column. Validates both the hospital and the

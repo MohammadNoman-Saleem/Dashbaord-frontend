@@ -21,20 +21,21 @@ async function getConfig() {
 }
 
 // One backend call. Returns { ok, status, data, error } and never throws, so the
-// panel always gets a structured result to render.
-async function api(path, body) {
+// panel always gets a structured result to render. A body is sent only when
+// given (GET requests omit it and the content-type header).
+async function request(method, path, body) {
   const { backendUrl, token } = await getConfig();
   if (!backendUrl || !token) {
     return { ok: false, status: 0, error: 'not_configured' };
   }
   try {
     const res = await fetch(backendUrl.replace(/\/+$/, '') + path, {
-      method: 'POST',
+      method,
       headers: {
-        'content-type': 'application/json',
         authorization: 'Bearer ' + token,
+        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
       },
-      body: JSON.stringify(body),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     let json = null;
     try {
@@ -52,6 +53,11 @@ async function api(path, body) {
   }
 }
 
+// POST helper (the common case).
+function api(path, body) {
+  return request('POST', path, body);
+}
+
 function lookup(phone) {
   return api('/api/extension/lookup', { phone });
 }
@@ -67,6 +73,95 @@ function addNote(caseId, module, content) {
     module,
     content,
   });
+}
+
+// The case notes for the open patient (Zoho CRM Notes related-list), newest
+// first. Read only; the panel renders the newest handful.
+function getNotes(caseId, module) {
+  return request(
+    'GET',
+    '/api/cockpit/case/' +
+      encodeURIComponent(caseId) +
+      '/notes?module=' +
+      encodeURIComponent(module),
+  );
+}
+
+// The WhatsApp template library, fetched once per browser session and cached in
+// chrome.storage.session (the list is the same for every chat).
+async function getTemplates() {
+  const cached = await chrome.storage.session.get('templates');
+  if (cached.templates) {
+    return { ok: true, status: 200, data: cached.templates };
+  }
+  const res = await request('GET', '/api/whatsapp/templates');
+  if (res.ok && res.data) {
+    await chrome.storage.session.set({ templates: res.data });
+  }
+  return res;
+}
+
+// The provider board (which patient is on which hospital), reused from the
+// dashboard. Cached in chrome.storage.session and invalidated on a write. The
+// board carries the hospital directory and all active cards; getHospitals derives
+// just the open patient's slice.
+async function getBoard() {
+  const cached = await chrome.storage.session.get('board');
+  if (cached.board) {
+    return { ok: true, status: 200, data: cached.board };
+  }
+  const res = await request('GET', '/api/provider-board');
+  if (res.ok && res.data) {
+    await chrome.storage.session.set({ board: res.data });
+  }
+  return res;
+}
+
+// The open patient's hospitals (with each link's referral id, for removal) plus
+// the pickable hospital directory (minus the ones already linked), derived from
+// the board.
+async function getHospitals(caseId) {
+  const res = await getBoard();
+  if (!res.ok || !res.data) return res;
+  const hospitals = Array.isArray(res.data.hospitals) ? res.data.hospitals : [];
+  const cardsByHospital = res.data.cardsByHospital || {};
+  const linked = [];
+  for (const hospitalId of Object.keys(cardsByHospital)) {
+    for (const card of cardsByHospital[hospitalId] || []) {
+      if (card && card.patient_ref && card.patient_ref.zoho_id === caseId) {
+        const h = hospitals.find((x) => x.id === hospitalId);
+        linked.push({
+          referral_id: card.id,
+          hospital_id: hospitalId,
+          hospital_name: h ? h.name : hospitalId,
+        });
+      }
+    }
+  }
+  const linkedIds = new Set(linked.map((l) => l.hospital_id));
+  const available = hospitals.filter((h) => !linkedIds.has(h.id));
+  return { ok: true, status: 200, data: { linked, available } };
+}
+
+// Add the patient to a hospital and remove a link, reusing the provider-board
+// routes. Both drop the cached board so the next read reflects the change.
+async function addHospital(caseId, hospitalId, recordKind) {
+  const res = await api('/api/provider-board', {
+    hospital_id: hospitalId,
+    record_kind: recordKind,
+    zoho_id: caseId,
+  });
+  if (res.ok) await chrome.storage.session.remove('board');
+  return res;
+}
+
+async function removeHospital(referralId) {
+  const res = await request(
+    'DELETE',
+    '/api/provider-board/' + encodeURIComponent(referralId),
+  );
+  if (res.ok) await chrome.storage.session.remove('board');
+  return res;
 }
 
 // Broadcast a panel update (ignored if the panel is closed).
@@ -144,6 +239,31 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     api('/api/events/resolve', { ids: msg.ids, action: msg.action || 'done' }).then(
       sendResponse,
     );
+    return true;
+  }
+
+  if (msg.type === 'get_notes') {
+    getNotes(msg.caseId, msg.module).then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === 'get_templates') {
+    getTemplates().then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === 'get_hospitals') {
+    getHospitals(msg.caseId).then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === 'action_add_hospital') {
+    addHospital(msg.caseId, msg.hospitalId, msg.recordKind).then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === 'action_remove_hospital') {
+    removeHospital(msg.referralId).then(sendResponse);
     return true;
   }
 

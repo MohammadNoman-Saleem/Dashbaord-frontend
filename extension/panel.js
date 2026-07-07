@@ -211,6 +211,9 @@ function showLoading(text) {
   show('notConfigured', false);
   show('empty', false);
   show('patient', false);
+  show('notesCard', false);
+  show('templatesCard', false);
+  show('hospitalsCard', false);
   show('loading', true);
   $('loadingText').textContent = text || 'Looking up...';
   setStatus('');
@@ -218,6 +221,9 @@ function showLoading(text) {
 
 function render(phone, result) {
   show('loading', false);
+  show('notesCard', false);
+  show('templatesCard', false);
+  show('hospitalsCard', false);
   current = { phone: phone || null, match: null, stageOptions: [], details: {}, openEventIds: [], suggestion: null };
 
   if (result && result.error === 'not_configured') {
@@ -284,6 +290,7 @@ function render(phone, result) {
   $('pFollow').textContent = fmt(c.next_follow_up);
   $('followDate').value = c.next_follow_up || '';
 
+  renderCaseDetails(c);
   renderTags(c);
   renderDetails(c, data);
   renderHistory(c);
@@ -305,6 +312,10 @@ function render(phone, result) {
   }
 
   setStatus((match.kind === 'deal' ? 'Deal' : 'Lead') + ' matched');
+
+  loadNotes();
+  loadTemplates();
+  loadHospitals();
 }
 
 function send(msg) {
@@ -345,12 +356,286 @@ async function removeTag(tag) {
   if (res && res.ok) refresh();
 }
 
+// Recent notes: fetch the newest Zoho CRM notes for the open case and render the
+// last few. Read only; adding a note stays in the Actions card below.
+async function loadNotes() {
+  const id = caseId();
+  if (!id) return;
+  const res = await send({ type: 'get_notes', caseId: id, module: moduleOf() });
+  // If the active chat changed while the notes were loading, drop this stale
+  // response rather than show one patient's notes against another.
+  if (caseId() !== id) return;
+  renderNotes(res);
+}
+
+// Relative time for a note's created_at (ISO). Small and local: the panel has no
+// date library.
+function fmtAgo(iso) {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (!then) return '';
+  const secs = Math.floor((Date.now() - then) / 1000);
+  if (secs < 60) return 'just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return mins + ' min ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + ' hr ago';
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return days + ' d ago';
+  return new Date(iso).toLocaleDateString();
+}
+
+const NOTE_TAGS = new Set([
+  'B', 'STRONG', 'I', 'EM', 'U', 'BR', 'P', 'UL', 'OL', 'LI',
+]);
+
+// Render a note body defensively. The server already sanitizes it, but rather
+// than trust that with innerHTML we parse the HTML and rebuild ONLY a small
+// allowlist of formatting tags with NO attributes, dropping any other tag while
+// keeping its text. This re-enforces the allowlist in the panel, so no untrusted
+// markup or attribute can reach the DOM.
+function renderNoteBody(container, html) {
+  const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+  const walk = (from, to) => {
+    for (const node of from.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        to.appendChild(document.createTextNode(node.textContent));
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        if (NOTE_TAGS.has(node.tagName)) {
+          const el = document.createElement(node.tagName.toLowerCase());
+          walk(node, el);
+          to.appendChild(el);
+        } else {
+          // Drop the tag but keep its text content.
+          walk(node, to);
+        }
+      }
+    }
+  };
+  walk(doc.body, container);
+}
+
+function renderNotes(res) {
+  const box = $('notesList');
+  box.innerHTML = '';
+  show('notesCard', true);
+  if (!res || !res.ok) {
+    box.textContent = 'Could not load notes.';
+    return;
+  }
+  const notes = Array.isArray(res.data) ? res.data : [];
+  if (!notes.length) {
+    box.textContent = 'No notes yet.';
+    return;
+  }
+  for (const n of notes.slice(0, 5)) {
+    const item = document.createElement('div');
+    item.className = 'note';
+    if (n.title) {
+      const t = document.createElement('div');
+      t.className = 'note-t';
+      t.textContent = n.title;
+      item.appendChild(t);
+    }
+    const body = document.createElement('div');
+    body.className = 'note-b';
+    renderNoteBody(body, n.body);
+    item.appendChild(body);
+    const meta = document.createElement('div');
+    meta.className = 'note-m';
+    meta.textContent =
+      (n.author_name || 'Unknown') + ' · ' + fmtAgo(n.created_at);
+    item.appendChild(meta);
+    box.appendChild(item);
+  }
+}
+
+// Templates: the same library the dashboard uses, fetched once and cached in the
+// service worker. Each is shown with the patient's name filled into the
+// placeholders, with a copy button.
+let templatesCache = null;
+
+async function loadTemplates() {
+  if (templatesCache) {
+    renderTemplates(true);
+    return;
+  }
+  const res = await send({ type: 'get_templates' });
+  if (res && res.ok && res.data && Array.isArray(res.data.templates)) {
+    templatesCache = res.data.templates;
+    renderTemplates(true);
+    return;
+  }
+  renderTemplates(false);
+}
+
+function patientFullName() {
+  return current.match && current.match.patient_name
+    ? String(current.match.patient_name).trim()
+    : '';
+}
+
+// Fill {{first_name}} and {{full_name}} from the open patient's name, matching
+// the dashboard. Leaves the placeholder in place when no name is available.
+function fillTemplate(bodyText) {
+  const full = patientFullName();
+  const first = full ? full.split(/\s+/)[0] : '';
+  return String(bodyText || '')
+    .replace(/\{\{\s*first_name\s*\}\}/g, first || '{{first_name}}')
+    .replace(/\{\{\s*full_name\s*\}\}/g, full || '{{full_name}}');
+}
+
+function renderTemplates(ok) {
+  const box = $('templatesList');
+  box.innerHTML = '';
+  show('templatesCard', true);
+  if (!ok || !templatesCache) {
+    box.textContent = 'Could not load templates.';
+    return;
+  }
+  if (!templatesCache.length) {
+    box.textContent = 'No templates yet.';
+    return;
+  }
+  for (const tpl of templatesCache) {
+    const filled = fillTemplate(tpl.body);
+    const item = document.createElement('div');
+    item.className = 'tmpl';
+    const head = document.createElement('div');
+    head.className = 'tmpl-h';
+    const title = document.createElement('span');
+    title.className = 'tmpl-t';
+    title.textContent = tpl.title || 'Template';
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'tmpl-copy';
+    copy.textContent = 'Copy';
+    copy.addEventListener('click', () => copyText(filled));
+    head.appendChild(title);
+    head.appendChild(copy);
+    const bodyEl = document.createElement('div');
+    bodyEl.className = 'tmpl-b';
+    bodyEl.textContent = filled;
+    item.appendChild(head);
+    item.appendChild(bodyEl);
+    box.appendChild(item);
+  }
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    setStatus('Copied');
+  } catch {
+    setStatus('Could not copy');
+  }
+}
+
+// Case details rows (condition, reason for treatment, preferred country,
+// destination, origin, source) from the lookup's case.details list.
+function renderCaseDetails(c) {
+  const box = $('pDetails');
+  box.innerHTML = '';
+  const details = Array.isArray(c.details) ? c.details : [];
+  for (const d of details) {
+    if (!d || d.v == null || d.v === '') continue;
+    const row = document.createElement('div');
+    row.className = 'row';
+    const k = document.createElement('span');
+    k.className = 'k';
+    k.textContent = d.k;
+    const v = document.createElement('span');
+    v.className = 'v';
+    v.textContent = d.v;
+    row.appendChild(k);
+    row.appendChild(v);
+    box.appendChild(row);
+  }
+}
+
+// Hospitals: reuses the provider board. Shows the hospitals the open patient is
+// on as removable chips, plus a dropdown of the directory to add another.
+async function loadHospitals() {
+  const id = caseId();
+  if (!id) return;
+  const res = await send({ type: 'get_hospitals', caseId: id });
+  // Drop a stale response if the active chat changed while loading.
+  if (caseId() !== id) return;
+  renderHospitals(res);
+}
+
+function renderHospitals(res) {
+  const list = $('hospitalsList');
+  const sel = $('hospitalSelect');
+  list.innerHTML = '';
+  sel.innerHTML = '<option value="">Select a hospital</option>';
+  show('hospitalsCard', true);
+  if (!res || !res.ok || !res.data) {
+    const hint = document.createElement('span');
+    hint.className = 'hint';
+    hint.textContent = 'Could not load hospitals.';
+    list.appendChild(hint);
+    return;
+  }
+  const linked = Array.isArray(res.data.linked) ? res.data.linked : [];
+  const available = Array.isArray(res.data.available) ? res.data.available : [];
+  if (!linked.length) {
+    const hint = document.createElement('span');
+    hint.className = 'hint';
+    hint.textContent = 'Not sent to any hospital yet';
+    list.appendChild(hint);
+  } else {
+    for (const l of linked) {
+      const span = document.createElement('span');
+      span.className = 'tag';
+      span.textContent = l.hospital_name;
+      const x = document.createElement('span');
+      x.className = 'x';
+      x.textContent = '×';
+      x.title = 'Remove hospital';
+      x.addEventListener('click', () => removeHospital(l.referral_id));
+      span.appendChild(x);
+      list.appendChild(span);
+    }
+  }
+  for (const h of available) {
+    const opt = document.createElement('option');
+    opt.value = h.id;
+    opt.textContent = h.country ? h.name + ' (' + h.country + ')' : h.name;
+    sel.appendChild(opt);
+  }
+}
+
+async function addHospitalFromPanel() {
+  const id = caseId();
+  const hospitalId = $('hospitalSelect').value;
+  if (!id || !hospitalId || !current.match) return;
+  setStatus('Adding hospital...');
+  const res = await send({
+    type: 'action_add_hospital',
+    caseId: id,
+    hospitalId,
+    recordKind: current.match.kind,
+  });
+  reportActionResult(res, 'Hospital added');
+  if (res && res.ok) loadHospitals();
+}
+
+async function removeHospital(referralId) {
+  setStatus('Removing hospital...');
+  const res = await send({ type: 'action_remove_hospital', referralId });
+  reportActionResult(res, 'Hospital removed');
+  if (res && res.ok) loadHospitals();
+}
+
 // --- wiring ---
 
 $('openOptions').addEventListener('click', (e) => {
   e.preventDefault();
   chrome.runtime.openOptionsPage();
 });
+
+$('hospitalBtn').addEventListener('click', addHospitalFromPanel);
 
 $('tagBtn').addEventListener('click', async () => {
   const tag = $('tagInput').value.trim();

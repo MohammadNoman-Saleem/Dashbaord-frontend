@@ -2,8 +2,10 @@
 
 import {
   Building2,
+  CalendarCheck,
   ChevronLeft,
   Coins,
+  Contact,
   Cpu,
   Filter,
   Gauge,
@@ -37,6 +39,8 @@ const WORKSPACE_NAV: NavEntry[] = [
      Command Center (second position) at the build lead's request. */
   { href: "/cockpit", label: "Cockpit", icon: Gauge },
   { href: "/cases", label: "Cases & Pipeline", icon: Layers },
+  { href: "/crm", label: "CRM", icon: Contact },
+  { href: "/appointments", label: "Appointments", icon: CalendarCheck },
   /* Team board is NOT in the approved v3 mockup; it is the legacy kanban
      port, styled with the existing design system and flagged for Khalid's
      review per the parking-list rule. */
@@ -70,6 +74,9 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobil
      signed-in role (the server refuses the routes regardless, but the link
      should not appear for anyone else). */
   const { me } = useViewer();
+  /* me is null on the server and on the first client render (useViewer holds it
+     back until hydration), so these gates are false on the first paint and the
+     gated links appear only after hydration, matching the server. */
   const isAdmin = me?.role === "admin";
   /* The provider board shows patient cases, so its nav item only appears for a
      viewer who may see patient names (the route 403s everyone else regardless). */

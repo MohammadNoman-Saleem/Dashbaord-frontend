@@ -280,6 +280,19 @@ export class ManualLedgerService {
     );
     return rows.map(toLedgerRow);
   }
+
+  /** All manual rows, newest first. The appointments tab windows by period
+   *  (mtd, qtd, ytd, all), not a single cycle, so it reads the full set and
+   *  filters by booked_at in Bahrain time to match its booking window. Manual
+   *  rows are the free-appointment ledger, a small set. */
+  async all(): Promise<ManualEntryRow[]> {
+    const { rows } = await this.pool.query<LedgerDbRow>(
+      `select ${LEDGER_ROW_FIELDS} from bookings_ledger
+       where manual = true
+       order by booked_at desc`,
+    );
+    return rows.map(toLedgerRow);
+  }
 }
 
 function toLedgerRow(r: LedgerDbRow): ManualEntryRow {
@@ -349,27 +362,49 @@ function resolveLookup(field: ZohoLookup | string | null): {
 /** Which segment an appointment Type falls in. Treatment lives in a separate
  *  Deals pipeline and is handled by the manual free-appointment path, not
  *  here. */
-function segmentOf(type: string | null): 'scheduled' | 'novo' | null {
-  if (typeof type !== 'string') return null;
-  if (type.startsWith('novo')) return 'novo';
-  if (type === 'standard') return 'scheduled';
-  return null;
+// The confirmed Novo (obesity) track booking types, normalized. The source of
+// truth for these values is the revenue spec and the live Type distribution;
+// kept as a constant here so segmentOf stays a pure, unit-testable function. If
+// they ever need to be editable without a deploy, move them to the novo payout
+// rule's params and thread them in.
+const NOVO_TYPES = new Set(['novo_scheduled', 'novo_instant']);
+
+// Normalized booking Type: trimmed, inner whitespace collapsed, lowercased. The
+// Zoho Type field is free text with inconsistent casing and spacing, so every
+// classification runs on this form, never the raw string.
+function normalizeBookingType(type: string | null): string {
+  return (type ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+// A consult is Novo when its normalized Type is in the Novo set; everything
+// else, including a missing or unrecognized Type, is treated as standard, so no
+// booking is left out. This replaces the old startsWith('novo') test, which was
+// case sensitive and missed the real values ("Novo Instant", "novo_scheduled").
+export function segmentOf(type: string | null): 'scheduled' | 'novo' {
+  return NOVO_TYPES.has(normalizeBookingType(type)) ? 'novo' : 'scheduled';
 }
 
 interface RuleSet {
   scheduled: PayoutRuleRow | null;
   novo: PayoutRuleRow | null;
+  /** Per-doctor flat-rate overrides, keyed by Zoho doctor id (first wins). */
+  byDoctor: Map<string, PayoutRuleRow>;
 }
 
-function pickRules(rules: PayoutRuleRow[]): RuleSet {
+export function pickRules(rules: PayoutRuleRow[]): RuleSet {
   let scheduled: PayoutRuleRow | null = null;
   let novo: PayoutRuleRow | null = null;
+  const byDoctor = new Map<string, PayoutRuleRow>();
   for (const r of rules) {
     const segment = r.scope?.segment;
     if (segment === 'scheduled' && !scheduled) scheduled = r;
     if (segment === 'novo' && !novo) novo = r;
+    const doctorId = r.scope?.doctor_id;
+    if (typeof doctorId === 'string' && !byDoctor.has(doctorId)) {
+      byDoctor.set(doctorId, r);
+    }
   }
-  return { scheduled, novo };
+  return { scheduled, novo, byDoctor };
 }
 
 export class CommissionService {
@@ -466,13 +501,17 @@ export class CommissionService {
     const rows: LedgerBookingRow[] = [];
     let unset = 0;
 
+    // Completed basis per the revenue spec: a consult counts once the call
+    // happened and the fee was deducted, which is Status Done or Awaiting
+    // Review. Awaiting Review means the call finished and the doctor is still
+    // filing notes; the fee is already taken, so it belongs in the cycle. This
+    // matches the Appointments tab income basis so the two tabs reconcile.
     for (const b of bookingsRead.data) {
-      if (b.Status !== 'Done') continue;
+      if (b.Status !== 'Done' && b.Status !== 'Awaiting Review') continue;
       const rate = num(b.Rate);
       if (rate <= 1) continue;
       if (bahrainCycle(b.From ?? b.Created_At) !== cycle) continue;
       const segment = segmentOf(b.Type);
-      if (!segment) continue;
 
       const doc = resolveLookup(b.Doctor);
       const docRec = doc.id ? doctorMap.get(doc.id) : null;
@@ -486,6 +525,7 @@ export class CommissionService {
         docRec?.pct,
         hospRec?.pct,
         ruleSet,
+        doc.id,
       );
       if (!split.commissionSet) unset += 1;
 
@@ -523,43 +563,127 @@ export class CommissionService {
     doctorPct: number | null | undefined,
     hospitalPct: number | null | undefined,
     rules: RuleSet,
+    doctorId: string | null | undefined,
   ): {
     saleemRevenue: number;
     providerPayout: number;
     ruleLabel: string;
     commissionSet: boolean;
   } {
-    if (segment === 'novo') {
-      const rule = rules.novo;
-      const commission = num(rule?.params?.commission_bhd);
-      const service = num(rule?.params?.service_charge_bhd);
+    return computeBookingSplit(
+      segment,
+      rate,
+      doctorPct,
+      hospitalPct,
+      rules,
+      doctorId,
+    );
+  }
+}
+
+// Flat-fee doctors: a fixed Saleem amount per consult whatever the Rate, with no
+// service charge and no commission, the same treatment as Novo. Kept as a
+// constant here (like NOVO_TYPES) because a per-doctor payout_rules override is
+// not seedable from this repo. A real byDoctor rule, if one is ever added, still
+// wins over this, so it is a safe bridge; move these into a per-doctor payout
+// rule once that table takes overrides. Keyed by Zoho doctor id.
+const FLAT_FEE_DOCTORS = new Map<string, number>([
+  // Dr. Hasan Abdul jabbar: flat BHD 3, confirmed with the team 2026-07-04.
+  ['7064208000002820122', 3],
+]);
+
+// The commission rate for a standard consult that resolves no doctor and no
+// hospital percent (both blank or zero) and has no positive payout_rules
+// default. The team's confirmed floor is 15 percent. A positive payout_rules
+// default still wins over this; it is only the final fallback.
+const DEFAULT_COMMISSION_PCT = 15;
+
+/** Gross/revenue/payout split for one booking. A per-doctor flat-rate override
+ *  wins when one exists for the booking's doctor, then a flat-fee doctor, then
+ *  the segment's rule applies (novo flat commission, or scheduled doctor-first
+ *  percent). */
+export function computeBookingSplit(
+  segment: 'scheduled' | 'novo',
+  rate: number,
+  doctorPct: number | null | undefined,
+  hospitalPct: number | null | undefined,
+  rules: RuleSet,
+  doctorId: string | null | undefined,
+): {
+  saleemRevenue: number;
+  providerPayout: number;
+  ruleLabel: string;
+  commissionSet: boolean;
+} {
+  if (doctorId) {
+    const docRule = rules.byDoctor.get(doctorId);
+    if (docRule) {
+      const commission = num(docRule.params?.commission_bhd);
+      const service = num(docRule.params?.service_charge_bhd);
       const saleemRevenue = round2(commission + service);
       return {
         saleemRevenue,
         providerPayout: round2(rate - saleemRevenue),
-        ruleLabel: rule?.label ?? 'Novo appointment',
+        ruleLabel: docRule.label,
         commissionSet: true,
       };
     }
+    // Flat-fee doctor: fixed Saleem amount, no service charge, no commission.
+    const flat = FLAT_FEE_DOCTORS.get(doctorId);
+    if (flat != null) {
+      const saleemRevenue = round2(flat);
+      return {
+        saleemRevenue,
+        providerPayout: round2(rate - saleemRevenue),
+        ruleLabel: 'Flat fee',
+        commissionSet: true,
+      };
+    }
+  }
 
-    // scheduled
-    const rule = rules.scheduled;
+  if (segment === 'novo') {
+    const rule = rules.novo;
+    const commission = num(rule?.params?.commission_bhd);
     const service = num(rule?.params?.service_charge_bhd);
-    let pct = doctorPct;
-    if (pct == null) pct = hospitalPct;
-    const commissionSet = pct != null;
-    const effPct = commissionSet
-      ? Number(pct)
-      : num(rule?.params?.commission_pct);
-    const commission = round2((rate * effPct) / 100);
     const saleemRevenue = round2(commission + service);
     return {
       saleemRevenue,
-      providerPayout: round2(rate - commission),
-      ruleLabel: rule?.label ?? 'Scheduled appointment',
-      commissionSet,
+      providerPayout: round2(rate - saleemRevenue),
+      ruleLabel: rule?.label ?? 'Novo appointment',
+      commissionSet: true,
     };
   }
+
+  // scheduled
+  const rule = rules.scheduled;
+  const service = num(rule?.params?.service_charge_bhd);
+  // Commission rate cascade: the doctor's own percent, then the hospital's, then
+  // the payout_rules default, then the 15 percent floor. A zero is treated the
+  // same as blank at each step and cascades on, so an unset or zeroed rate never
+  // silently zeroes Saleem's commission. commissionSet is true only when the
+  // doctor or hospital carried a real (positive) percent, so the page can still
+  // flag how many bookings fell through to the default.
+  const docRate =
+    doctorPct != null && Number(doctorPct) > 0 ? Number(doctorPct) : null;
+  const hospRate =
+    hospitalPct != null && Number(hospitalPct) > 0 ? Number(hospitalPct) : null;
+  const ruleDefault = num(rule?.params?.commission_pct);
+  const commissionSet = docRate != null || hospRate != null;
+  const effPct =
+    docRate ??
+    hospRate ??
+    (ruleDefault > 0 ? ruleDefault : DEFAULT_COMMISSION_PCT);
+  // Commission is taken on the fee after the service charge, not the full fee.
+  const commissionBase = Math.max(0, round2(rate - service));
+  const commission = round2((commissionBase * effPct) / 100);
+  const saleemRevenue = round2(commission + service);
+  return {
+    saleemRevenue,
+    // The provider keeps the fee minus everything Saleem takes.
+    providerPayout: round2(rate - saleemRevenue),
+    ruleLabel: rule?.label ?? 'Scheduled appointment',
+    commissionSet,
+  };
 }
 
 /** Cycle (YYYY-MM) a booking date falls in, in Bahrain time. */
@@ -602,6 +726,14 @@ export function paramsDisplay(rule: {
   scope: Record<string, unknown>;
   params: Record<string, unknown>;
 }): string {
+  if (typeof rule.scope?.doctor_id === 'string') {
+    const commission = Number(rule.params?.commission_bhd) || 0;
+    const service = Number(rule.params?.service_charge_bhd) || 0;
+    if (service > 0) {
+      return `Flat commission BHD ${commission}, plus service charge BHD ${service}`;
+    }
+    return `Flat commission BHD ${commission}, no service charge`;
+  }
   const segment = rule.scope?.segment;
   const service = Number(rule.params?.service_charge_bhd) || 0;
   if (segment === 'novo') {

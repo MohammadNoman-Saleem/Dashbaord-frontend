@@ -223,10 +223,16 @@ const AGING_BUCKETS: Array<{
   { key: 'b90p', label: 'Over 90 days', test: (d) => d > 90 },
 ];
 
-/** "2026-06" for an ISO timestamp, or null when the date is missing. */
+/** The Bahrain civil month ("2026-06") of a booking's appointment date, or null
+ *  when the date is missing. Uses From (the appointment date) and converts to
+ *  Asia/Bahrain, the same rule the Appointments path uses, so a booking near
+ *  midnight lands in the same month on both pages. */
 function monthOf(booking: BookingRecord): string | null {
   const iso = booking.From ?? booking.Created_At;
-  return iso ? iso.slice(0, 7) : null;
+  if (!iso) return null;
+  return new Date(iso)
+    .toLocaleDateString('en-CA', { timeZone: 'Asia/Bahrain' })
+    .slice(0, 7);
 }
 
 function lastMonths(count: number): string[] {
@@ -295,13 +301,18 @@ export class FinancialsService {
       this.invoicesSlim(),
     ]);
 
-    const done = bookingsRead.data.filter(
-      (b) => b.Status === 'Done' && (b.Rate ?? 0) > 1,
+    // Completed basis per the revenue spec: Done or Awaiting Review, since the
+    // fee is deducted at Awaiting Review. Matches the appointments and
+    // commission tabs so money in reconciles with them.
+    const completed = bookingsRead.data.filter(
+      (b) =>
+        (b.Status === 'Done' || b.Status === 'Awaiting Review') &&
+        (b.Rate ?? 0) > 1,
     );
 
     const months = lastMonths(SPARK_MONTHS);
     const sums = new Map<string, number>(months.map((m) => [m, 0]));
-    for (const booking of done) {
+    for (const booking of completed) {
       const month = monthOf(booking);
       if (month && sums.has(month)) {
         sums.set(month, (sums.get(month) ?? 0) + (booking.Rate ?? 0));
@@ -344,7 +355,7 @@ export class FinancialsService {
         platform_revenue: {
           month_bhd: monthBhd,
           vs_prev_pct: vsPrevPct,
-          split_plain: this.splitPlain(done, months[months.length - 1]),
+          split_plain: this.splitPlain(completed, months[months.length - 1]),
           spark,
           verified: false,
         },
@@ -563,7 +574,11 @@ export class FinancialsService {
     // Revenue join: completed platform bookings per month, bucketed the
     // same way as the overview spark so the two views never disagree.
     for (const booking of bookingsRead.data) {
-      if (booking.Status !== 'Done' || (booking.Rate ?? 0) <= 1) continue;
+      if (
+        (booking.Status !== 'Done' && booking.Status !== 'Awaiting Review') ||
+        (booking.Rate ?? 0) <= 1
+      )
+        continue;
       const month = monthOf(booking);
       if (!month) continue;
       const bucket = bucketByKey.get(month);
@@ -707,9 +722,9 @@ export class FinancialsService {
   }
 
   /** "Consult BHD 2,140 · Follow-up BHD 320." for the current month. */
-  private splitPlain(done: BookingRecord[], currentMonth: string): string {
+  private splitPlain(completed: BookingRecord[], currentMonth: string): string {
     const byType = new Map<string, number>();
-    for (const booking of done) {
+    for (const booking of completed) {
       if (monthOf(booking) !== currentMonth) continue;
       const type = booking.Type ?? 'Consult';
       byType.set(type, (byType.get(type) ?? 0) + (booking.Rate ?? 0));

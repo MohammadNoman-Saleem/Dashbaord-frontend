@@ -191,3 +191,25 @@ export async function teamOf(managerKey: string): Promise<string[]> {
   );
   return rows.map((r) => r.key);
 }
+
+/** Resolve helpdesk assignee first-names to Zoho zpuids against the users table
+ *  (an explicit stored zpuid wins; a name that matches no user is skipped, never
+ *  invented). A name matches when any token of a user's full name equals it,
+ *  case-insensitive, so "Noman" resolves "Mohammad Noman". Returns the resolved
+ *  zpuids (deduped) and the names that did not resolve. */
+export async function zpuidsByNames(
+  names: string[],
+): Promise<{ resolved: string[]; unresolved: string[] }> {
+  const users = await assignableUsers();
+  const resolved: string[] = [];
+  const unresolved: string[] = [];
+  for (const name of names) {
+    const lower = name.toLowerCase();
+    const match = users.find((u) =>
+      u.name.toLowerCase().split(/\s+/).includes(lower),
+    );
+    if (match) resolved.push(match.zpuid);
+    else unresolved.push(name);
+  }
+  return { resolved: [...new Set(resolved)], unresolved };
+}

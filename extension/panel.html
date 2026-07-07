@@ -89,6 +89,20 @@
       .hist:last-child { border-bottom: 0; }
       .hist .t { font-weight: 600; }
       .hist .d { color: var(--muted); font-size: 12px; }
+      /* Notes + templates lists */
+      .note { margin: 6px 0; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+      .note:last-child { border-bottom: 0; }
+      .note-t { font-weight: 600; color: var(--ink); }
+      .note-b { color: var(--ink); font-size: 12px; margin: 2px 0; overflow-wrap: anywhere; }
+      .note-b p { margin: 3px 0; }
+      .note-b ul, .note-b ol { margin: 3px 0; padding-left: 16px; }
+      .note-m { color: var(--muted); font-size: 11px; margin-top: 2px; }
+      .tmpl { margin: 6px 0; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+      .tmpl:last-child { border-bottom: 0; }
+      .tmpl-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .tmpl-t { font-weight: 600; color: var(--title); font-size: 12px; }
+      .tmpl-copy { width: auto; margin: 0; padding: 4px 10px; font-size: 11px; }
+      .tmpl-b { color: var(--muted); font-size: 12px; white-space: pre-wrap; margin-top: 4px; overflow-wrap: anywhere; }
 
       /* Form controls */
       label { display: block; font-size: 11px; color: var(--muted); margin: 11px 0 4px; font-weight: 500; }
@@ -120,7 +134,7 @@
       }
       .btn-ghost:hover { background: var(--accent-soft); filter: none; }
       .addtag { display: flex; gap: 7px; align-items: center; }
-      .addtag input { flex: 1; }
+      .addtag input, .addtag select { flex: 1; }
       .addtag button { width: auto; margin: 0; padding: 9px 14px; }
 
       .hint { font-size: 11px; color: var(--muted); line-height: 1.5; }
@@ -251,11 +265,21 @@
         <div class="row"><span class="k">Owner</span><span class="v" id="pOwner">-</span></div>
         <div class="row"><span class="k">Next action</span><span class="v" id="pNext">-</span></div>
         <div class="row"><span class="k">Follow up</span><span class="v" id="pFollow">-</span></div>
+        <div id="pDetails"></div>
         <div class="tags" id="pTags"></div>
         <div class="addtag" style="margin-top: 10px">
           <input type="text" id="tagInput" list="tagOptions" placeholder="Add a tag" />
           <datalist id="tagOptions"></datalist>
           <button id="tagBtn">Add</button>
+        </div>
+      </div>
+
+      <div class="card hidden" id="hospitalsCard">
+        <h2>Hospitals</h2>
+        <div class="tags" id="hospitalsList"></div>
+        <div class="addtag" style="margin-top: 8px">
+          <select id="hospitalSelect"><option value="">Select a hospital</option></select>
+          <button id="hospitalBtn">Add</button>
         </div>
       </div>
 
@@ -284,6 +308,11 @@
         <div id="history"></div>
       </div>
 
+      <div class="card hidden" id="notesCard">
+        <h2>Recent notes</h2>
+        <div id="notesList"></div>
+      </div>
+
       <div class="card">
         <h2>Actions</h2>
 
@@ -300,6 +329,11 @@
         <label for="followDate">Set follow up</label>
         <input type="date" id="followDate" />
         <button id="followBtn">Set follow up</button>
+      </div>
+
+      <div class="card hidden" id="templatesCard">
+        <h2>Templates</h2>
+        <div id="templatesList"></div>
       </div>
     </div>
 

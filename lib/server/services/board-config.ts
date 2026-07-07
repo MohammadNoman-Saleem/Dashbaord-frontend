@@ -125,3 +125,17 @@ export const IT_HELPDESK_DEFAULT_TASKLIST = {
   id: '2599674000000344003',
   name: 'General',
 };
+
+// IT helpdesk tasklists per category, ported from the legacy
+// config/zoho-projects.js (IT_SUPPORT_TASKLIST_IDS_DEFAULTS). A ticket routes to
+// the tasklist for its category; General is the default and shares the pinned
+// default-tasklist id above.
+export const IT_HELPDESK_TASKLISTS: Record<string, { id: string; name: string }> = {
+  Bugs: { id: '2599674000000343002', name: 'Bugs' },
+  Features: { id: '2599674000000378007', name: 'Features' },
+  Access: { id: '2599674000000378011', name: 'Access' },
+  Integrations: { id: '2599674000000378009', name: 'Integrations' },
+  General: IT_HELPDESK_DEFAULT_TASKLIST,
+};
+
+export const IT_HELPDESK_CATEGORIES = Object.keys(IT_HELPDESK_TASKLISTS);

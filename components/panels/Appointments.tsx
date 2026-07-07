@@ -91,7 +91,7 @@ export function AppointmentsPanel({
               <div className={flags.unreliable ? "opacity-55" : undefined}>
                 {rows.map((row) => (
                   <ListRow
-                    key={`${row.time}-${row.doctor}`}
+                    key={row.id}
                     icon={row.fee_state === "done" ? Check : Calendar}
                     variant={row.fee_state === "done" ? "good" : "info"}
                     title={`${row.time} · ${row.doctor}`}

@@ -45,3 +45,6 @@ next-env.d.ts
 
 # local dev screenshot helper, carries a login credential; never commit
 /shot.mjs
+
+# packaged extension build artifact
+/extension.zip

@@ -60,7 +60,7 @@ export function DirectTab({ query, variant, onVariantChange }: DirectTabProps) {
                 </div>
               }
               isEmpty={(d) => d.steps.length === 0}
-              emptyCopy="No funnel data for this month yet."
+              emptyCopy="No funnel data for this period yet."
             >
               {(d, _meta, flags) => (
                 <div className={flags.unreliable ? "opacity-55" : undefined}>
