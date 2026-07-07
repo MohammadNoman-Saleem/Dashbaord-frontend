@@ -135,14 +135,56 @@ export function PatientSearch({ onSelect }: Props) {
 
   const matches = query.data ?? null;
 
+  // The card idles as a single row: title + input + button. Result states
+  // render below only once a search has actually run.
+  const results = query.isFetching ? (
+    <div className="flex flex-col gap-2">
+      {Array.from({ length: 3 }, (_, i) => (
+        <Skeleton key={i} height={48} />
+      ))}
+    </div>
+  ) : query.isError ? (
+    <div className="py-1">
+      <p className="text-[13px] leading-relaxed text-ink-2">
+        {query.error instanceof ApiError && query.error.messagePlain
+          ? query.error.messagePlain
+          : SEARCH_FAILURE_COPY}
+      </p>
+      <Button variant="ghost" size="sm" className="mt-2" onClick={() => void query.refetch()}>
+        Retry
+      </Button>
+    </div>
+  ) : submitted == null ? null : matches != null && matches.length === 0 ? (
+    <p className="py-1 text-[13px] text-ink-2">
+      No lead or deal matches that name, phone, or ID. Check the spelling or
+      digits, or the case may not be in the CRM yet.
+    </p>
+  ) : matches != null ? (
+    <div>
+      {matches.map((m) => (
+        <ListRow
+          key={`${m.kind}-${m.patient_ref.zoho_id}`}
+          icon={User}
+          title={<PatientRef patient={{ ...m, ...m.patient_ref }} />}
+          subtitle={matchSubtitle(m)}
+          right={
+            <span className="flex items-center gap-2">
+              <Chip variant="mut">{kindChip(m.kind)}</Chip>
+              <Button size="sm" variant="ghost" onClick={() => onSelect(m.patient_ref.zoho_id)}>
+                Open
+              </Button>
+            </span>
+          }
+        />
+      ))}
+    </div>
+  ) : null;
+
   return (
     <Card className="flex flex-col">
-      <CardHeader
-        title="Find a patient"
-        subtitle="Search by name, phone, or Zoho ID to jump straight to the case."
-      />
-      <div className="px-[18px] pb-3 pt-2">
-        <form onSubmit={onSubmit} className="flex items-end gap-2">
+      <CardHeader title="Find a patient" />
+      <div className="px-[18px] pb-[14px] pt-2">
+        <form onSubmit={onSubmit} className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
             <FieldInput
               type="text"
@@ -153,78 +195,15 @@ export function PatientSearch({ onSelect }: Props) {
               onChange={(e) => setInput(e.target.value)}
             />
           </div>
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={!longEnough || query.isFetching}
-          >
+          <Button type="submit" variant="primary" disabled={!longEnough || query.isFetching}>
             <Search strokeWidth={1.8} aria-hidden="true" />
             Search
           </Button>
         </form>
-        <p className="mt-1.5 text-xs text-ink-3">
-          {longEnough || input.length === 0
-            ? "Matches a patient name, a phone (country code optional), or a Zoho record ID."
-            : "Enter at least 2 characters to search."}
-        </p>
-
-        <div className="mt-3">
-          {query.isFetching ? (
-            <div className="flex flex-col gap-2">
-              {Array.from({ length: 3 }, (_, i) => (
-                <Skeleton key={i} height={48} />
-              ))}
-            </div>
-          ) : query.isError ? (
-            <div className="py-1">
-              <p className="text-[13px] leading-relaxed text-ink-2">
-                {query.error instanceof ApiError && query.error.messagePlain
-                  ? query.error.messagePlain
-                  : SEARCH_FAILURE_COPY}
-              </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="mt-2"
-                onClick={() => void query.refetch()}
-              >
-                Retry
-              </Button>
-            </div>
-          ) : submitted == null ? (
-            <p className="py-1 text-[13px] text-ink-2">
-              Results will appear here once you search.
-            </p>
-          ) : matches != null && matches.length === 0 ? (
-            <p className="py-1 text-[13px] text-ink-2">
-              No lead or deal matches that name, phone, or ID. Check the spelling
-              or digits, or the case may not be in the CRM yet.
-            </p>
-          ) : matches != null ? (
-            <div>
-              {matches.map((m) => (
-                <ListRow
-                  key={`${m.kind}-${m.patient_ref.zoho_id}`}
-                  icon={User}
-                  title={<PatientRef patient={{ ...m, ...m.patient_ref }} />}
-                  subtitle={matchSubtitle(m)}
-                  right={
-                    <span className="flex items-center gap-2">
-                      <Chip variant="mut">{kindChip(m.kind)}</Chip>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onSelect(m.patient_ref.zoho_id)}
-                      >
-                        Open
-                      </Button>
-                    </span>
-                  }
-                />
-              ))}
-            </div>
-          ) : null}
-        </div>
+        {!longEnough && input.length > 0 ? (
+          <p className="mt-1.5 text-xs text-ink-3">Enter at least 2 characters to search.</p>
+        ) : null}
+        {results != null ? <div className="mt-3">{results}</div> : null}
       </div>
     </Card>
   );

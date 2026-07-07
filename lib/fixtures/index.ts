@@ -225,6 +225,41 @@ const FIXTURES: Record<EndpointKey, FixtureFn> = {
     data: null,
     meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
   }),
+  // Reactive inbox GET stub for dev smoke (the live route serves the real
+  // grouped events). The resolve write goes through mutateEnvelope and never
+  // reads a fixture, so its stub only satisfies the record type.
+  events_inbox: () => ({
+    data: { groups: [], counts: { open: 0, urgent: 0 } },
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
+  events_resolve: () => ({
+    data: null,
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
+  // AI costs GET stub for dev smoke (the live route serves real metered spend).
+  ai_costs: () => ({
+    data: {
+      total_usd: 0,
+      calls: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+      last_call_at: null,
+      by_day: [],
+      by_model: [],
+    },
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
+  // Today list GET stub for dev smoke (the live route merges SLA + inbox).
+  cockpit_today: () => ({
+    data: { rows: [], counts: { total: 0, due_now: 0, messages: 0 } },
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
+  // Summaries refresh POST seam: mutateEnvelope resolves null in fixture mode and
+  // never calls getFixture, so this stub only satisfies the record type.
+  cockpit_summaries_refresh: () => ({
+    data: { refreshed: 0, skipped: 0, remaining: 0 },
+    meta: { updated_at: new Date().toISOString(), cached: false, stale: false, reliable: true, reasons: [] },
+  }),
 }
 
 export function getFixture<T>(

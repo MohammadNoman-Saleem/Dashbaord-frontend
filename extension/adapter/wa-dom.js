@@ -151,16 +151,122 @@
     });
   }
 
-  let last = null;
+  // Extract one message from a rendered row. The DOM data-id is only the bare
+  // message hash; the fromMe flag, the full serialized id, the body, and the
+  // timestamp live on the message model in the row's React fiber. Serialized id
+  // shape: "<true|false>_<chat-wid>_<hash>". Body falls back to the rendered
+  // .selectable-text when the fiber body field moved (one resilience fallback).
+  function messageFromRow(el) {
+    const root = reactRoot(el);
+    if (!root) return null;
+    const seen = new WeakSet();
+    let found = null;
+    let budget = 4000;
+    (function walk(o, d) {
+      if (found || o === null || d > 25 || budget-- <= 0) return;
+      if (typeof o !== 'object' || seen.has(o)) return;
+      seen.add(o);
+      const ser = o.__x_id && o.__x_id._serialized;
+      if (
+        typeof ser === 'string' &&
+        /^(true|false)_/.test(ser) &&
+        (o.__x_t !== undefined || o.__x_body !== undefined)
+      ) {
+        found = o;
+        return;
+      }
+      for (const k in o) {
+        let v;
+        try {
+          v = o[k];
+        } catch {
+          continue;
+        }
+        walk(v, d + 1);
+        if (found) return;
+      }
+    })(root, 0);
+    if (!found) return null;
+    const ser = found.__x_id._serialized;
+    const t = typeof found.__x_t === 'number' ? found.__x_t : null;
+    let body = typeof found.__x_body === 'string' ? found.__x_body : null;
+    if (!body) {
+      const tx = el.querySelector('.selectable-text');
+      body = tx ? tx.textContent : null;
+    }
+    return {
+      external_id: ser,
+      from_me: ser.startsWith('true_'),
+      t,
+      body: body ? body.slice(0, 2000) : null,
+    };
+  }
+
+  // The trailing window of the open conversation (last 25 rendered rows).
+  function collectMessages() {
+    const rows = [...document.querySelectorAll('#main [data-id]')].slice(-25);
+    const out = [];
+    for (const el of rows) {
+      const m = messageFromRow(el);
+      if (m && m.t) out.push(m);
+    }
+    return out;
+  }
+
+  // Per-wid set of message ids already posted, so a rescan only sends news.
+  // Bounded to the most recent wids so it cannot grow without limit.
+  const seenByWid = new Map();
+  function markSeen(wid, ids) {
+    let set = seenByWid.get(wid);
+    if (!set) {
+      set = new Set();
+      seenByWid.set(wid, set);
+      if (seenByWid.size > 50) {
+        seenByWid.delete(seenByWid.keys().next().value);
+      }
+    }
+    for (const id of ids) set.add(id);
+  }
+
+  let lastWid = null;
+  let lastPhone = null;
   async function tick() {
     const wid = activeChatId();
-    if (wid === last) return;
-    last = wid;
-    const phone = await widToPhone(wid);
-    window.postMessage(
-      { __saleem: 'chat', wid: wid || null, phone: phone || null },
-      '*',
-    );
+    if (wid !== lastWid) {
+      lastWid = wid;
+      // Resolve the phone once per chat (IndexedDB lookup) and cache it.
+      lastPhone = await widToPhone(wid);
+      window.postMessage(
+        { __saleem: 'chat', wid: wid || null, phone: lastPhone || null },
+        '*',
+      );
+    }
+    // Capture new messages of the active chat. Skip when the phone did not
+    // resolve: the server cannot attribute content it has no number for.
+    if (wid && lastPhone) {
+      const set = seenByWid.get(wid);
+      const fresh = collectMessages().filter(
+        (m) => !set || !set.has(m.external_id),
+      );
+      if (fresh.length) {
+        markSeen(wid, fresh.map((m) => m.external_id));
+        window.postMessage(
+          {
+            __saleem: 'messages',
+            wid,
+            phone: lastPhone,
+            // Body only for inbound; outgoing rows are id+ts markers.
+            messages: fresh.map((m) => ({
+              id: m.external_id,
+              t: m.t,
+              from_me: m.from_me,
+              body: m.from_me ? undefined : m.body,
+            })),
+          },
+          '*',
+        );
+      }
+    }
   }
 
   let timer = null;
@@ -179,7 +285,8 @@
   // The isolated relay can force a re-scan (it may load after our first post).
   window.addEventListener('message', (e) => {
     if (e.source === window && e.data && e.data.__saleem === 'rescan') {
-      last = null;
+      // Force a chat re-post; the seen sets stay so messages are not re-sent.
+      lastWid = null;
       tick();
     }
   });

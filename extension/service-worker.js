@@ -215,6 +215,33 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  // New inbound messages captured from the open chat: ingest first-party.
+  if (msg.type === 'wa_messages') {
+    (async () => {
+      if (!msg.phone || !msg.messages || msg.messages.length === 0) return;
+      const res = await api('/api/events/whatsapp', {
+        chat: { phone: msg.phone },
+        messages: msg.messages.map((m) => ({
+          external_id: m.id,
+          from_me: m.from_me,
+          ts: m.t,
+          body: m.body,
+        })),
+      });
+      // Nudge an open panel to refresh its needs-action strip.
+      if (res.ok) broadcast({ type: 'events_update' });
+    })();
+    return false;
+  }
+
+  // Resolve inbox events from the panel's needs-action strip.
+  if (msg.type === 'events_resolve') {
+    api('/api/events/resolve', { ids: msg.ids, action: msg.action || 'done' }).then(
+      sendResponse,
+    );
+    return true;
+  }
+
   if (msg.type === 'get_notes') {
     getNotes(msg.caseId, msg.module).then(sendResponse);
     return true;

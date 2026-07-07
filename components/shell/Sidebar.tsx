@@ -4,6 +4,7 @@ import {
   Building2,
   CalendarCheck,
   ChevronLeft,
+  Coins,
   Contact,
   Cpu,
   Filter,
@@ -80,6 +81,10 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobil
   /* The provider board shows patient cases, so its nav item only appears for a
      viewer who may see patient names (the route 403s everyone else regardless). */
   const seesNames = Boolean(me?.capabilities?.sees_patient_names);
+  /* AI costs is leadership-only (the three who track spend). The route 403s
+     everyone else regardless; this just hides the link. Keys must match the
+     COST_VIEWERS set in app/api/ai-costs/route.ts. */
+  const canSeeCosts = ["khalid", "noman", "alsaeed"].includes(me?.person ?? "");
 
   function navLabel(text: string) {
     if (rail) return null;
@@ -132,6 +137,15 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobil
         {MANAGE_NAV.map((entry) => (
           <NavItem key={entry.href} {...entry} collapsed={rail} onNavigate={onCloseMobile} />
         ))}
+        {canSeeCosts ? (
+          <NavItem
+            href="/ai-costs"
+            label="AI costs"
+            icon={Coins}
+            collapsed={rail}
+            onNavigate={onCloseMobile}
+          />
+        ) : null}
         {isAdmin ? (
           <>
             {navLabel("Admin")}

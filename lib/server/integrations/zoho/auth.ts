@@ -32,6 +32,15 @@ export class ZohoAuthService {
     );
   }
 
+  /** Drop the cached token so the next accessToken() re-mints. Called after a
+   *  401 from Zoho: the token is valid per our TTL but Zoho rejected it (early
+   *  expiry, revocation, or the concurrent-access-token cap invalidating an
+   *  older token when many warm instances share one refresh token). */
+  invalidate(): void {
+    this.token = null;
+    this.expiresAt = 0;
+  }
+
   async accessToken(): Promise<string> {
     if (!this.configured()) {
       throw new Error(

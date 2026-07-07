@@ -1399,6 +1399,9 @@ export interface CockpitCaseData {
   in_funnel_days: number
   step_current: string
   steps: CockpitStep[]
+  /** A one-line AI read of where this case stands, from the proactive summary
+   *  store, or null/absent when none exists. Name-seer gated server-side. */
+  ai_summary?: string | null
   next_action: CockpitNextAction
   details: CockpitDetail[]
   checklist: CockpitChecklistItem[]
@@ -1755,4 +1758,99 @@ export interface CockpitSlaPolicyData {
   provider: CockpitProviderSlaRule[]
   /** Plain summary of the business-day rule shown above the tables. */
   business_day_note: string
+}
+
+// Reactive inbox (channel_events). GET /api/events/inbox returns InboxData;
+// POST /api/events/resolve { ids, action } returns { resolved }. The extension
+// lookup response also carries open_events: InboxEvent[] for the matched case.
+export interface InboxTriage {
+  source: 'rules' | 'ai'
+  urgency: 'urgent' | 'high' | 'normal' | 'low'
+  bucket: 'sla_breach' | 'reply' | 'revival' | 'unmatched'
+  intent?: string
+  /** A suggested write-gate change, or null. Tier 1 kinds (set_follow_up,
+   *  set_lead_follow_up, set_lead_status, stamp, add_tag) confirm inline;
+   *  tier 2 kinds (move_stage, convert_lead, park_lead) confirm via a modal. */
+  suggested_change?: { kind: string; [k: string]: unknown } | null
+  draft_note?: string
+  /** One-line status of where the case stands; name-seers only (may echo message
+   *  content, stripped for everyone else server-side). */
+  summary?: string
+  model?: string
+  /** The case's stage/status when triaged; the Confirm button disables when the
+   *  live case no longer matches (staleness guard). */
+  stage_at_triage?: string | null
+}
+export interface InboxEvent {
+  id: string
+  channel: 'whatsapp' | 'email' | 'call'
+  occurred_at: string
+  status: 'open'
+  /** Patient message content: present only for name-seers; null when purged. */
+  message_snippet?: string | null
+  triage: InboxTriage | null
+}
+/** The matched case for an inbox group; the same ref shape as a search match. */
+export interface InboxCase {
+  kind: 'lead' | 'deal'
+  patient_ref: PatientRefData
+  patient_name?: string
+  stage_or_status: string | null
+  pipeline: string | null
+  owner: string | null
+}
+export interface InboxGroup {
+  case: InboxCase | null
+  /** Sender number for an unmatched group; name-seers only. */
+  patient_phone?: string | null
+  events: InboxEvent[]
+}
+export interface InboxData {
+  groups: InboxGroup[]
+  counts: { open: number; urgent: number }
+}
+
+// The unified "Today" list (GET /api/cockpit/today): one row per case, merging
+// the SLA clock with the case's open messages + top suggestion. The cockpit home.
+export interface TodayRow {
+  lead_ref: PatientRefData | null
+  patient_name?: string
+  record_type: 'lead' | 'deal' | null
+  pipeline: string | null
+  stage_or_status: string | null
+  next_action: string | null
+  due: { label: string; tone: 'good' | 'warn' | 'info' | 'mut'; kind: string } | null
+  approx: boolean
+  events: InboxEvent[]
+  urgency_rank: number
+  /** Proactive AI summary (from the manual refresh); name-seers only. The
+   *  message summary on events takes priority. */
+  ai_summary?: string | null
+  /** Proactive AI suggestion for a silent case; no message event to resolve. */
+  ai_suggestion?: { change: { kind: string; [k: string]: unknown }; stage_at: string | null } | null
+}
+export interface TodayData {
+  rows: TodayRow[]
+  counts: { total: number; due_now: number; messages: number }
+}
+
+// AI costs (GET /api/ai-costs, leadership-gated). Exact self-metered Nova spend.
+export interface AiCostDay {
+  date: string
+  usd: number
+  calls: number
+}
+export interface AiCostModel {
+  model: string
+  usd: number
+  calls: number
+}
+export interface AiCostsData {
+  total_usd: number
+  calls: number
+  input_tokens: number
+  output_tokens: number
+  last_call_at: string | null
+  by_day: AiCostDay[]
+  by_model: AiCostModel[]
 }

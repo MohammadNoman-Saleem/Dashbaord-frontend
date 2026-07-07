@@ -26,6 +26,7 @@ import { searchByPhone } from '@/lib/server/services/patient-search';
 import { cockpitService } from '@/lib/server/services/cockpit';
 import { PIPELINE_STAGES } from '@/lib/server/crm-read';
 import { LEAD_STATUSES } from '@/lib/server/services/write-gate-changes';
+import { openEventsForCase } from '@/lib/server/services/channel-events';
 
 export const runtime = 'nodejs';
 
@@ -66,6 +67,9 @@ export const POST = handler(async (req, ctx) => {
     viewer,
   );
 
+  // This route is already name-seer gated, so open-event snippets ride along.
+  const openEvents = await openEventsForCase(top.patient_ref.zoho_id, viewer);
+
   // Deal stages come from the matched pipeline; leads advance by status, which
   // the panel handles separately, so their stage options are empty here.
   const stageOptions =
@@ -82,6 +86,7 @@ export const POST = handler(async (req, ctx) => {
       // Leads advance by Lead_Status; the panel's status control offers the
       // exact picklist set_lead_status validates against.
       lead_status_options: top.kind === 'lead' ? [...LEAD_STATUSES] : [],
+      open_events: openEvents,
     },
     mergeMeta(parts),
   );

@@ -29,6 +29,7 @@
 // SERVER ONLY. Node runtime (it reaches pg/Zoho through getCrmRead()).
 import { getCrmRead } from '../crm-read';
 import type { DealRecord, LeadRecord } from '../crm-read';
+import { getOrComputeSummary } from './case-summary';
 import { patientSerializer, type PatientRef } from '../privacy';
 import {
   destinationGroupOf,
@@ -197,6 +198,10 @@ export interface CaseFile {
   in_funnel_days: number;
   step_current: string;
   steps: Array<{ key: string; label: string; state: 'done' | 'cur' | 'todo' }>;
+  // A one-line AI read of where this case stands, from the proactive summary
+  // store, or null when none has been computed. Gated to name-seers, like
+  // patient data, since it can paraphrase clinical concern text.
+  ai_summary?: string | null;
   next_action: {
     label: string;
     due_label: string;
@@ -219,7 +224,7 @@ export interface CaseFile {
 
 // A normalized case the engine and the serializers read, built from either a
 // Lead or a Deal so the rest of the service handles one shape.
-interface NormalizedCase {
+export interface NormalizedCase {
   // The internal Zoho record id. Stays the case-file lookup key; never shown.
   zoho_id: string;
   // The human Zoho reference the team identifies records by (Leads autonumber
@@ -691,6 +696,17 @@ async function caseFile(
     .then((read) => read.data)
     .catch(() => [] as string[]);
 
+  // One-line AI summary, name-seer gated. Computed on demand: return the stored
+  // line when the case's state is unchanged, else generate + store one now, so a
+  // case the bulk refresh never covered (e.g. a lead outside the active
+  // population) still shows a real summary the moment it is opened. Best effort:
+  // a model or store hiccup must never fail the whole case file.
+  const aiSummary = viewer.sees_patient_names
+    ? await getOrComputeSummary(found)
+        .then((s) => s?.summary ?? null)
+        .catch(() => null)
+    : null;
+
   const now = new Date();
   const clock = governingClock(found.clockInputs, now);
   const inFunnelDays = found.createdTime
@@ -737,6 +753,7 @@ async function caseFile(
     in_funnel_days: inFunnelDays,
     step_current: STEP_LABEL[found.step],
     steps: stepperFor(found.step),
+    ai_summary: aiSummary,
     next_action: {
       label: nextActionLine(found.step),
       due_label: clock.due_label,
@@ -876,6 +893,10 @@ export const cockpitService = {
   parked,
   caseFile,
   slaPolicy,
+  // Exposed for the reactive-inbox triage: it finds a matched case by zoho_id to
+  // read its cockpit step and governing clock (reusing the exact fromDeal/fromLead
+  // clock mapping instead of duplicating it).
+  population,
 };
 
 // Re-export the step order for any caller that mirrored the controller's DTOs.
