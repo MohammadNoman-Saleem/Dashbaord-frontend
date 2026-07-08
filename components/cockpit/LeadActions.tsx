@@ -40,14 +40,16 @@ const WRITE_FAILURE_COPY =
 
 const PIPELINES: CockpitPipeline[] = ["Treatment", "Telemedicine"];
 
-// The Leads Lead_Status picklist, in funnel order.
+// The in-use Leads Lead_Status values, in funnel order. Only statuses live
+// leads actually hold are offered. Three older picklist options (Doctor
+// Consultation Scheduled/Done, Quote Shared) are unused in Zoho (zero leads,
+// renamed labels over legacy Zoho defaults) and were removed so the cockpit
+// stops offering statuses the team does not use. Kept in sync with the server
+// allowlist in lib/server/services/write-gate-changes.ts.
 const LEAD_STATUSES = [
   "New",
   "Intro Call Scheduled",
   "Intro Call Done",
-  "Doctor Consultation Scheduled",
-  "Doctor Consultation Done",
-  "Quote Shared",
   "Deal Ready",
   "Not Qualified",
   "Waiting Response",

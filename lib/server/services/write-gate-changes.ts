@@ -81,16 +81,21 @@ export const ACTIVE_CHANGE_KINDS: ReadonlyArray<ProposedChange['kind']> = [
   'remove_tag',
 ];
 
-// The Lead_Status picklist (Leads Lead_Status), from the Zoho schema discovery.
-// set_lead_status validates its target against this list; nothing outside it is
-// written.
+// The in-use Lead_Status values (Leads module): the funnel labels the team
+// actually sets. In Zoho these display labels sit on top of legacy stored
+// values (for example New over "Attempted to Contact"), so the strings here are
+// the display labels live records hold. Verified against live data 2026-07-08:
+// three older picklist options (Doctor Consultation Scheduled/Done, Quote
+// Shared) are unused (zero leads) and were removed so the cockpit stops offering
+// statuses the team does not use. Two real options (Service not available,
+// Searching Providers) are pending the cockpit step alignment before they are
+// offered. set_lead_status validates its target against this list; nothing
+// outside it is written. Keep in sync with LEAD_STATUSES in
+// components/cockpit/LeadActions.tsx.
 export const LEAD_STATUSES = [
   'New',
   'Intro Call Scheduled',
   'Intro Call Done',
-  'Doctor Consultation Scheduled',
-  'Doctor Consultation Done',
-  'Quote Shared',
   'Deal Ready',
   'Not Qualified',
   'Waiting Response',
