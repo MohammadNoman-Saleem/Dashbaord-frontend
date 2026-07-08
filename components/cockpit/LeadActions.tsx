@@ -40,20 +40,19 @@ const WRITE_FAILURE_COPY =
 
 const PIPELINES: CockpitPipeline[] = ["Treatment", "Telemedicine"];
 
-// The Lead_Status values offered in the cockpit: the funnel labels available in
-// Zoho. Three unused picklist options (Doctor Consultation Scheduled/Done, Quote
-// Shared) stay out; they are renamed labels over legacy Zoho defaults with zero
-// leads. Kept in sync with the server allowlist in
-// lib/server/services/write-gate-changes.ts.
+// The Lead_Status values offered in the cockpit, matching the live Zoho leads
+// board (verified 2026-07-08), in board order. Doctor Consultation
+// Scheduled/Done and Quote Shared (unused phantom labels, zero leads) and
+// Service not available (not on the board) are excluded. Kept in sync with the
+// server allowlist in lib/server/services/write-gate-changes.ts.
 const LEAD_STATUSES = [
   "New",
+  "Waiting Response",
   "Intro Call Scheduled",
   "Intro Call Done",
+  "Searching Providers",
   "Deal Ready",
   "Not Qualified",
-  "Waiting Response",
-  "Service not available",
-  "Searching Providers",
 ];
 
 type Props = {
