@@ -81,15 +81,15 @@ export const ACTIVE_CHANGE_KINDS: ReadonlyArray<ProposedChange['kind']> = [
   'remove_tag',
 ];
 
-// The in-use Lead_Status values (Leads module): the funnel labels the team
-// actually sets. In Zoho these display labels sit on top of legacy stored
-// values (for example New over "Attempted to Contact"), so the strings here are
-// the display labels live records hold. Verified against live data 2026-07-08:
-// three older picklist options (Doctor Consultation Scheduled/Done, Quote
-// Shared) are unused (zero leads) and were removed so the cockpit stops offering
-// statuses the team does not use. Two real options (Service not available,
-// Searching Providers) are pending the cockpit step alignment before they are
-// offered. set_lead_status validates its target against this list; nothing
+// The Lead_Status values (Leads module) offered in the cockpit: the funnel
+// labels available in Zoho. In Zoho these display labels sit on top of legacy
+// stored values (for example New over "Attempted to Contact"), so the strings
+// here are the display labels live records hold. Verified against live data
+// 2026-07-08: three picklist options (Doctor Consultation Scheduled/Done, Quote
+// Shared) are unused (zero leads) and stay out. Service not available and
+// Searching Providers are real, available options and are included; the cockpit
+// step placement for Searching Providers (sla.ts) is interim pending the step
+// alignment. set_lead_status validates its target against this list; nothing
 // outside it is written. Keep in sync with LEAD_STATUSES in
 // components/cockpit/LeadActions.tsx.
 export const LEAD_STATUSES = [
@@ -99,6 +99,8 @@ export const LEAD_STATUSES = [
   'Deal Ready',
   'Not Qualified',
   'Waiting Response',
+  'Service not available',
+  'Searching Providers',
 ] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
