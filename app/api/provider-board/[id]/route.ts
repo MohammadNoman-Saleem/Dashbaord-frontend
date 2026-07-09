@@ -1,13 +1,13 @@
 // DELETE /api/provider-board/:id -> remove a patient card from a hospital column
-// (a soft delete; the same patient can be re-added later). Person-only and
-// name-seer-gated like the board route; the id is validated as a UUID and the
-// removal is audited (id only, no patient data).
+// (a soft delete; the same patient can be re-added later). Person-only and open
+// to every signed-in viewer, since removing a card by its id touches no patient
+// identity; the id is validated as a UUID and the removal is audited (id only,
+// no patient data).
 import { z } from 'zod';
 import { handler } from '@/lib/server/handler';
 import { withMeta } from '@/lib/server/envelope';
 import { BadRequestError, ForbiddenError } from '@/lib/server/errors';
 import { getAudit } from '@/lib/server/audit';
-import { viewerMustNotSeePii } from '@/lib/server/privacy';
 import { getProviderBoardService } from '@/lib/server/services/provider-board';
 import type { RequestViewer } from '@/lib/server/auth/viewer';
 
@@ -19,19 +19,12 @@ function assertPerson(viewer: RequestViewer): void {
   }
 }
 
-function assertNameSeer(viewer: RequestViewer): void {
-  if (viewerMustNotSeePii(viewer)) {
-    throw new ForbiddenError('You do not have access to the provider board.');
-  }
-}
-
 // provider_referrals ids are gen_random_uuid() v4, like the blockers route.
 const UuidSchema = z.string().uuid();
 
 export const DELETE = handler(async (req, ctx) => {
   const viewer = ctx.requireViewer();
   assertPerson(viewer);
-  assertNameSeer(viewer);
 
   const segments = new URL(req.url).pathname.split('/').filter(Boolean);
   const rawId = decodeURIComponent(segments[segments.length - 1] ?? '');

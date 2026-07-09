@@ -17,10 +17,13 @@
 import { handler } from '@/lib/server/handler';
 import { withMeta } from '@/lib/server/envelope';
 import { rulesList } from '@/lib/server/services/payouts';
+import { assertFinancialsAccess } from '@/lib/server/auth/access';
 
 export const runtime = 'nodejs';
 
 export const GET = handler(async (_req, ctx) => {
   const viewer = ctx.requireViewer();
+  // Commission is part of Financials, restricted to the same audience.
+  assertFinancialsAccess(viewer);
   return withMeta(await rulesList(viewer));
 });

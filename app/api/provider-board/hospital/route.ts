@@ -1,14 +1,13 @@
 // POST /api/provider-board/hospital -> add a board-only custom hospital (one not
 // in the Zoho Hospitals directory). It never touches Zoho; it becomes an extra
-// column on the provider board under its country. Person-only and name-seer
-// gated like the rest of the board; audited (business name + country, no patient
-// data).
+// column on the provider board under its country. Person-only and open to every
+// signed-in viewer, since a hospital name and country carry no patient identity;
+// audited (business name + country, no patient data).
 import { z } from 'zod';
 import { handler } from '@/lib/server/handler';
 import { withMeta } from '@/lib/server/envelope';
 import { BadRequestError, ForbiddenError } from '@/lib/server/errors';
 import { getAudit } from '@/lib/server/audit';
-import { viewerMustNotSeePii } from '@/lib/server/privacy';
 import { getProviderBoardService } from '@/lib/server/services/provider-board';
 import type { RequestViewer } from '@/lib/server/auth/viewer';
 
@@ -20,12 +19,6 @@ function assertPerson(viewer: RequestViewer): void {
   }
 }
 
-function assertNameSeer(viewer: RequestViewer): void {
-  if (viewerMustNotSeePii(viewer)) {
-    throw new ForbiddenError('You do not have access to the provider board.');
-  }
-}
-
 const addHospitalSchema = z.object({
   name: z.string().min(1).max(200),
   country: z.string().min(1).max(100),
@@ -34,7 +27,6 @@ const addHospitalSchema = z.object({
 export const POST = handler(async (req, ctx) => {
   const viewer = ctx.requireViewer();
   assertPerson(viewer);
-  assertNameSeer(viewer);
 
   let raw: unknown;
   try {

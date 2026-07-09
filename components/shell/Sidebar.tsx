@@ -23,6 +23,7 @@ import { PersonMenu } from "@/components/shell/PersonMenu";
 import { LogoutButton } from "@/components/shell/LogoutButton";
 import { BeatIcon } from "@/components/ui/BeatIcon";
 import { useViewer } from "@/lib/viewer";
+import { canSeeFinancials } from "@/lib/access";
 
 /* Sidebar per 02 section 5.1 and the approved mockup: 250px sticky full
    height, collapsing to a 70px icon rail on desktop, and a fixed off-canvas
@@ -50,7 +51,6 @@ const WORKSPACE_NAV: NavEntry[] = [
      parking-list rule and flagged for Khalid's review. There is no separate
      Social nav item; the standalone /social route was removed. */
   { href: "/marketing", label: "Marketing", icon: Megaphone },
-  { href: "/financials", label: "Financials", icon: Wallet },
 ];
 
 const MANAGE_NAV: NavEntry[] = [
@@ -77,9 +77,11 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobil
      back until hydration), so these gates are false on the first paint and the
      gated links appear only after hydration, matching the server. */
   const isAdmin = me?.role === "admin";
-  /* The provider board shows patient cases, so its nav item only appears for a
-     viewer who may see patient names (the route 403s everyone else regardless). */
-  const seesNames = Boolean(me?.capabilities?.sees_patient_names);
+  /* Financials (and the commission tab behind it) is limited to the Financials
+     audience (admins, the CEO, and finance); the routes enforce the same rule
+     server-side. The provider board is open to everyone now, so it no longer
+     gates on seeing names. */
+  const canFinancials = me ? canSeeFinancials(me.role, me.person) : false;
 
   function navLabel(text: string) {
     if (rail) return null;
@@ -119,15 +121,22 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobil
         {WORKSPACE_NAV.map((entry) => (
           <NavItem key={entry.href} {...entry} collapsed={rail} onNavigate={onCloseMobile} />
         ))}
-        {seesNames ? (
+        {canFinancials ? (
           <NavItem
-            href="/provider-board"
-            label="Provider board"
-            icon={Building2}
+            href="/financials"
+            label="Financials"
+            icon={Wallet}
             collapsed={rail}
             onNavigate={onCloseMobile}
           />
         ) : null}
+        <NavItem
+          href="/provider-board"
+          label="Provider board"
+          icon={Building2}
+          collapsed={rail}
+          onNavigate={onCloseMobile}
+        />
         {navLabel("Manage")}
         {MANAGE_NAV.map((entry) => (
           <NavItem key={entry.href} {...entry} collapsed={rail} onNavigate={onCloseMobile} />
