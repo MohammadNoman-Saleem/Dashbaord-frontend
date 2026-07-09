@@ -168,6 +168,22 @@ const EnvSchema = z.object({
   // effect. Strict string boolean.
   WRITE_GATE_ENABLED: strictBool,
 
+  // Reactive-inbox AI triage gate. Default false: the inbox always runs the
+  // rule-based triage; with this on, matched inbound messages are additionally
+  // refined by Amazon Nova (Bedrock). Turning it on is a human decision.
+  TRIAGE_AI_ENABLED: strictBool,
+  // Bedrock config. Nova is NOT served in me-south-1 (Bahrain), so the region is
+  // a deliberate cross-region choice (e.g. eu-west-1) and the model id is a
+  // cross-region inference profile. Keys are BEDROCK_-prefixed, NOT the bare
+  // AWS_* names the SDK picks up ambiently (same isolation reason as the
+  // ANTHROPIC_API_KEY strip in init.ts); they are passed explicitly to the
+  // client. All optional so the app boots before Bedrock is set; when
+  // TRIAGE_AI_ENABLED is on but these are missing, triage falls back to rules.
+  BEDROCK_REGION: z.string().optional(),
+  BEDROCK_MODEL_ID: z.string().default('eu.amazon.nova-micro-v1:0'),
+  BEDROCK_ACCESS_KEY_ID: z.string().optional(),
+  BEDROCK_SECRET_ACCESS_KEY: z.string().optional(),
+
   // Git sha stamped by the deploy pipeline; surfaced on /healthz.
   GIT_SHA: z.string().default('dev'),
 });

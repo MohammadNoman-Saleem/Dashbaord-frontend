@@ -5,7 +5,40 @@
 const $ = (id) => document.getElementById(id);
 
 // The currently rendered match plus the prefill values the details form edits.
-let current = { phone: null, match: null, stageOptions: [], details: {} };
+let current = { phone: null, match: null, stageOptions: [], details: {}, openEventIds: [], suggestion: null };
+
+// Tier 1 kinds fire on one tap; tier 2 kinds show an inline confirm step first.
+const ONE_TAP_KINDS = new Set([
+  'set_follow_up',
+  'set_lead_follow_up',
+  'set_lead_status',
+  'stamp',
+  'add_tag',
+]);
+const MODAL_KINDS = new Set(['move_stage', 'convert_lead', 'park_lead']);
+
+function describeChange(c) {
+  if (!c) return null;
+  switch (c.kind) {
+    case 'set_follow_up':
+    case 'set_lead_follow_up':
+      return 'Set follow up to ' + c.date;
+    case 'set_lead_status':
+      return 'Set status: ' + c.status;
+    case 'stamp':
+      return 'Mark ' + String(c.event).replace(/_/g, ' ');
+    case 'add_tag':
+      return 'Add tag: ' + (Array.isArray(c.tag_names) ? c.tag_names.join(', ') : '');
+    case 'move_stage':
+      return 'Move stage to ' + c.to_stage;
+    case 'convert_lead':
+      return 'Convert to a ' + c.pipeline + ' deal at ' + c.stage;
+    case 'park_lead':
+      return 'Park as Not Qualified (' + c.reason + ')';
+    default:
+      return null;
+  }
+}
 
 function setStatus(text) {
   $('status').textContent = text || '';
@@ -115,6 +148,64 @@ function renderDetails(c, data) {
   }
 }
 
+// The "needs action" strip: open reactive-inbox events for this case, plus a
+// one-tap Confirm when the AI suggested a safe action (staleness-guarded).
+function renderNeedsAction(data) {
+  const events = Array.isArray(data.open_events) ? data.open_events : [];
+  current.openEventIds = events.map((e) => e.id);
+  current.suggestion = null;
+  if (!events.length) {
+    show('needsAction', false);
+    return;
+  }
+  show('needsAction', true);
+  const latest = events[0];
+  const summary = events.map((e) => e.triage && e.triage.summary).find(Boolean);
+  // Label the band honestly: the AI one-line read when we have it, else the raw
+  // message text (or nothing yet), so it never mislabels a snippet as AI output.
+  $('needsKind').textContent = summary ? 'AI summary' : 'Latest message';
+  $('needsSnippet').textContent = summary || latest.message_snippet || 'New message waiting';
+  const urgency = latest.triage && latest.triage.urgency ? latest.triage.urgency : 'new';
+  $('needsMeta').textContent =
+    events.length + ' open' + (urgency ? ' · ' + urgency : '');
+
+  // Find the first event with a suggestion (either tier).
+  const sugEvent = events.find(
+    (e) =>
+      e.triage &&
+      e.triage.suggested_change &&
+      (ONE_TAP_KINDS.has(e.triage.suggested_change.kind) ||
+        MODAL_KINDS.has(e.triage.suggested_change.kind)),
+  );
+  const label = sugEvent && describeChange(sugEvent.triage.suggested_change);
+  if (sugEvent && label) {
+    const stamped = sugEvent.triage.stage_at_triage;
+    const currentStage = current.match && current.match.stage_or_status;
+    const stale = stamped != null && currentStage !== stamped;
+    current.suggestion = {
+      eventId: sugEvent.id,
+      change: sugEvent.triage.suggested_change,
+      modal: MODAL_KINDS.has(sugEvent.triage.suggested_change.kind),
+      label,
+    };
+    show('needsSuggest', true);
+    $('needsSuggestLabel').textContent =
+      'Suggested: ' + label + (stale ? ' (case changed, re-check)' : '');
+    $('needsConfirm').disabled = stale;
+    show('needsModal', false);
+  } else {
+    show('needsSuggest', false);
+    show('needsModal', false);
+  }
+}
+
+// Re-lookup without the loading skeleton (background refresh after an event).
+async function silentRefresh() {
+  if (!current.phone) return;
+  const result = await send({ type: 'lookup', phone: current.phone });
+  render(current.phone, result);
+}
+
 // Show the spinner/skeleton while a lookup is in flight.
 function showLoading(text) {
   show('notConfigured', false);
@@ -133,7 +224,7 @@ function render(phone, result) {
   show('notesCard', false);
   show('templatesCard', false);
   show('hospitalsCard', false);
-  current = { phone: phone || null, match: null, stageOptions: [], details: {} };
+  current = { phone: phone || null, match: null, stageOptions: [], details: {}, openEventIds: [], suggestion: null };
 
   if (result && result.error === 'not_configured') {
     show('notConfigured', true);
@@ -175,6 +266,19 @@ function render(phone, result) {
   show('empty', false);
   show('patient', true);
 
+  // Standing AI summary (the proactive case read) at the top of the Patient
+  // card, so a matched patient always shows a clear AI line, mirroring the
+  // cockpit case file. When the chat has a live unanswered message, the "Needs
+  // action" hero shows that fresher message read instead, so hide this one to
+  // avoid two bands.
+  const hasLiveEvents = Array.isArray(data.open_events) && data.open_events.length > 0;
+  if (c.ai_summary && !hasLiveEvents) {
+    $('patientAiText').textContent = c.ai_summary;
+    show('patientAi', true);
+  } else {
+    show('patientAi', false);
+  }
+
   $('pName').textContent = fmt(
     match.patient_name || (match.patient_ref && match.patient_ref.initials),
   );
@@ -190,6 +294,7 @@ function render(phone, result) {
   renderTags(c);
   renderDetails(c, data);
   renderHistory(c);
+  renderNeedsAction(data);
 
   const stageSel = $('stageSelect');
   stageSel.innerHTML = '';
@@ -624,6 +729,60 @@ $('followBtn').addEventListener('click', async () => {
   if (res && res.ok) refresh();
 });
 
+async function fireSuggestion(s, id) {
+  setStatus('Confirming...');
+  // Fire the prefilled write, then resolve ONLY the event it came from.
+  const w = await send({ type: 'action_write', caseId: id, change: s.change });
+  if (!w || !w.ok) {
+    setStatus('Failed: ' + fmt(w && w.error));
+    return;
+  }
+  await send({ type: 'events_resolve', ids: [s.eventId], action: 'done' });
+  setStatus('Done');
+  silentRefresh();
+}
+
+$('needsConfirm').addEventListener('click', async () => {
+  const s = current.suggestion;
+  const id = caseId();
+  if (!s || !id) return;
+  if (s.modal) {
+    // Tier 2: show the inline confirm step instead of firing immediately.
+    $('needsModalText').textContent = s.label;
+    show('needsModal', true);
+    return;
+  }
+  await fireSuggestion(s, id);
+});
+
+$('needsModalOk').addEventListener('click', async () => {
+  const s = current.suggestion;
+  const id = caseId();
+  if (!s || !id) return;
+  show('needsModal', false);
+  await fireSuggestion(s, id);
+});
+
+$('needsModalCancel').addEventListener('click', () => {
+  show('needsModal', false);
+});
+
+$('needsHandled').addEventListener('click', async () => {
+  if (!current.openEventIds.length) return;
+  setStatus('Marking handled...');
+  const res = await send({
+    type: 'events_resolve',
+    ids: current.openEventIds,
+    action: 'done',
+  });
+  if (res && res.ok) {
+    setStatus('Marked handled');
+    silentRefresh();
+  } else {
+    setStatus('Failed: ' + fmt(res && res.error));
+  }
+});
+
 $('manualBtn').addEventListener('click', async () => {
   const phone = $('manualPhone').value.trim();
   if (!phone) return;
@@ -637,6 +796,8 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (!msg) return;
   if (msg.type === 'loading') showLoading('Looking up ' + (msg.phone || ''));
   if (msg.type === 'panel_update') render(msg.phone, msg.result);
+  // New events were ingested for the open chat: refresh the strip quietly.
+  if (msg.type === 'events_update') silentRefresh();
 });
 
 // On open, pull the last known state.

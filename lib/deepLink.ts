@@ -57,6 +57,50 @@ const FLASH_MS = 1600
 const RETRY_WINDOW_MS = 3000
 
 /**
+ * Scroll a [data-focus-id="<focusId>"] element into view (block center, smooth
+ * unless reduced motion) and play the global 'flash' highlight. Retries on rAF
+ * until the element mounts (async panels / a just-switched tab), up to 3s.
+ * Returns a cleanup that cancels the retry and clears the flash. Used by the
+ * cockpit page so selecting a lead visibly opens and flashes the case card, the
+ * same "the thing you asked for is here" signal deep links use.
+ */
+export function flashFocus(focusId: string): () => void {
+  let rafId = 0
+  let flashTimer: ReturnType<typeof setTimeout> | undefined
+  let flashed: HTMLElement | null = null
+  const startedAt = performance.now()
+
+  const attempt = () => {
+    const el = document.querySelector<HTMLElement>(
+      `[data-focus-id="${CSS.escape(focusId)}"]`,
+    )
+    if (el) {
+      flashed = el
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      // Land at the TOP of the target (with its scroll-margin), not its center;
+      // a tall case card centered would scroll to the middle of the ticket.
+      el.scrollIntoView({ block: 'start', behavior: reduced ? 'auto' : 'smooth' })
+      el.classList.remove('flash')
+      // Force a reflow so re-adding the class restarts the animation on a repeat tap.
+      void el.offsetWidth
+      el.classList.add('flash')
+      flashTimer = setTimeout(() => el.classList.remove('flash'), FLASH_MS)
+      return
+    }
+    if (performance.now() - startedAt < RETRY_WINDOW_MS) {
+      rafId = requestAnimationFrame(attempt)
+    }
+  }
+  rafId = requestAnimationFrame(attempt)
+
+  return () => {
+    cancelAnimationFrame(rafId)
+    if (flashTimer !== undefined) clearTimeout(flashTimer)
+    flashed?.classList.remove('flash')
+  }
+}
+
+/**
  * Reads the ?focus= search param and, once per value, scrolls the matching
  * [data-focus-id="<focus>"] element into view (block center, smooth unless
  * prefers-reduced-motion) and plays the global 'flash' highlight for 1.6s.

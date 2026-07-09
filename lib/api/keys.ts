@@ -69,4 +69,10 @@ export const qk = {
   cockpitSlaPolicy: () => ['cockpit', 'sla-policy'] as const,
   providerBoard: () => ['provider-board'] as const,
   whatsappTemplates: () => ['whatsapp', 'templates'] as const,
+  // Reactive inbox: the ONLY query in the app with a refetchInterval (40s, set on
+  // its hook), since new inbound events arrive out of band and the manager needs
+  // them without a manual refresh.
+  inbox: () => ['events', 'inbox'] as const,
+  aiCosts: () => ['ai-costs'] as const,
+  cockpitToday: (person: string) => ['cockpit', 'today', person] as const,
 }

@@ -143,5 +143,9 @@ export const POST = handler(async (req, ctx) => {
     resourceId,
     parsed.data.change as ProposedChange,
   );
+  // Note: we do NOT blanket-resolve the case's inbox events here. A write does
+  // not mean every unread message was handled; the caller resolves the specific
+  // event it acted on (POST /api/events/resolve), and a WhatsApp reply
+  // auto-resolves via the ingest path.
   return withMeta(result);
 });

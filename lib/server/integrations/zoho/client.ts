@@ -43,27 +43,37 @@ export class ZohoClient {
     url: string,
     params: Record<string, string> = {},
   ): Promise<T> {
-    const token = await this.auth.accessToken();
     const qs = new URLSearchParams(params).toString();
     const fullUrl = qs ? `${url}?${qs}` : url;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), ZOHO_TIMEOUT_MS);
-    let res: Response;
-    try {
-      res = await fetch(fullUrl, {
-        headers: { authorization: `Zoho-oauthtoken ${token}` },
-        signal: controller.signal,
-      });
-    } catch (err) {
-      if (controller.signal.aborted) {
-        throw new Error(
-          `Zoho request timed out after ${ZOHO_TIMEOUT_MS}ms at ${url}`,
-        );
+    const fetchOnce = async (): Promise<Response> => {
+      const token = await this.auth.accessToken();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), ZOHO_TIMEOUT_MS);
+      try {
+        return await fetch(fullUrl, {
+          headers: { authorization: `Zoho-oauthtoken ${token}` },
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if (controller.signal.aborted) {
+          throw new Error(
+            `Zoho request timed out after ${ZOHO_TIMEOUT_MS}ms at ${url}`,
+          );
+        }
+        throw err;
+      } finally {
+        clearTimeout(timer);
       }
-      throw err;
-    } finally {
-      clearTimeout(timer);
+    };
+
+    let res = await fetchOnce();
+    // A cached token can be valid per our TTL but rejected by Zoho (early
+    // expiry, revocation, or the concurrent-token cap). Drop it and re-mint
+    // once; a genuine bad refresh token throws in accessToken() on the retry.
+    if (res.status === 401) {
+      this.auth.invalidate();
+      res = await fetchOnce();
     }
 
     if (!res.ok) {

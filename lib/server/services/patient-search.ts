@@ -65,7 +65,7 @@ export interface PatientSearchMatch {
  *  human ref); patient_name is attached only for a name-seeing viewer (the
  *  per-field gate), and the handler's global sweep strips any that slips past.
  *  Centralized so every match path (phone, name, id) gates the name identically. */
-function buildMatch(
+export function buildMatch(
   kind: 'lead' | 'deal',
   id: string,
   zohoRef: string | null | undefined,

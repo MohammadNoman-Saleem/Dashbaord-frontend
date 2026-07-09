@@ -4,6 +4,7 @@ import {
   Building2,
   CalendarCheck,
   ChevronLeft,
+  Coins,
   Contact,
   Cpu,
   Filter,
@@ -82,6 +83,10 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobil
      server-side. The provider board is open to everyone now, so it no longer
      gates on seeing names. */
   const canFinancials = me ? canSeeFinancials(me.role, me.person) : false;
+  /* AI costs is leadership-only (the three who track spend). The route 403s
+     everyone else regardless; this just hides the link. Keys must match the
+     COST_VIEWERS set in app/api/ai-costs/route.ts. */
+  const canSeeCosts = ["khalid", "noman", "alsaeed"].includes(me?.person ?? "");
 
   function navLabel(text: string) {
     if (rail) return null;
@@ -141,6 +146,15 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobil
         {MANAGE_NAV.map((entry) => (
           <NavItem key={entry.href} {...entry} collapsed={rail} onNavigate={onCloseMobile} />
         ))}
+        {canSeeCosts ? (
+          <NavItem
+            href="/ai-costs"
+            label="AI costs"
+            icon={Coins}
+            collapsed={rail}
+            onNavigate={onCloseMobile}
+          />
+        ) : null}
         {isAdmin ? (
           <>
             {navLabel("Admin")}

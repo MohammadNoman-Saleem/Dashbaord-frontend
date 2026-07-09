@@ -145,6 +145,15 @@ function CaseBody({
 
   return (
     <div className="px-[18px] pb-3 pt-2">
+      {data.ai_summary ? (
+        <div className="mb-4 flex items-start gap-2.5 rounded-[12px] border border-line bg-[var(--accessible-soft)] px-[15px] py-[12px]">
+          <Cpu size={15} className="mt-[3px] shrink-0 text-accent" aria-hidden />
+          <div className="min-w-0">
+            <GrpLabel className="mb-1">AI summary</GrpLabel>
+            <p className="text-[13.5px] leading-snug text-title">{data.ai_summary}</p>
+          </div>
+        </div>
+      ) : null}
       <Stepper steps={data.steps} />
       <NextAction data={data} />
 
