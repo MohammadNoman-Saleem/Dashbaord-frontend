@@ -81,19 +81,25 @@ export const ACTIVE_CHANGE_KINDS: ReadonlyArray<ProposedChange['kind']> = [
   'remove_tag',
 ];
 
-// The Lead_Status picklist (Leads Lead_Status), from the Zoho schema discovery.
-// set_lead_status validates its target against this list; nothing outside it is
-// written.
+// The Lead_Status values (Leads module) offered in the cockpit, matching the
+// live Zoho leads board (verified 2026-07-08), in board order. In Zoho these
+// display labels sit on top of legacy stored values (for example New over
+// "Attempted to Contact"), so the strings here are the display labels live
+// records hold. Excluded: Doctor Consultation Scheduled/Done and Quote Shared
+// (unused phantom labels, zero leads) and Service not available (not on the
+// board; the read side still classifies it defensively). The cockpit step
+// placement for Searching Providers (sla.ts) is interim pending the step
+// alignment. set_lead_status validates its target against this list; nothing
+// outside it is written. Keep in sync with LEAD_STATUSES in
+// components/cockpit/LeadActions.tsx.
 export const LEAD_STATUSES = [
   'New',
+  'Waiting Response',
   'Intro Call Scheduled',
   'Intro Call Done',
-  'Doctor Consultation Scheduled',
-  'Doctor Consultation Done',
-  'Quote Shared',
+  'Searching Providers',
   'Deal Ready',
   'Not Qualified',
-  'Waiting Response',
 ] as const;
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 

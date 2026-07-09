@@ -2,10 +2,13 @@
 // hospital column. The board is a Supabase view over live Zoho reads (see
 // lib/server/services/provider-board.ts).
 //
-// Access: the board shows patients, so it is gated to name-seers (the same gate
-// as patient search); everyone else gets a 403. Writes are person-only (the MCP
-// service viewer is rejected). The add body is validated at the boundary and the
-// write is audited with ids and kind only, never a patient name.
+// Access: reading the board is open to every signed-in viewer, with patient
+// names gated per-field in the service (non-name-seers see anonymized
+// references) and the global sweep as a backstop. Adding a referral stays
+// name-seer-only because it is driven by the name-seer-gated patient search.
+// Writes are person-only (the MCP service viewer is rejected). The add body is
+// validated at the boundary and the write is audited with ids and kind only,
+// never a patient name.
 //
 // Node runtime: the service reaches Postgres through getPool() and the cached
 // Zoho reads.
@@ -44,7 +47,8 @@ const addSchema = z.object({
 
 export const GET = handler(async (_req, ctx) => {
   const viewer = ctx.requireViewer();
-  assertNameSeer(viewer);
+  // Reading the board is open to every signed-in viewer; patient names are gated
+  // per-field in the service and the global sweep strips them as a backstop.
   return withMeta(await getProviderBoardService().getBoard(viewer));
 });
 

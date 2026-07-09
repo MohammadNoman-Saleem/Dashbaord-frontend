@@ -7,11 +7,14 @@
 import { handler } from '@/lib/server/handler';
 import { mergeMeta, withMeta } from '@/lib/server/envelope';
 import { getFinancialsService } from '@/lib/server/services/financials';
+import { assertFinancialsAccess } from '@/lib/server/auth/access';
 
 export const runtime = 'nodejs';
 
 export const GET = handler(async (_req, ctx) => {
-  ctx.requireViewer();
+  const viewer = ctx.requireViewer();
+  // Financials is restricted to its audience (admins, the CEO, and finance).
+  assertFinancialsAccess(viewer);
   const { data, parts } = await getFinancialsService().overview();
   return withMeta(data, mergeMeta(parts));
 });

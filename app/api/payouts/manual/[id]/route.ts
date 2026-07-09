@@ -23,6 +23,7 @@ import { withMeta } from '@/lib/server/envelope';
 import { BadRequestError, ForbiddenError } from '@/lib/server/errors';
 import { getAudit } from '@/lib/server/audit';
 import { getManualLedgerService } from '@/lib/server/services/payouts';
+import { assertFinancialsAccess } from '@/lib/server/auth/access';
 import { ManualEntrySchema } from '../route';
 
 export const runtime = 'nodejs';
@@ -35,6 +36,8 @@ function readId(req: Request): string {
 
 export const PATCH = handler(async (req, ctx) => {
   const viewer = ctx.requireViewer();
+  // Commission is part of Financials, restricted to the same audience.
+  assertFinancialsAccess(viewer);
   if (!viewer.can_edit_payout_rules) {
     throw new ForbiddenError('Editing payout rules is for Khalid or Isa.');
   }

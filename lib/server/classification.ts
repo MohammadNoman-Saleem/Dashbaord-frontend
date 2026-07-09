@@ -337,12 +337,15 @@ export function specialtyGroupOf(
 
 // Lead status vocabulary, live values verified Jun 12 2026 (New, Waiting
 // Response, Intro Call Scheduled, Intro Call Done, Not Qualified, Deal
-// Ready) plus the picklist metadata values that may reappear.
+// Ready) plus the picklist metadata values that may reappear. Added 2026-07-08:
+// Service not available (a "we cannot help" outcome, so not_qualified) and
+// Searching Providers (active post-intro work, so intro_done).
 const STATUS_MAP: Record<string, LeadStatusNormalized> = {
   'deal ready': 'converted',
   'intro call done': 'intro_done',
   contacted: 'intro_done',
   'pre-qualified': 'intro_done',
+  'searching providers': 'intro_done',
   'waiting response': 'waiting',
   'intro call scheduled': 'waiting',
   'contact in future': 'waiting',
@@ -350,6 +353,7 @@ const STATUS_MAP: Record<string, LeadStatusNormalized> = {
   'not qualified': 'not_qualified',
   'junk lead': 'not_qualified',
   'lost lead': 'not_qualified',
+  'service not available': 'not_qualified',
 };
 
 /** status_normalized: maps the Zoho lead status plus the converted check.

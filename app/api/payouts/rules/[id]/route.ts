@@ -27,6 +27,7 @@ import {
   rulesList,
   type EditableParamKey,
 } from '@/lib/server/services/payouts';
+import { assertFinancialsAccess } from '@/lib/server/auth/access';
 
 export const runtime = 'nodejs';
 
@@ -54,6 +55,9 @@ function readId(req: Request): number {
 
 export const PATCH = handler(async (req, ctx) => {
   const viewer = ctx.requireViewer();
+  // Commission is part of Financials, restricted to the same audience, checked
+  // before the payout-rule edit capability.
+  assertFinancialsAccess(viewer);
   // Capability gate, verbatim message from the backend assertCanEdit.
   if (!viewer.can_edit_payout_rules) {
     throw new ForbiddenError('Editing payout rules is for Khalid or Isa.');
