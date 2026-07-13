@@ -16,6 +16,7 @@ import {
   type ProviderCardData,
 } from "@/components/provider-board/ProviderCard";
 import { AddReferralModal } from "@/components/provider-board/AddReferralModal";
+import { AddByReferenceModal } from "@/components/provider-board/AddByReferenceModal";
 import { AddHospitalModal } from "@/components/provider-board/AddHospitalModal";
 import { useViewer } from "@/lib/viewer";
 
@@ -40,9 +41,8 @@ const REMOVE_FAILURE =
 export function ProviderBoard() {
   const toast = useToast();
   const queryClient = useQueryClient();
-  /* Adding a patient runs the name-seer-gated patient search, so the add-patient
-     controls show only for name-seers. Viewing the board, removing cards, and
-     adding a hospital column are open to every signed-in viewer. */
+  /* Everyone can add a patient. Name-seers use the name/phone search; everyone
+     else adds by the Zoho reference shown on a card or in the case file. */
   const { me } = useViewer();
   const seesNames = me ? Boolean(me.capabilities.sees_patient_names) : false;
   const [addOpen, setAddOpen] = useState(false);
@@ -103,17 +103,15 @@ export function ProviderBoard() {
           <Building2 strokeWidth={1.8} aria-hidden="true" />
           Add hospital
         </Button>
-        {seesNames ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => openAdd(null)}
-            disabled={query.isError}
-          >
-            <Plus strokeWidth={1.8} aria-hidden="true" />
-            Add patient
-          </Button>
-        ) : null}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => openAdd(null)}
+          disabled={query.isError}
+        >
+          <Plus strokeWidth={1.8} aria-hidden="true" />
+          Add patient
+        </Button>
       </div>
 
       <div className="px-[18px] pb-[16px]">
@@ -126,20 +124,29 @@ export function ProviderBoard() {
               onAdd={openAdd}
               onRemove={(id) => removeMutation.mutate(id)}
               removingId={removingId}
-              canAddPatient={seesNames}
             />
           )}
         </QueryPanel>
       </div>
 
       {addOpen ? (
-        <AddReferralModal
-          key={presetHospitalId ?? "any"}
-          open
-          hospitals={hospitals}
-          presetHospitalId={presetHospitalId}
-          onClose={() => setAddOpen(false)}
-        />
+        seesNames ? (
+          <AddReferralModal
+            key={presetHospitalId ?? "any"}
+            open
+            hospitals={hospitals}
+            presetHospitalId={presetHospitalId}
+            onClose={() => setAddOpen(false)}
+          />
+        ) : (
+          <AddByReferenceModal
+            key={presetHospitalId ?? "any"}
+            open
+            hospitals={hospitals}
+            presetHospitalId={presetHospitalId}
+            onClose={() => setAddOpen(false)}
+          />
+        )
       ) : null}
 
       {addHospitalOpen ? (
@@ -162,7 +169,6 @@ type BoardBodyProps = {
   onAdd: (hospitalId: string | null) => void;
   onRemove: (id: string) => void;
   removingId: string | null;
-  canAddPatient: boolean;
 };
 
 function BoardBody({
@@ -172,7 +178,6 @@ function BoardBody({
   onAdd,
   onRemove,
   removingId,
-  canAddPatient,
 }: BoardBodyProps) {
   if (data.hospitals.length === 0) {
     return (
@@ -252,12 +257,10 @@ function BoardBody({
                     onRemove={() => onRemove(card.id)}
                   />
                 ))}
-                {canAddPatient ? (
-                  <Button variant="ghost" size="sm" onClick={() => onAdd(h.id)}>
-                    <Plus strokeWidth={1.8} aria-hidden="true" />
-                    Add patient
-                  </Button>
-                ) : null}
+                <Button variant="ghost" size="sm" onClick={() => onAdd(h.id)}>
+                  <Plus strokeWidth={1.8} aria-hidden="true" />
+                  Add patient
+                </Button>
               </div>
             </section>
           );

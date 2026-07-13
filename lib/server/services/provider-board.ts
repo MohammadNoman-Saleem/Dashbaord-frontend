@@ -90,7 +90,9 @@ function orderCountries(values: Iterable<string>): string[] {
 
 export interface AddReferralInput {
   hospital_id: string;
-  record_kind: 'lead' | 'deal';
+  /** Optional. When omitted (add-by-reference), the kind is auto-detected. */
+  record_kind?: 'lead' | 'deal';
+  /** Either the internal record id or the human Zoho_ID reference. */
   zoho_id: string;
 }
 
@@ -283,14 +285,21 @@ export class ProviderBoardService {
     return { hospitals, repByRecordId, columnIds };
   }
 
-  /** Add a patient to a hospital column. Validates both the hospital and the
-   *  patient against the live Zoho reads, then inserts. A patient can be on many
-   *  hospitals, but only once per hospital (the active unique index, plus a
-   *  pre-check for a friendly message). Returns the new row id. */
+  /** Add a patient to a hospital column. Resolves the entered reference (an
+   *  internal record id or a Zoho_ID) to a record and kind, validates the
+   *  hospital, then inserts. A patient can be on many hospitals, but only once
+   *  per hospital (the active unique index, plus a pre-check for a friendly
+   *  message). Returns the new row id and the resolved kind and id so the route
+   *  audits the resolved values, never the raw input. */
   async addReferral(
     viewer: RequestViewer,
     input: AddReferralInput,
-  ): Promise<{ id: string }> {
+  ): Promise<{ id: string; record_kind: 'lead' | 'deal'; zoho_id: string }> {
+    const { record_kind, recordId } = await this.resolveRecord(
+      input.zoho_id,
+      input.record_kind,
+    );
+
     const crm = getCrmRead();
     const hospitalsRead = await crm.hospitals();
     const zohoHospital = hospitalsRead.data.find(
@@ -308,22 +317,10 @@ export class ProviderBoardService {
       hospitalName = custom.name;
     }
 
-    if (input.record_kind === 'deal') {
-      const dealsRead = await crm.deals();
-      if (!dealsRead.data.some((d) => d.id === input.zoho_id)) {
-        throw new BadRequestError('That deal was not found in Zoho.');
-      }
-    } else {
-      const leadsRead = await crm.leads();
-      if (!leadsRead.data.some((l) => l.id === input.zoho_id)) {
-        throw new BadRequestError('That lead was not found in Zoho.');
-      }
-    }
-
     const existing = await this.pool.query<{ id: string }>(
       `select id from provider_referrals
        where hospital_id = $1 and zoho_id = $2 and removed_at is null`,
-      [input.hospital_id, input.zoho_id],
+      [input.hospital_id, recordId],
     );
     if (existing.rows.length > 0) {
       throw new ConflictError('That patient is already on this hospital column.');
@@ -335,15 +332,9 @@ export class ProviderBoardService {
            (hospital_id, hospital_name, record_kind, zoho_id, added_by)
          values ($1, $2, $3, $4, $5)
          returning id`,
-        [
-          input.hospital_id,
-          hospitalName,
-          input.record_kind,
-          input.zoho_id,
-          viewer.key,
-        ],
+        [input.hospital_id, hospitalName, record_kind, recordId, viewer.key],
       );
-      return { id: rows[0].id };
+      return { id: rows[0].id, record_kind, zoho_id: recordId };
     } catch (err) {
       // The active unique index is the backstop against a concurrent double-add.
       if (isUniqueViolation(err)) {
@@ -353,6 +344,80 @@ export class ProviderBoardService {
       }
       throw err;
     }
+  }
+
+  /** Resolve a reference (an internal record id or a Zoho_ID) to a record and
+   *  kind. With a kind given (the name-seer search flow) it matches inside that
+   *  collection. Without a kind (add-by-reference) it auto-detects: an
+   *  internal-id match first (the internal id is globally unique), then a
+   *  Zoho_ID match. The Zoho_ID field is NOT unique across modules (Deals
+   *  "Zoho ID" is text, Leads "Zoho Lead ID" is a separate autonumber), so a
+   *  Zoho_ID reference can hit more than one record; an ambiguous reference is
+   *  refused rather than guessed. */
+  private async resolveRecord(
+    reference: string,
+    kind?: 'lead' | 'deal',
+  ): Promise<{ record_kind: 'lead' | 'deal'; recordId: string }> {
+    const crm = getCrmRead();
+    const ref = reference.trim();
+    // Guard the empty reference: without this, an all-whitespace input would
+    // trim to '' and match the first record that has no Zoho_ID.
+    if (!ref) {
+      throw new BadRequestError(
+        'That Zoho reference was not found in leads or deals.',
+      );
+    }
+
+    if (kind === 'deal') {
+      const dealsRead = await crm.deals();
+      const d = dealsRead.data.find(
+        (r) => r.id === ref || (r.Zoho_ID ?? '').trim() === ref,
+      );
+      if (!d) throw new BadRequestError('That deal was not found in Zoho.');
+      return { record_kind: 'deal', recordId: d.id };
+    }
+    if (kind === 'lead') {
+      const leadsRead = await crm.leads();
+      const l = leadsRead.data.find(
+        (r) => r.id === ref || (r.Zoho_ID ?? '').trim() === ref,
+      );
+      if (!l) throw new BadRequestError('That lead was not found in Zoho.');
+      return { record_kind: 'lead', recordId: l.id };
+    }
+
+    // The internal record id is globally unique, so an id match is
+    // authoritative and wins.
+    const [dealsRead, leadsRead] = await Promise.all([
+      crm.deals(),
+      crm.leads(),
+    ]);
+    const dealById = dealsRead.data.find((r) => r.id === ref);
+    if (dealById) return { record_kind: 'deal', recordId: dealById.id };
+    const leadById = leadsRead.data.find((r) => r.id === ref);
+    if (leadById) return { record_kind: 'lead', recordId: leadById.id };
+
+    // The Zoho_ID field is not unique across modules, so gather every record
+    // that carries this reference. Use it only when it points at exactly one
+    // record; refuse an ambiguous reference so a non-name-seer can never
+    // silently attach the wrong patient to a hospital.
+    const byReference: Array<{ record_kind: 'lead' | 'deal'; recordId: string }> =
+      [
+        ...dealsRead.data
+          .filter((r) => (r.Zoho_ID ?? '').trim() === ref)
+          .map((r) => ({ record_kind: 'deal' as const, recordId: r.id })),
+        ...leadsRead.data
+          .filter((r) => (r.Zoho_ID ?? '').trim() === ref)
+          .map((r) => ({ record_kind: 'lead' as const, recordId: r.id })),
+      ];
+    if (byReference.length === 1) return byReference[0];
+    if (byReference.length > 1) {
+      throw new BadRequestError(
+        'That Zoho reference matches more than one record. Ask a case manager to add this patient.',
+      );
+    }
+    throw new BadRequestError(
+      'That Zoho reference was not found in leads or deals.',
+    );
   }
 
   /** Soft-remove a card (set removed_at). The same patient can be re-added later
