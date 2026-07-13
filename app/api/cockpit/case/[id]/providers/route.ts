@@ -8,10 +8,12 @@
 // to pick from (available). Adds and removes reuse the provider-board routes
 // (POST /api/provider-board, DELETE /api/provider-board/[id]).
 //
-// PRIVACY (NHRA): which hospital a patient was sent to is patient health data, so
-// this is gated to name-seers, the same gate as the provider board and patient
-// search; anyone else gets a ForbiddenError. The response carries hospital names
-// and Zoho ids only, never a patient name.
+// PRIVACY (NHRA): this per-patient case view surfaces which hospitals a specific
+// identified patient was sent to, so it is gated to name-seers (the same gate as
+// the name/phone patient search); anyone else gets a ForbiddenError. The provider
+// board itself is open to every viewer, but it shows only anonymized references;
+// this route is tied to one identified case, so it stays name-seer only. The
+// response carries hospital names and Zoho ids only, never a patient name.
 //
 // Node runtime: the service reaches Postgres through getPool() and the cached
 // Zoho reads.

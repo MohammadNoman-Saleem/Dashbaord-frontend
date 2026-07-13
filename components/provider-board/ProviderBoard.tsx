@@ -16,7 +16,9 @@ import {
   type ProviderCardData,
 } from "@/components/provider-board/ProviderCard";
 import { AddReferralModal } from "@/components/provider-board/AddReferralModal";
+import { AddByReferenceModal } from "@/components/provider-board/AddByReferenceModal";
 import { AddHospitalModal } from "@/components/provider-board/AddHospitalModal";
+import { useViewer } from "@/lib/viewer";
 
 /* The provider board. Country tabs (Bahrain first, then alphabetical, with
    "Other" for hospitals that have no country set in Zoho); under the selected
@@ -39,6 +41,10 @@ const REMOVE_FAILURE =
 export function ProviderBoard() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  /* Everyone can add a patient. Name-seers use the name/phone search; everyone
+     else adds by the Zoho reference shown on a card or in the case file. */
+  const { me } = useViewer();
+  const seesNames = me ? Boolean(me.capabilities.sees_patient_names) : false;
   const [addOpen, setAddOpen] = useState(false);
   const [presetHospitalId, setPresetHospitalId] = useState<string | null>(null);
   const [activeCountry, setActiveCountry] = useState<string | null>(null);
@@ -124,13 +130,23 @@ export function ProviderBoard() {
       </div>
 
       {addOpen ? (
-        <AddReferralModal
-          key={presetHospitalId ?? "any"}
-          open
-          hospitals={hospitals}
-          presetHospitalId={presetHospitalId}
-          onClose={() => setAddOpen(false)}
-        />
+        seesNames ? (
+          <AddReferralModal
+            key={presetHospitalId ?? "any"}
+            open
+            hospitals={hospitals}
+            presetHospitalId={presetHospitalId}
+            onClose={() => setAddOpen(false)}
+          />
+        ) : (
+          <AddByReferenceModal
+            key={presetHospitalId ?? "any"}
+            open
+            hospitals={hospitals}
+            presetHospitalId={presetHospitalId}
+            onClose={() => setAddOpen(false)}
+          />
+        )
       ) : null}
 
       {addHospitalOpen ? (

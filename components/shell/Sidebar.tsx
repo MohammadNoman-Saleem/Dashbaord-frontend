@@ -78,9 +78,6 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobil
      back until hydration), so these gates are false on the first paint and the
      gated links appear only after hydration, matching the server. */
   const isAdmin = me?.role === "admin";
-  /* The provider board shows patient cases, so its nav item only appears for a
-     viewer who may see patient names (the route 403s everyone else regardless). */
-  const seesNames = Boolean(me?.capabilities?.sees_patient_names);
   /* AI costs is leadership-only (the three who track spend). The route 403s
      everyone else regardless; this just hides the link. Keys must match the
      COST_VIEWERS set in app/api/ai-costs/route.ts. */
@@ -124,15 +121,13 @@ export function Sidebar({ collapsed, mobileOpen, onToggleCollapsed, onCloseMobil
         {WORKSPACE_NAV.map((entry) => (
           <NavItem key={entry.href} {...entry} collapsed={rail} onNavigate={onCloseMobile} />
         ))}
-        {seesNames ? (
-          <NavItem
-            href="/provider-board"
-            label="Provider board"
-            icon={Building2}
-            collapsed={rail}
-            onNavigate={onCloseMobile}
-          />
-        ) : null}
+        <NavItem
+          href="/provider-board"
+          label="Provider board"
+          icon={Building2}
+          collapsed={rail}
+          onNavigate={onCloseMobile}
+        />
         {navLabel("Manage")}
         {MANAGE_NAV.map((entry) => (
           <NavItem key={entry.href} {...entry} collapsed={rail} onNavigate={onCloseMobile} />

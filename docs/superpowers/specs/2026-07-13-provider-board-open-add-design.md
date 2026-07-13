@@ -60,11 +60,14 @@ gated (unchanged).
   `record_kind`. Add a resolver that maps the entered reference to a record by
   matching against BOTH the internal record id and the `Zoho_ID` field. When the
   kind is provided (name-seer search flow) it matches within that collection.
-  When the kind is omitted (add-by-reference flow) it auto-detects: internal-id
-  match first (deals then leads), then `Zoho_ID` match (deals then leads). It
-  stores the resolved internal id and kind, and returns them so the route can
-  audit the resolved values. Zoho record ids are unique across modules, so a
-  reference resolves to at most one record.
+  When the kind is omitted (add-by-reference flow) it auto-detects: an internal
+  record id match first (the internal id is globally unique), then a `Zoho_ID`
+  match. The `Zoho_ID` field is NOT unique across modules (Deals "Zoho ID" is a
+  text field, Leads "Zoho Lead ID" is a separate autonumber), so a `Zoho_ID`
+  reference can point at more than one record; an ambiguous reference is refused
+  rather than guessed, so a wrong patient is never attached. It stores the
+  resolved internal id and kind, and returns them so the route audits the
+  resolved values.
 - `components/provider-board/ProviderBoard.tsx`: show "Add patient" (top button
   and per-column) to everyone. Name-seers open the existing `AddReferralModal`
   (name/phone/id search). Non-name-seers open the new `AddByReferenceModal`.
