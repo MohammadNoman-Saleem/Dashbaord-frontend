@@ -265,9 +265,13 @@ export function businessHoursElapsed(start: Date, now: Date): number {
 //
 // Mapping CONFIRMED with Mohammad (2026-06-25):
 //   Leads  -> first_contact:  New, Intro Call Scheduled, Waiting Response
-//             info_collected: Intro Call Done, Doctor Consultation Scheduled/Done
-//             partner_quotes: Deal Ready, Quote Shared
-//             parked:         Not Qualified, Junk Lead, Lost Lead
+//             info_collected: Intro Call Done, Searching Providers (interim),
+//                             Doctor Consultation Scheduled/Done (legacy)
+//             partner_quotes: Deal Ready, Quote Shared (legacy)
+//             parked:         Not Qualified, Service not available, Junk Lead,
+//                             Lost Lead
+// Searching Providers step placement is interim (added 2026-07-08) pending the
+// cockpit step alignment, which adds a dedicated "looking for providers" step.
 //   Treatment deal -> quotation: New Deal
 //             decision:  Quote Proposed, Consultation Scheduled, Consult Payment,
 //                        TeleConsult Completed, Treatment Quote
@@ -287,6 +291,9 @@ const PARKED_LEAD_STATUSES = new Set([
   'not qualified',
   'junk lead',
   'lost lead',
+  // Service not available is a "we cannot help" outcome; park it like Not
+  // Qualified (added 2026-07-08).
+  'service not available',
 ]);
 const PARKED_DEAL_STAGES = new Set([
   'lost / inactive',
@@ -305,6 +312,10 @@ const INFO_COLLECTED_LEAD = new Set([
   'intro call done',
   'doctor consultation scheduled',
   'doctor consultation done',
+  // Searching Providers is active post-intro work. Interim placement here
+  // (added 2026-07-08) pending the cockpit step alignment, which adds a
+  // dedicated "looking for providers" step.
+  'searching providers',
 ]);
 const PARTNER_QUOTES_LEAD = new Set(['deal ready', 'quote shared']);
 

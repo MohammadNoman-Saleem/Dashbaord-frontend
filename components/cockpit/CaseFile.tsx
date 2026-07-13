@@ -8,6 +8,7 @@ import { AlertCircle, Check, Clock, Cpu, FileText, PenLine, Phone, StickyNote } 
 import { Button } from "@/components/ui/Button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
+import { CopyButton } from "@/components/ui/CopyButton";
 import { ListRow } from "@/components/ui/ListRow";
 import { PatientRef } from "@/components/ui/PatientRef";
 import { QueryPanel } from "@/components/ui/QueryPanel";
@@ -179,12 +180,15 @@ function CaseBody({
               <Phone strokeWidth={1.8} aria-hidden="true" className="h-3 w-3" />
               Phone
             </div>
-            <a
-              href={`tel:${data.patient_phone}`}
-              className="text-[13px] text-title underline underline-offset-2"
-            >
-              {data.patient_phone}
-            </a>
+            <div className="mt-0.5 flex items-center gap-1.5">
+              <CopyButton value={data.patient_phone} label="Copy phone number" />
+              <a
+                href={`tel:${data.patient_phone}`}
+                className="text-[13px] text-title underline underline-offset-2"
+              >
+                {data.patient_phone}
+              </a>
+            </div>
           </div>
         ) : null}
 

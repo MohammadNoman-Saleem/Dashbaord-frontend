@@ -18,6 +18,7 @@ import { handler } from '@/lib/server/handler';
 import { mergeMeta, withMeta } from '@/lib/server/envelope';
 import { BadRequestError } from '@/lib/server/errors';
 import { getCommissionService } from '@/lib/server/services/payouts';
+import { assertFinancialsAccess } from '@/lib/server/auth/access';
 
 export const runtime = 'nodejs';
 
@@ -34,6 +35,8 @@ function readCycle(req: Request): string | undefined {
 
 export const GET = handler(async (req, ctx) => {
   const viewer = ctx.requireViewer();
+  // Commission is part of Financials, restricted to the same audience.
+  assertFinancialsAccess(viewer);
   const cycle = readCycle(req);
   const { data, parts } = await getCommissionService().bookings(viewer, cycle);
   return withMeta(data, mergeMeta(parts));

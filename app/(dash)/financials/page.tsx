@@ -5,8 +5,11 @@ import { Suspense } from "react";
 
 import { CommissionTab } from "@/components/financials/CommissionTab";
 import { FinancialsTab } from "@/components/financials/FinancialsTab";
+import { Card, CardHeader } from "@/components/ui/Card";
 import { Tabs } from "@/components/ui/Tabs";
 import { useFocusFlash } from "@/lib/deepLink";
+import { canSeeFinancials } from "@/lib/access";
+import { useViewer } from "@/lib/viewer";
 import { TITLES } from "@/config/titles";
 
 /* Financials, now two tabs wired to ?tab= (financials|commission), mirroring
@@ -26,6 +29,23 @@ function FinancialsContent() {
   useFocusFlash();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { me } = useViewer();
+
+  // Financials (both tabs) is limited to the Financials audience (admins, the
+  // CEO, and finance; see canSeeFinancials). While the viewer is still hydrating
+  // we render nothing; the API enforces the same rule regardless of this guard.
+  const allowed = me ? canSeeFinancials(me.role, me.person) : null;
+  if (allowed === null) return null;
+  if (!allowed) {
+    return (
+      <Card>
+        <CardHeader title="Financials" subtitle="Restricted" />
+        <p className="px-[18px] pb-[16px] text-[13px] text-ink-2">
+          You do not have access to the financials page.
+        </p>
+      </Card>
+    );
+  }
 
   const title = TITLES.financials;
   const requested = searchParams.get("tab");
