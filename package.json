@@ -13,6 +13,7 @@
     "check:hype": "node scripts/check-hype.mjs",
     "check:patient": "node scripts/check-patient-name.mjs",
     "smoke:fixtures": "node scripts/smoke-fixtures.mjs",
+    "smoke:filters": "node scripts/smoke-filters.mjs",
     "ci": "npm run check:dashes && npm run check:red && npm run check:hype && npm run check:patient && npm run typecheck && npm run lint"
   },
   "dependencies": {

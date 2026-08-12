@@ -151,10 +151,38 @@ export interface BookingRecord {
    *  lives on the Patients module via the Patient lookup. Server-side join key
    *  ONLY, never serialized into a payload. */
   Email: string | null;
-  Name: string | null;
+  /** Appointment start and end (both datetimes). To was added to the read on
+   *  2026-08-12 so the appointments page can show a real time range instead of
+   *  a bare date. */
   From: string | null;
+  To: string | null;
+  /** Zoho formula field, the booking length in minutes (15 on every live
+   *  record checked 2026-08-12). */
+  Duration: number | null;
   Type: string | null;
+  /** The platform fee, separate from Rate (the consult fee the patient pays).
+   *  Live pairs run Rate 20 / charge 3, Rate 25 / charge 5; every record before
+   *  2025-10 carries 1, so the field's meaning changed at some point. NOT folded
+   *  into any revenue total until the paid-amount definition is confirmed. */
+  Service_Charge: number | null;
+  /** The Saleem booking reference, "SLM-APP-7GTQJZ" on records created from
+   *  2026-01 and a bare six-character code before that. Null on Pending Payment
+   *  rows, which are abandoned checkouts that never became real bookings. */
+  Saleem_ID: string | null;
+  /** Share links the booking system generates. Patient_Link is a tokenized
+   *  patient-facing link; Guest_Link keys off Saleem_ID; Doctor_Link carries the
+   *  booking system's own numeric appointment id in its last path segment. All
+   *  null on Pending Payment rows. */
+  Patient_Link: string | null;
+  Doctor_Link: string | null;
+  Guest_Link: string | null;
 }
+// The Zoho Subject field (api_name Name) is deliberately NOT read or declared
+// here. Live values are literally "Appointment for <patient full name>" (checked
+// 2026-08-12), so the field is patient PII under a non-PII name: the privacy
+// sweep in handler.ts keys off patient_name / patient_phone / whatsapp_message
+// and would not catch it. The appointments payload carries Saleem_ID as the
+// booking reference instead. Do not add Name back to the field list.
 
 /** Patients module rows carry the email the bookings rows lack. Join key ONLY:
  *  emails never leave the server. */
@@ -406,11 +434,16 @@ export class CrmReadService {
     ]);
   }
 
+  /** Bumped v2 -> v3 on 2026-08-12: the field list gained To, Duration,
+   *  Service_Charge, Saleem_ID and the three share links, and dropped Name. A
+   *  cached v2 payload carries none of the new fields and still carries the
+   *  patient-name Subject, so the key MUST change with the field list rather
+   *  than serving a stale shape for a full TTL. */
   bookings(): Promise<CachedRead<BookingRecord[]>> {
-    return this.cache.read('zoho_crm:bookings_v2', 'zoho_crm', async () => {
+    return this.cache.read('zoho_crm:bookings_v3', 'zoho_crm', async () => {
       const records = await this.zoho.getAll(`${CRM}/Appointment_Bookings`, {
         fields:
-          'Status,Rate,Doctor,Patient,Created_At,Created_Time,Email,Name,From,Type',
+          'Status,Rate,Doctor,Patient,Created_At,Created_Time,Email,From,To,Duration,Type,Service_Charge,Saleem_ID,Patient_Link,Doctor_Link,Guest_Link',
       });
       return records as BookingRecord[];
     });

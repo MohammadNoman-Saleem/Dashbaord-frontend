@@ -23,6 +23,13 @@ export function fmtDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+/** "Jun 20, 7:42 AM" */
+export function fmtDateTime(iso: string): string {
+  const d = parse(iso)
+  if (!d) return iso
+  return `${fmtDate(iso)}, ${fmtTime(iso)}`
+}
+
 /**
  * Relative age for fresh things, the plain date once it is old news:
  * "just now" under a minute, "24 min ago" under an hour, "2 hours ago"
