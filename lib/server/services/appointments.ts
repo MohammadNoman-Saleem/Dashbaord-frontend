@@ -141,11 +141,43 @@ function toRow(
   return patientSerializer.withName(row, booking.Patient?.name, viewer);
 }
 
+// The three things a single "Rate > 1" test used to lump together, split apart
+// on 2026-08-12 so a fully discounted consult can be listed without disturbing
+// any revenue figure. Measured against live data on that date:
+//
+//   Rate null (114) -> an abandoned checkout. Always Pending Payment, carries no
+//                      booking reference and no links, never became an
+//                      appointment. Excluded.
+//   Rate 1    (18)  -> the BHD 1 test-booking placeholder. Excluded.
+//   Rate 0    (103) -> a real consult discounted 100 percent. The patient
+//                      attended and it belongs in the volume. INCLUDED.
+//   Rate > 1        -> an ordinary paid consult. Included.
+//
+// isRealAppointment drives what is counted, listed, and put in the funnel.
+function isRealAppointment(b: BookingRecord): boolean {
+  return b.Rate != null && b.Rate !== 1;
+}
+
+// isPaidConsult additionally gates the MONEY math, and that separation is the
+// whole point. computeBookingSplit is rate-independent on two of its paths: a
+// per-doctor rule and the novo rule both return commission_bhd + service_charge_bhd
+// whatever the fee, and a flat-fee doctor returns the flat amount. Run either on
+// a zero fee and Saleem "earns" revenue on a consult nobody paid for, while
+// providerPayout computes as rate minus that, which goes NEGATIVE.
+//
+// So a free consult is counted and listed, but carries no split: its Saleem,
+// provider and rule cells read as a calm dash, exactly like a booking that has
+// not completed yet. Gross and Saleem income are therefore unchanged by this
+// switch, which is what keeps the page reconciled with the Commission tab.
+function isPaidConsult(b: BookingRecord): boolean {
+  return (b.Rate ?? 0) > 1;
+}
+
 async function board(
   viewer: RequestViewer,
 ): Promise<{ data: AppointmentsPayload; parts: SourceMeta[] }> {
   const read = await getCrmRead().bookings();
-  const real = read.data.filter((b) => (b.Rate ?? 0) > 1);
+  const real = read.data.filter(isRealAppointment);
   const today = bahrainDay(new Date().toISOString());
 
   const todays = real
@@ -172,9 +204,17 @@ async function board(
   };
 }
 
-// The six booking stages, in the fixed funnel order the page renders. Counts
-// fall only into an exact Status match; any other status is ignored, matching
-// the legacy analytics route.
+// The booking stages, in the fixed funnel order the page renders: the in-flight
+// stages, then Done, then the two terminal non-completions.
+//
+// Cancelled and No Show were added on 2026-08-12. Before that the list held six
+// stages and every other status was silently dropped, so the funnel did not sum
+// to the total printed above it: Cancelled alone is 85 of 263 bookings all time.
+// The Zoho picklist also carries Session Ended, Awaiting Patient Reschedule and
+// Awaiting Doctor Approval, and No Show is present on records but has been
+// removed from the picklist, so an exact-match list can always fall behind the
+// data. buildStageBreakdown appends any status it has not seen here rather than
+// dropping it, which keeps the funnel reconciled whatever Zoho adds next.
 const STAGE_ORDER = [
   'Pending Payment',
   'Pending',
@@ -182,7 +222,32 @@ const STAGE_ORDER = [
   'Session Started',
   'Awaiting Review',
   'Done',
+  'Cancelled',
+  'No Show',
 ] as const;
+
+// Stage counts over the windowed set. Known stages keep their fixed order and
+// render even at zero; any other status is appended in descending count order so
+// the breakdown always sums to the total. A blank status reads as "(none)",
+// matching status_breakdown.
+function buildStageBreakdown(
+  bookings: BookingRecord[],
+): AppointmentsStageCount[] {
+  const counts = new Map<string, number>(STAGE_ORDER.map((s) => [s, 0]));
+  for (const b of bookings) {
+    const status = b.Status && b.Status.trim() ? b.Status : '(none)';
+    counts.set(status, (counts.get(status) ?? 0) + 1);
+  }
+  const known = STAGE_ORDER.map((name) => ({
+    name: name as string,
+    count: counts.get(name) ?? 0,
+  }));
+  const extra = [...counts.entries()]
+    .filter(([name]) => !STAGE_ORDER.includes(name as (typeof STAGE_ORDER)[number]))
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+  return [...known, ...extra];
+}
 
 // Start of the period in Bahrain civil time, returned as the Bahrain calendar
 // day string (YYYY-MM-DD) a booking's own Bahrain day is compared against. mtd
@@ -233,6 +298,21 @@ function normalizeType(t: string | null | undefined): string {
   return (t ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
+// The booking system's own numeric appointment id, taken from the last path
+// segment of Doctor_Link ("https://doctor.tellsaleem.com/appointments/1766").
+// This is the id the admin (Nova) console shows in its own list, so it is what
+// the team cross-references: verified 2026-08-12 by matching 1766, 1765 and 1764
+// against their admin rows on patient, appointment time and creation time, all
+// three exact. It is NOT the Zoho record id and NOT Saleem_ID.
+//
+// Null when the booking carries no Doctor_Link (every Pending Payment row, which
+// are abandoned checkouts) or when the link does not end in digits.
+function adminAppointmentId(link: string | null): string | null {
+  if (!link) return null;
+  const m = /\/(\d+)\/?$/.exec(link.trim());
+  return m ? m[1] : null;
+}
+
 // Build one analytics row. The patient reference (record id plus initials) is
 // built for everyone through the same serializer board() uses; patient_name is
 // appended only for a viewer holding sees_patient_names, via withName. The raw
@@ -244,7 +324,11 @@ function toAnalyticsRow(
 ): AppointmentsAnalyticsRow {
   const row: AppointmentsAnalyticsRow = {
     id: booking.id,
-    name: booking.Name ?? '·',
+    // The booking reference, never the Zoho Subject: Subject is literally
+    // "Appointment for <patient full name>", so it is not read at all (see the
+    // note on BookingRecord in crm-read.ts).
+    saleem_id: booking.Saleem_ID ?? null,
+    admin_id: adminAppointmentId(booking.Doctor_Link ?? null),
     patient_ref: patientSerializer.ref(
       booking.Patient?.id ?? booking.id,
       booking.Patient?.name,
@@ -253,7 +337,13 @@ function toAnalyticsRow(
     status: booking.Status ?? '·',
     type: booking.Type ?? null,
     fee_bhd: booking.Rate != null ? booking.Rate : 0,
+    service_charge_bhd: booking.Service_Charge ?? null,
     date: booking.From ?? booking.Created_At ?? null,
+    ends_at: booking.To ?? null,
+    duration_min: booking.Duration ?? null,
+    patient_link: booking.Patient_Link ?? null,
+    doctor_link: booking.Doctor_Link ?? null,
+    guest_link: booking.Guest_Link ?? null,
   };
   return patientSerializer.withName(row, booking.Patient?.name, viewer);
 }
@@ -288,7 +378,7 @@ async function analytics(
         .then((rows) => ({ ok: true as const, rows }))
         .catch(() => ({ ok: false as const, rows: [] })),
     ]);
-  let real = read.data.filter((b) => (b.Rate ?? 0) > 1);
+  let real = read.data.filter(isRealAppointment);
 
   // The reporting window as Bahrain-day bounds, [start, end). A specific month
   // (YYYY-MM) takes precedence and bounds both ends, so "June" means June only.
@@ -315,20 +405,29 @@ async function analytics(
     (b) => b.Status === 'Done' || b.Status === 'Awaiting Review',
   );
   const completed = completedRows.length;
+  // The completed consults that actually carry money. A fully discounted consult
+  // counts toward completed volume above but is excluded here, so no revenue is
+  // invented and no provider payout goes negative (see isPaidConsult). Summing
+  // Rate over the paid set gives the same figure as summing over all completed
+  // rows, since a free consult adds zero; the split loop below is where the
+  // distinction actually bites.
+  const paidCompletedRows = completedRows.filter(isPaidConsult);
   const revenue = round2(
-    completedRows.reduce((sum, b) => sum + (b.Rate ?? 0), 0),
+    paidCompletedRows.reduce((sum, b) => sum + (b.Rate ?? 0), 0),
   );
   const completionRate = total === 0 ? 0 : Math.round((completed / total) * 100);
+  // Fully discounted consults in the window, surfaced so the volume jump from
+  // including them is explainable rather than mysterious.
+  const free = real.filter((b) => (b.Rate ?? 0) === 0).length;
 
-  const stageCounts = new Map<string, number>(STAGE_ORDER.map((s) => [s, 0]));
-  for (const b of real) {
-    const s = b.Status ?? '';
-    if (stageCounts.has(s)) stageCounts.set(s, (stageCounts.get(s) ?? 0) + 1);
-  }
-  const stage_breakdown: AppointmentsStageCount[] = STAGE_ORDER.map((name) => ({
-    name,
-    count: stageCounts.get(name) ?? 0,
-  }));
+  // Reported alongside total so the funnel reconciles with the headline count.
+  // Deliberately NOT removed from the completion-rate denominator: that would
+  // change a number the team already tracks, so the basis is stated in the UI
+  // instead and the change is a separate decision.
+  const cancelled = real.filter((b) => b.Status === 'Cancelled').length;
+  const noShow = real.filter((b) => b.Status === 'No Show').length;
+
+  const stage_breakdown = buildStageBreakdown(real);
 
   const doctorMap = new Map<string, AppointmentsDoctorRow>();
   for (const b of real) {
@@ -346,15 +445,19 @@ async function analytics(
   }
   const by_doctor = [...doctorMap.values()].sort((a, b) => b.done - a.done);
 
-  // Gross income (sum of Rate over completed consults plus any free-appointment
-  // patient payments) and Saleem income (the commission-engine split plus the
-  // free-appointment shares) over the completed set the doctor loop counts.
-  // Reuses the shared engine and folds in the manual ledger so the figures match
-  // the Commission tab, which uses the same Done or Awaiting Review basis and
-  // counts free appointments too. splitByBooking carries each completed
+  // Gross income (sum of Rate over PAID completed consults plus any
+  // free-appointment patient payments) and Saleem income (the commission-engine
+  // split plus the free-appointment shares). Reuses the shared engine and folds
+  // in the manual ledger so the figures match the Commission tab, which uses the
+  // same Done or Awaiting Review basis. splitByBooking carries each paid
   // consult's split out to its recent-table row. If the rules, doctors, or
   // hospitals read failed, the income fields stay undefined and the rest of the
   // payload still returns.
+  //
+  // The loop runs over paidCompletedRows, NOT completedRows: a fully discounted
+  // consult must not reach computeBookingSplit, whose novo and flat-fee paths
+  // ignore the fee entirely and would return a positive Saleem cut against a zero
+  // fee, with a negative provider payout to match.
   const splitByBooking = new Map<
     string,
     { saleem_bhd: number; provider_payout_bhd: number; rule_label: string }
@@ -386,7 +489,7 @@ async function analytics(
     let gross = 0;
     let saleem = 0;
     let unset = 0;
-    for (const b of completedRows) {
+    for (const b of paidCompletedRows) {
       const id = doctorId(b);
       const docPct = id != null ? docPctMap.get(id) ?? null : null;
       const hospId = id != null ? docHospitalMap.get(id) ?? null : null;
@@ -501,6 +604,9 @@ async function analytics(
     metrics: {
       total,
       completed,
+      cancelled,
+      no_show: noShow,
+      free,
       revenue_bhd: revenue,
       completion_rate_pct: completionRate,
       gross_income_bhd: grossIncome,

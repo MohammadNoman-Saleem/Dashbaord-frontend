@@ -40,8 +40,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# smoke-test compile output (scripts/smoke-fixtures.mjs)
+# smoke-test compile output (scripts/smoke-fixtures.mjs, scripts/smoke-filters.mjs).
+# Each script removes its own directory on exit; these entries cover a hard crash
+# that leaves one behind.
 /.smoke-fixtures/
+/.smoke-filters/
 
 # local dev screenshot helper, carries a login credential; never commit
 /shot.mjs

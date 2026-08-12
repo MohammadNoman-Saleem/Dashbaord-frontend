@@ -3,13 +3,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { Download } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 
+import { AppointmentFilters } from "@/components/appointments/AppointmentFilters";
 import { MiniBars } from "@/components/charts/MiniBars";
 import { Grid, spans } from "@/components/shell/Grid";
 import { Button } from "@/components/ui/Button";
 import { Card, CardFooter, CardHeader } from "@/components/ui/Card";
 import { Chip, type ChipVariant } from "@/components/ui/Chip";
+import { CopyButton } from "@/components/ui/CopyButton";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PatientRef } from "@/components/ui/PatientRef";
@@ -27,9 +29,17 @@ import type {
 } from "@/lib/api/contract";
 import { fetchEnvelope } from "@/lib/api/fetcher";
 import { qk } from "@/lib/api/keys";
+import {
+  bahrainToday,
+  filterRows,
+  optionsFrom,
+  readFilters,
+  writeFilters,
+  type AppointmentFilterState,
+} from "@/lib/appointments/filters";
 import { useFocusFlash } from "@/lib/deepLink";
 import { fmtBHD } from "@/lib/format/bhd";
-import { fmtDate } from "@/lib/format/datetime";
+import { fmtDateTime, fmtTime } from "@/lib/format/datetime";
 import { TITLES } from "@/config/titles";
 
 /* Appointments analytics (Stage 1). Read-only view over the cached Zoho
@@ -66,7 +76,9 @@ function recentMonths(count: number): { value: string; label: string }[] {
 }
 
 /* Status to Chip variant. Done reads as good; the in-flight stages read as
-   neutral information; everything else stays muted. There is no red. */
+   neutral information; the terminal non-completions (Cancelled, No Show) and
+   everything else stay muted, carrying their severity in the word alone. There
+   is no red. */
 function statusVariant(status: string): ChipVariant {
   if (status === "Done") return "good";
   if (status === "Confirmed" || status === "Session Started" || status === "Awaiting Review") {
@@ -93,9 +105,81 @@ function splitCell(n: number | undefined): string {
   return n == null ? "-" : fmtAmount(n);
 }
 
-/* Date text. A null date reads as a calm dash rather than "NaN". */
-function dateCell(date: string | null): string {
-  return date ? fmtDate(date) : "-";
+/* Appointment start with its time, then the end time and length underneath. A
+   null start reads as a calm dash rather than "NaN"; a booking with no end time
+   or duration shows the start alone. */
+function whenCell(row: AppointmentsAnalyticsRow): ReactNode {
+  if (!row.date) return <span className="text-ink-2">-</span>;
+  const tail = [
+    row.ends_at ? `to ${fmtTime(row.ends_at)}` : null,
+    row.duration_min != null ? `${row.duration_min} min` : null,
+  ].filter((part): part is string => part != null);
+  return (
+    <div>
+      <div>{fmtDateTime(row.date)}</div>
+      {tail.length > 0 ? (
+        <div className="text-[11.5px] text-ink-2">{tail.join(" · ")}</div>
+      ) : null}
+    </div>
+  );
+}
+
+/* Base URL for an appointment in the admin console. The row's admin_id is the
+   resource id, parsed server-side from the booking's doctor link. */
+const ADMIN_APPOINTMENT_URL =
+  "https://admin.tellsaleem.com/nova/resources/appointment-resources/";
+
+/* The admin appointment id as a link into the admin console, with the Saleem
+   booking reference and its copy control underneath. Abandoned checkouts carry
+   neither and read as a calm dash. */
+function refCell(row: AppointmentsAnalyticsRow): ReactNode {
+  if (!row.admin_id && !row.saleem_id) return <span className="text-ink-2">-</span>;
+  return (
+    <div className="whitespace-nowrap">
+      {row.admin_id ? (
+        <a
+          href={`${ADMIN_APPOINTMENT_URL}${row.admin_id}`}
+          target="_blank"
+          rel="noreferrer"
+          className="num text-[13px] font-semibold text-accent hover:underline"
+        >
+          #{row.admin_id}
+        </a>
+      ) : null}
+      {row.saleem_id ? (
+        <div className="flex items-center gap-1 text-[11.5px] text-ink-2">
+          <span className="num">{row.saleem_id}</span>
+          <CopyButton value={row.saleem_id} label="Copy booking reference" />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* The three share links the booking system generates, each as a copy control.
+   Only links the booking actually carries are offered; a booking with none (an
+   abandoned checkout) reads as a calm dash. The link text itself is never
+   rendered: these are access links, so they are copied deliberately rather than
+   left sitting on screen. */
+const LINK_KINDS = [
+  { key: "patient_link", label: "Patient", copy: "Copy patient link" },
+  { key: "doctor_link", label: "Doctor", copy: "Copy doctor link" },
+  { key: "guest_link", label: "Guest", copy: "Copy guest link" },
+] as const;
+
+function linksCell(row: AppointmentsAnalyticsRow): ReactNode {
+  const available = LINK_KINDS.filter((kind) => row[kind.key] != null);
+  if (available.length === 0) return <span className="text-ink-2">-</span>;
+  return (
+    <span className="inline-flex items-center gap-[7px] whitespace-nowrap">
+      {available.map((kind) => (
+        <span key={kind.key} className="inline-flex items-center gap-[1px]">
+          <span className="text-[11px] text-ink-3">{kind.label}</span>
+          <CopyButton value={row[kind.key] as string} label={kind.copy} />
+        </span>
+      ))}
+    </span>
+  );
 }
 
 /* Appointment type text. A null or empty type reads as a calm dash; a booking
@@ -118,10 +202,13 @@ function csvField(value: string): string {
 }
 
 /* Build a CSV from the visible rows and download it through a transient
-   anchor. The patient column carries only the reference, never the name. */
+   anchor. The patient column carries only the reference, never the name. The
+   three share links are deliberately left out: they are access links, and an
+   exported spreadsheet circulates far more freely than the page does. */
 function downloadRecentCsv(rows: AppointmentsAnalyticsRow[]): void {
   const header = [
-    "Appointment",
+    "Admin ID",
+    "Reference",
     "Patient (ref)",
     "Doctor",
     "Type",
@@ -130,11 +217,14 @@ function downloadRecentCsv(rows: AppointmentsAnalyticsRow[]): void {
     "Saleem BHD",
     "Provider BHD",
     "Rule",
-    "Date",
+    "Start",
+    "End",
+    "Duration min",
   ];
   const lines = rows.map((row) =>
     [
-      row.name,
+      row.admin_id ?? "",
+      row.saleem_id ?? "",
       patientReference(row),
       row.doctor,
       row.type ?? "",
@@ -143,7 +233,9 @@ function downloadRecentCsv(rows: AppointmentsAnalyticsRow[]): void {
       row.saleem_bhd != null ? String(row.saleem_bhd) : "",
       row.provider_payout_bhd != null ? String(row.provider_payout_bhd) : "",
       row.rule_label ?? "",
-      row.date ? fmtDate(row.date) : "",
+      row.date ? fmtDateTime(row.date) : "",
+      row.ends_at ? fmtDateTime(row.ends_at) : "",
+      row.duration_min != null ? String(row.duration_min) : "",
     ]
       .map(csvField)
       .join(","),
@@ -161,7 +253,7 @@ function downloadRecentCsv(rows: AppointmentsAnalyticsRow[]): void {
 }
 
 const RECENT_COLUMNS: DataTableColumn<AppointmentsAnalyticsRow>[] = [
-  { key: "name", label: "Appointment" },
+  { key: "reference", label: "Reference", render: refCell },
   {
     key: "patient",
     label: "Patient",
@@ -198,7 +290,8 @@ const RECENT_COLUMNS: DataTableColumn<AppointmentsAnalyticsRow>[] = [
         <span className="text-ink-2">-</span>
       ),
   },
-  { key: "date", label: "Date", numeric: true, render: (row) => dateCell(row.date) },
+  { key: "when", label: "Date and time", numeric: true, render: whenCell },
+  { key: "links", label: "Links", render: linksCell },
 ];
 
 type CohortRow = GrowthRetentionData["booking_cohorts"]["cohorts"][number];
@@ -321,15 +414,35 @@ function AppointmentsContent() {
     queryFn: () => fetchEnvelope<GrowthRetentionData>("growth_retention", "/growth/retention"),
   });
 
-  // One place to set the window. period is always written so clearing the month
-  // falls back to it; month is written only when a specific month is chosen.
-  function pushParams(nextPeriod: string, nextMonth: string | null) {
+  // Table filters, also carried in the URL so a filtered view survives a reload
+  // and can be shared. These narrow the Recent table only; see the note in
+  // lib/appointments/filters.ts.
+  const filters = readFilters(searchParams);
+
+  // One place to set the window and the filters. period is always written so
+  // clearing the month falls back to it; month is written only when a specific
+  // month is chosen. Filters ride along on every push so changing the period
+  // does not silently drop them.
+  function pushParams(
+    nextPeriod: string,
+    nextMonth: string | null,
+    nextFilters: AppointmentFilterState = filters,
+  ) {
     const params = new URLSearchParams();
     params.set("period", nextPeriod);
     if (nextMonth) params.set("month", nextMonth);
+    writeFilters(nextFilters, params);
     const viewAs = searchParams.get("as");
     if (viewAs) params.set("as", viewAs);
     router.push(`/appointments?${params.toString()}`);
+  }
+
+  // Today needs the loaded window to contain today, so it also resets the period
+  // to MTD and clears any specific month. Without that, picking Today while
+  // June is selected would filter a June payload down to nothing.
+  function applyToday() {
+    const today = bahrainToday();
+    pushParams("mtd", null, { ...filters, from: today, to: today });
   }
 
   return (
@@ -371,6 +484,12 @@ function AppointmentsContent() {
             value: s.count,
             pct: (s.count / maxStage) * 100,
           }));
+          // Filter options come from the rows on screen, so the panel only offers
+          // values that can match. The filtered set drives the table and the CSV;
+          // the cards above stay period-wide, which the table header states.
+          const filterOptions = optionsFrom(data.recent);
+          const visibleRows = filterRows(data.recent, filters);
+          const filtered = visibleRows.length !== data.recent.length;
           return (
             <Grid className={flags.unreliable ? "opacity-55" : undefined}>
               <KpiCard
@@ -388,16 +507,28 @@ function AppointmentsContent() {
               />
               <KpiCard
                 className={spans.c3}
+                label="Free consults"
+                value={m.free.toLocaleString()}
+                note="Discounted 100 percent, so they add no revenue"
+              />
+              <KpiCard
+                className={spans.c3}
                 label="Completion rate"
                 value={`${m.completion_rate_pct}%`}
-                note="Share of bookings completed"
+                note="Completed over every booking, cancellations included"
+              />
+              <KpiCard
+                className={spans.c3}
+                label="Cancelled or no show"
+                value={(m.cancelled + m.no_show).toLocaleString()}
+                note={`${m.cancelled.toLocaleString()} cancelled, ${m.no_show.toLocaleString()} no show`}
               />
 
               <KpiCard
                 className={spans.c3}
                 label="Gross income"
                 value={fmtBHD(m.gross_income_bhd ?? 0)}
-                note="Fees from completed and pending-review appointments"
+                note="Fees from completed paid consults, free ones add nothing"
               />
               <KpiCard
                 className={spans.c3}
@@ -419,7 +550,7 @@ function AppointmentsContent() {
                       <MiniBars rows={stageRows} />
                     )}
                   </div>
-                  <CardFooter note="One row per booking stage, counted in this period." />
+                  <CardFooter note="One row per booking stage, counted in this period. Cancelled and no show are included, so the rows add up to the total above." />
                 </Card>
               </div>
 
@@ -496,27 +627,46 @@ function AppointmentsContent() {
                 <Card>
                   <CardHeader
                     title="Recent appointments"
-                    subtitle="Latest bookings, newest first."
+                    subtitle={
+                      filtered
+                        ? `${visibleRows.length.toLocaleString()} of ${data.recent.length.toLocaleString()} bookings match these filters. The cards above still cover the whole period.`
+                        : "Latest bookings, newest first."
+                    }
                   />
-                  <div className="px-[18px] pb-2 pt-[5px]">
+                  <div className="px-[18px] pt-[11px]">
+                    <AppointmentFilters
+                      filters={filters}
+                      options={filterOptions}
+                      onChange={(next) => pushParams(period, monthValid, next)}
+                      onToday={applyToday}
+                    />
+                  </div>
+                  <div className="px-[18px] pb-2 pt-[9px]">
                     {data.recent.length === 0 ? (
                       <p className="py-2 text-[13px] text-ink-2">No appointments to show yet.</p>
+                    ) : visibleRows.length === 0 ? (
+                      <p className="py-2 text-[13px] text-ink-2">
+                        No appointments match these filters.
+                        {filters.from !== null || filters.to !== null
+                          ? " If the dates sit outside the reporting period above, widen it to All time."
+                          : ""}
+                      </p>
                     ) : (
                       <DataTable
                         columns={RECENT_COLUMNS}
-                        rows={data.recent}
+                        rows={visibleRows}
                         rowKey={(row) => row.id}
                       />
                     )}
                   </div>
                   <CardFooter
-                    note="Saleem cut and provider payout show on completed consults. Patient names stay with the name-seers; everyone else reads the reference."
+                    note="Saleem cut and provider payout show on completed consults. Copy a patient, doctor, or guest link from the Links column. Patient names stay with the name-seers; everyone else reads the reference."
                     right={
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => downloadRecentCsv(data.recent)}
-                        disabled={data.recent.length === 0}
+                        onClick={() => downloadRecentCsv(visibleRows)}
+                        disabled={visibleRows.length === 0}
                       >
                         <Download strokeWidth={1.8} aria-hidden="true" />
                         Export CSV

@@ -29,5 +29,8 @@ jobs:
       - name: Smoke test fixtures
         run: npm run smoke:fixtures
 
+      - name: Smoke test appointment filters
+        run: npm run smoke:filters
+
       - name: Build
         run: npm run build

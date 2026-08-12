@@ -453,14 +453,37 @@ export interface AppointmentsData {
 export type AppointmentsPeriod = 'mtd' | 'qtd' | 'ytd' | 'all'
 export interface AppointmentsAnalyticsRow {
   id: string
-  name: string
+  // The booking reference the team reads (Zoho Saleem_ID), e.g. "SLM-APP-7GTQJZ".
+  // This replaced a `name` field carrying the Zoho Subject, which is literally
+  // "Appointment for <patient full name>" and so may never be serialized. Null on
+  // abandoned checkouts, which never got a reference.
+  saleem_id: string | null
+  // The admin (Nova) console's numeric appointment id, parsed from the booking's
+  // doctor_link. This is the number the admin list shows, so it is what the team
+  // cross-references and what the admin deep link is built from. Null on
+  // abandoned checkouts, which carry no links.
+  admin_id: string | null
   patient_ref: PatientRefData
   patient_name?: string
   doctor: string
   status: string
   type: string | null
   fee_bhd: number
+  // The platform fee, carried separately from fee_bhd and NOT summed into any
+  // revenue total. Which of the two counts as "what the patient paid" is not yet
+  // confirmed, so nothing here asserts a combined figure.
+  service_charge_bhd: number | null
+  // Appointment start, end, and length in minutes. `date` is the start and keeps
+  // its name so existing consumers stay valid.
   date: string | null
+  ends_at: string | null
+  duration_min: number | null
+  // Share links from the booking system. All null on abandoned checkouts.
+  // patient_link is a tokenized patient-facing link, so it is offered as a copy
+  // action in the UI and deliberately kept out of the CSV export.
+  patient_link: string | null
+  doctor_link: string | null
+  guest_link: string | null
   // Per-consult commission split, mirroring the Commission tab ledger. Present
   // only on completed consults (Done or Awaiting Review) that resolved a split;
   // absent on not-yet-completed rows, which read as a dash. Never summed into
@@ -471,7 +494,15 @@ export interface AppointmentsAnalyticsRow {
 }
 export interface AppointmentsStageCount { name: string; count: number }
 export interface AppointmentsDoctorRow { name: string; count: number; done: number; revenue_bhd: number; saleem_income_bhd?: number; commission_pct?: number | null }
-export interface AppointmentsAnalyticsMetrics { total: number; completed: number; revenue_bhd: number; completion_rate_pct: number; gross_income_bhd?: number; saleem_income_bhd?: number; commission_unset?: number }
+// cancelled and no_show are reported alongside total so the stage funnel
+// reconciles with the headline count. completion_rate_pct still divides completed
+// by total, cancellations included in the denominator; the basis is stated in the
+// UI rather than changed silently.
+// free is the count of fully discounted consults (fee BHD 0) in the window. They
+// count toward total and completed, but carry no commission split and add nothing
+// to gross or Saleem income, so the figure is reported to explain the gap between
+// volume and revenue.
+export interface AppointmentsAnalyticsMetrics { total: number; completed: number; cancelled: number; no_show: number; free: number; revenue_bhd: number; completion_rate_pct: number; gross_income_bhd?: number; saleem_income_bhd?: number; commission_unset?: number }
 // Reconciliation diagnostic (revenue spec, step 1). status_breakdown is every
 // Status present in the window with its count and gross, so the completed-basis
 // gap is visible. type_distribution is every distinct raw Type with its
